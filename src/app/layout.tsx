@@ -3,9 +3,9 @@ import "@/app/globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 
 export const metadata = {
-  title: "China Southern Virtual Group (CZVG)",
+  title: "China Southern Virtual Group IF",
   description:
-    "Official website of China Southern Virtual Group - A leading virtual airline for flight simulation enthusiasts",
+    "Official website of China Southern Virtual Group - A leading IFVARB approved virtual airline group operating in China.",
 };
 
 export default function RootLayout({
