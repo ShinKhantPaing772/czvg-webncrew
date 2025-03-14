@@ -11,21 +11,51 @@ export default function FleetPage() {
       aircraft: [
         {
           type: "Boeing 777-300ER",
-          image: "/placeholder.svg?height=300&width=500",
+          airline: "China Southern Airlines",
+          image:
+            "https://global.discourse-cdn.com/infiniteflight/original/4X/4/4/9/449f11d44e6be0994c1ac7fd69a0565967bd46ab.png",
           description:
-            "Our flagship long-haul aircraft serving international routes to Europe, North America, and Australia.",
+            "Our flagship long-haul aircraft serving major airports and international routes to Europe, North America, and Australia.",
         },
         {
           type: "Airbus A350-900",
-          image: "/placeholder.svg?height=300&width=500",
+          airline: "China Southern Airlines",
+          image:
+            "https://global.discourse-cdn.com/infiniteflight/original/4X/5/d/4/5d49216d40425c10a09098b460bad0bd69a5d7b7.png",
           description:
-            "Latest addition to our long-haul fleet, offering superior fuel efficiency and passenger comfort.",
+            "Latest addition to our long-haul fleet, serving major airports and international routes to Europe, North America, and Australia.",
         },
         {
-          type: "Boeing 787-9 Dreamliner",
-          image: "/placeholder.svg?height=300&width=500",
+          type: "Airbus A330-300",
+          airline: "China Southern Airlines",
+          image:
+            "https://global.discourse-cdn.com/infiniteflight/original/4X/7/e/7/7e774e9d23860935ce53d0d8f8ca8624a9f5d214.png",
           description:
-            "Advanced composite aircraft serving medium to long-haul routes with enhanced passenger experience.",
+            "A big player in our long haul fleet offering superior fuel efficiency, operated on both major and international routes.",
+        },
+        {
+          type: "Boeing 787-8/9 Dreamliner",
+          airline: "China Southern Airlines",
+          image:
+            "https://global.discourse-cdn.com/infiniteflight/original/4X/9/7/d/97dc473f7f9d9520e894038c9048b2ae8b2eadab.png",
+          description:
+            "Advanced composite aircraft serving medium to long-haul routes, equipped with special livery.",
+        },
+        {
+          type: "Boeing 787-8/9 Dreamliner",
+          airline: "Xiamen Airlines",
+          image:
+            "https://global.discourse-cdn.com/infiniteflight/optimized/4X/a/9/a/a9aa6451ccf7ab112cd86f8d0a4f46f7c2cdcfcf_2_1640x664.png",
+          description:
+            "Xiamen Airlines flagship long-haul aircraft serving major airports and international routes to Europe, North America, and Australia.",
+        },
+        {
+          type: "Boeing 777 Freighter",
+          airline: "China Southern Cargo",
+          image:
+            "https://global.discourse-cdn.com/infiniteflight/original/4X/0/4/0/0401c2231ffaac4ddfeac1309ce8f7f134f65991.png",
+          description:
+            "China Southern's cargo aircraft for international and regional routes.",
         },
       ],
     },
@@ -33,16 +63,67 @@ export default function FleetPage() {
       category: "Narrow-body Aircraft",
       aircraft: [
         {
-          type: "Airbus A320neo",
-          image: "/placeholder.svg?height=300&width=500",
+          type: "Airbus A319/20/21/ceo/neo",
+          airline: "China Southern Airlines",
+          image:
+            "https://global.discourse-cdn.com/infiniteflight/original/4X/7/6/2/762e27e54b98ad4c9c894fca9ee8c1dfa994affb.png",
           description:
-            "Latest generation A320 serving domestic and regional routes with improved fuel efficiency.",
+            "This aircraft type serves domestic and regional routes.",
+        },
+        {
+          type: "Airbus A321neo",
+          airline: "Xiamen Airlines",
+          image: "",
+          description:
+            "Latest generation A321 serving domestic and regional routes.",
+        },
+        {
+          type: "Airbus A319/20/21/ceo/neo",
+          airline: "Chengdu Airlines",
+          image:
+            "https://global.discourse-cdn.com/infiniteflight/original/4X/4/d/e/4de02ac198b9e8c6d4e200263fb90d50b125cbdf.png",
+          description:
+            "Chengdu Airline's major aircraft serving domestic routes.",
+        },
+        {
+          type: "Airbus A319/20/21/ceo/neo",
+          airline: "Chongqing Airlines",
+          image:
+            "https://global.discourse-cdn.com/infiniteflight/original/4X/5/d/f/5df3c8a3a93e27c4e8102864a99e24ee47c7de62.png",
+          description:
+            "Chongqing Airline's major aircraft serving domestic routes.",
+        },
+        {
+          type: "Boeing 737-700/800/Max 8",
+          airline: "China Southern Airlines",
+          image:
+            "https://global.discourse-cdn.com/infiniteflight/original/4X/7/c/0/7c0231e4927f43356d12e9e839d1fd21183c49de.png",
+          description:
+            "Workhorse of our domestic network, connecting regions and major cities across China.",
+        },
+        {
+          type: "Boeing 737-700/800/Max 8",
+          airline: "Xiamen Airines",
+          image:
+            "https://global.discourse-cdn.com/infiniteflight/optimized/4X/2/0/c/20c11416c9168d62ec16a892bafc9eec08c118e4_2_1640x480.png",
+          description:
+            "Workhorse of our domestic network, connecting regions and major cities across China.",
         },
         {
           type: "Boeing 737-800",
-          image: "/placeholder.svg?height=300&width=500",
+          airline: "Hebei Airlines",
+          image:
+            "https://global.discourse-cdn.com/infiniteflight/original/4X/9/2/a/92a634c3d80808527c1f4e614783fdeec2d91a83.png",
           description:
-            "Workhorse of our domestic network, connecting major cities across China.",
+            "Hebei airline workhorse, connecting Shijiazhuang with major cities across China.",
+        },
+        {
+          type: "Boeing 737-800",
+          airline: "Jiangxi Airlines",
+          image:
+            "https://global.discourse-cdn.com/infiniteflight/original/4X/1/0/2/1025c543a111b67a9cada2ca20e4079d01e88330.png",
+          description:
+            "Jiangxi airline workhorse, connecting Jiangxi region with major cities across China.",
         },
       ],
     },
@@ -51,7 +132,9 @@ export default function FleetPage() {
       aircraft: [
         {
           type: "Embraer E190",
-          image: "/placeholder.svg?height=300&width=500",
+          airline: "Hebei Airlines",
+          image:
+            "https://global.discourse-cdn.com/infiniteflight/original/4X/d/a/b/dabde7465cc74e6dab7786e8f16ddfda60f90dda.png",
           description:
             "Regional jet serving smaller cities and lower-demand routes throughout China.",
         },
@@ -61,22 +144,44 @@ export default function FleetPage() {
       category: "Historical Fleet",
       aircraft: [
         {
-          type: "Boeing 747-400",
-          image: "/placeholder.svg?height=300&width=500",
+          type: "Boeing 747-400F",
+          airline: "China Southern Cargo",
+          image:
+            "https://global.discourse-cdn.com/infiniteflight/optimized/4X/1/d/4/1d49408bf5b2a652de2fe4feccb091a8a485f6f1_2_1640x418.png",
           description:
-            "The iconic Queen of the Skies that served our long-haul routes from 1989 to 2019, connecting China to the world.",
+            "The iconic Queen of the Skies that served our cargo routes, connecting China to the world.",
         },
         {
-          type: "Airbus A340-300",
-          image: "/placeholder.svg?height=300&width=500",
+          type: "Airbus A380-800",
+          airline: "China Southern Airlines",
+          image:
+            "https://global.discourse-cdn.com/infiniteflight/original/4X/4/2/1/421c1ff1fb2459533ff6b8458d31ca63fc3e21b5.png",
           description:
-            "A reliable four-engine aircraft that operated our long-haul routes from 1995 to 2015.",
+            "The King of the skies that operated our major routes from 2011 to 2022",
         },
         {
-          type: "McDonnell Douglas MD-82",
-          image: "/placeholder.svg?height=300&width=500",
+          type: "Boeing 757-200",
+          airline: "China Southern Airlines",
+          image:
+            "https://global.discourse-cdn.com/infiniteflight/original/4X/5/3/c/53ca439104f455f387197572beb1b44be679c2ff.png",
           description:
-            "A classic narrow-body aircraft that served our domestic routes through the 1990s.",
+            "A classic narrow-body aircraft that served our domestic routes from 1987 to 2018.",
+        },
+        {
+          type: "Boeing 757-200",
+          airline: "Xiamen Airlines",
+          image:
+            "https://global.discourse-cdn.com/infiniteflight/optimized/4X/5/7/b/57bea2fb9a47778f044bbcb8b23f0a8a1a9d8825_2_1640x438.png",
+          description:
+            "A classic narrow-body aircraft that served our domestic routes in the past.",
+        },
+        {
+          type: "Embraer E190",
+          airline: "China Southern Airlines",
+          image:
+            "https://global.discourse-cdn.com/infiniteflight/original/4X/9/f/d/9fddae7f609a83f4d5f0f0b9cecfe41fce096836.png",
+          description:
+            "Regional jet serving smaller cities and lower-demand routes throughout China until 2021.",
         },
       ],
     },
@@ -143,13 +248,16 @@ export default function FleetPage() {
                   {category.aircraft.map((aircraft, aircraftIndex) => (
                     <div
                       key={aircraftIndex}
-                      className="bg-white rounded-lg shadow-md overflow-hidden border"
+                      className="bg-gray-50 rounded-xl shadow-md overflow-hidden"
                     >
-                      <div className="md:flex">
+                      <div className="md:flex p-2">
                         <div className="md:w-2/3 p-6">
                           <h3 className="text-2xl font-bold mb-3">
                             {aircraft.type}
                           </h3>
+                          <p className="text-sm text-gray-800 mb-3">
+                            {aircraft.airline}
+                          </p>
                           <p className="text-gray-600 mb-4">
                             {aircraft.description}
                           </p>
@@ -160,7 +268,7 @@ export default function FleetPage() {
                               src={aircraft.image || "/placeholder.svg"}
                               alt={aircraft.type}
                               fill
-                              className="object-cover"
+                              className="object-contain"
                             />
                           </div>
                         </div>
@@ -186,7 +294,7 @@ export default function FleetPage() {
               </p>
               <div className="flex justify-center space-x-4">
                 <Link
-                  href="/join-us"
+                  href="/crew"
                   className="bg-white text-blue-700 px-6 py-3 rounded font-medium hover:bg-gray-100 transition-colors"
                 >
                   Apply Now

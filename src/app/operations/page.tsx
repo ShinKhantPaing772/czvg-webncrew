@@ -182,7 +182,7 @@ export default function OperationsPage() {
                 of flying with China Southern.
               </p>
               <Link
-                href="/join-us"
+                href="/crew"
                 className="bg-white text-blue-700 px-6 py-3 rounded font-medium hover:bg-gray-100 transition-colors"
               >
                 Apply Now

@@ -12,11 +12,6 @@ export default function AboutPage() {
         <section className="py-16 md:py-24">
           <div className="container mx-auto px-4">
             <h1 className="text-4xl md:text-5xl font-bold mb-6">About Us</h1>
-            <div className="max-w-3xl">
-              <p className="text-lg text-gray-600 mb-8">
-                Learn about our history, mission, and the airlines we operate.
-              </p>
-            </div>
           </div>
         </section>
 
@@ -34,15 +29,16 @@ export default function AboutPage() {
                   airline to Infinite Flight started. Our hubs are at Guangzhou
                   Baiyun and Beijing Daxing.
                 </p>
+                <br />
                 <p>
                   As one of the largest airlines in China, we fly to more than
                   300+ destinations across 1000+ routes from our hubs and focus
                   cities to many places around the world. We also have a large
                   variety of fleets you can fly!
                 </p>
+                <br />
                 <p className="font-medium">
-                  Come and join China Southern Virtual Group to Fly Into Your
-                  Dreams.
+                  Join China Southern Virtual Group to Fly Into Your Dreams.
                 </p>
               </div>
             </div>
@@ -59,39 +55,39 @@ export default function AboutPage() {
                 {[
                   {
                     name: "China Southern Airlines",
-                    logo: "/placeholder.svg?height=80&width=160",
+                    logo: "https://upload.wikimedia.org/wikipedia/en/thumb/b/b4/China_Southern_Airlines_logo.svg/400px-China_Southern_Airlines_logo.svg.png",
                     description:
                       "Our flagship carrier with extensive domestic and international routes.",
                   },
                   {
                     name: "Xiamen Air",
-                    logo: "/placeholder.svg?height=80&width=160",
+                    logo: "https://upload.wikimedia.org/wikipedia/en/thumb/c/c8/XiamenAir.svg/480px-XiamenAir.svg.png",
                     description:
                       "Based in Xiamen, serving destinations across Asia and beyond.",
                   },
                   {
+                    name: "Chongqing Air",
+                    logo: "https://upload.wikimedia.org/wikipedia/commons/0/0f/Chongqing_Airlines_logo.png",
+                    description:
+                      "Operating from Chongqing to cities throughout China.",
+                  },
+                  {
                     name: "Chengdu Air",
-                    logo: "/placeholder.svg?height=80&width=160",
+                    logo: "https://upload.wikimedia.org/wikipedia/en/thumb/c/c1/Chengdu_Airlines_logo.png/400px-Chengdu_Airlines_logo.png",
                     description:
                       "Focused on routes from Chengdu to major Chinese cities.",
                   },
                   {
                     name: "Hebei Air",
-                    logo: "/placeholder.svg?height=80&width=160",
+                    logo: "https://upload.wikimedia.org/wikipedia/en/thumb/0/0b/HebeiAirLogo.png/440px-HebeiAirLogo.png",
                     description:
                       "Connecting Hebei province with destinations across China.",
                   },
                   {
                     name: "Jiangxi Air",
-                    logo: "/placeholder.svg?height=80&width=160",
+                    logo: "https://upload.wikimedia.org/wikipedia/en/thumb/4/4a/Jiangxi_Air_logo.svg/440px-Jiangxi_Air_logo.svg.png",
                     description:
                       "Serving routes from Nanchang to major Chinese destinations.",
-                  },
-                  {
-                    name: "Chongqing Air",
-                    logo: "/placeholder.svg?height=80&width=160",
-                    description:
-                      "Operating from Chongqing to cities throughout China.",
                   },
                 ].map((airline, index) => (
                   <div
@@ -103,48 +99,12 @@ export default function AboutPage() {
                       alt={`${airline.name} logo`}
                       width={160}
                       height={80}
-                      className="mb-4"
+                      className="mb-4 h-1/3 object-contain w-full"
                     />
                     <h3 className="font-bold text-lg mb-2">{airline.name}</h3>
                     <p className="text-gray-600">{airline.description}</p>
                   </div>
                 ))}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Our Mission */}
-        <section className="py-16 bg-blue-700 text-white">
-          <div className="container mx-auto px-4">
-            <div className="max-w-4xl mx-auto text-center">
-              <h2 className="text-3xl font-bold mb-6">Our Mission</h2>
-              <p className="text-xl mb-8">
-                To provide the most realistic and enjoyable virtual flying
-                experience for aviation enthusiasts around the world.
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <div>
-                  <h3 className="text-xl font-bold mb-3">Community</h3>
-                  <p>
-                    Building a supportive community of virtual pilots who share
-                    a passion for aviation.
-                  </p>
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold mb-3">Realism</h3>
-                  <p>
-                    Striving for the most authentic representation of real-world
-                    airline operations.
-                  </p>
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold mb-3">Education</h3>
-                  <p>
-                    Helping aspiring pilots learn about aviation procedures and
-                    airline operations.
-                  </p>
-                </div>
               </div>
             </div>
           </div>
@@ -163,7 +123,7 @@ export default function AboutPage() {
               </p>
               <div className="flex justify-center space-x-4">
                 <Link
-                  href="/join-us"
+                  href="/crew"
                   className="bg-blue-700 text-white px-6 py-3 rounded hover:bg-blue-800 transition-colors"
                 >
                   Apply Now

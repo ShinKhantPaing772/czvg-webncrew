@@ -4,110 +4,6 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 
 export default function RoutesPage() {
-  // Sample routes data
-  const routeCategories = [
-    {
-      category: "Domestic Routes",
-      description:
-        "Our extensive domestic network connects all major cities across China.",
-      routes: [
-        {
-          from: "Guangzhou (CAN)",
-          to: "Beijing (PEK)",
-          distance: "1,880 km",
-          duration: "3h 10m",
-          frequency: "Multiple daily",
-          aircraft: ["Boeing 777-300ER", "Airbus A330-300", "Boeing 787-9"],
-        },
-        {
-          from: "Guangzhou (CAN)",
-          to: "Shanghai (PVG)",
-          distance: "1,300 km",
-          duration: "2h 20m",
-          frequency: "Multiple daily",
-          aircraft: ["Airbus A320neo", "Boeing 737-800"],
-        },
-        {
-          from: "Beijing (PEK)",
-          to: "Shenzhen (SZX)",
-          distance: "1,950 km",
-          duration: "3h 25m",
-          frequency: "Daily",
-          aircraft: ["Airbus A330-300", "Boeing 787-9"],
-        },
-        {
-          from: "Shanghai (PVG)",
-          to: "Chengdu (CTU)",
-          distance: "1,670 km",
-          duration: "2h 55m",
-          frequency: "Daily",
-          aircraft: ["Airbus A320neo", "Boeing 737-800"],
-        },
-      ],
-    },
-    {
-      category: "International Routes - Asia",
-      description: "Connecting China with major destinations across Asia.",
-      routes: [
-        {
-          from: "Guangzhou (CAN)",
-          to: "Tokyo (NRT)",
-          distance: "3,050 km",
-          duration: "4h 10m",
-          frequency: "Daily",
-          aircraft: ["Airbus A330-300", "Boeing 787-9"],
-        },
-        {
-          from: "Beijing (PEK)",
-          to: "Seoul (ICN)",
-          distance: "950 km",
-          duration: "2h 05m",
-          frequency: "Daily",
-          aircraft: ["Airbus A330-300", "Boeing 737-800"],
-        },
-        {
-          from: "Guangzhou (CAN)",
-          to: "Singapore (SIN)",
-          distance: "2,380 km",
-          duration: "3h 45m",
-          frequency: "Daily",
-          aircraft: ["Airbus A330-300", "Boeing 787-9"],
-        },
-      ],
-    },
-    {
-      category: "International Routes - Long Haul",
-      description:
-        "Our long-haul services connecting China with Europe, North America, and Australia.",
-      routes: [
-        {
-          from: "Guangzhou (CAN)",
-          to: "Los Angeles (LAX)",
-          distance: "11,800 km",
-          duration: "13h 20m",
-          frequency: "Daily",
-          aircraft: ["Boeing 777-300ER", "Boeing 787-9"],
-        },
-        {
-          from: "Beijing (PEK)",
-          to: "London (LHR)",
-          distance: "8,150 km",
-          duration: "10h 30m",
-          frequency: "Daily",
-          aircraft: ["Boeing 777-300ER", "Airbus A350-900"],
-        },
-        {
-          from: "Guangzhou (CAN)",
-          to: "Sydney (SYD)",
-          distance: "7,400 km",
-          duration: "9h 15m",
-          frequency: "Daily",
-          aircraft: ["Airbus A350-900", "Boeing 787-9"],
-        },
-      ],
-    },
-  ];
-
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
@@ -135,7 +31,27 @@ export default function RoutesPage() {
             </div>
           </div>
         </section>
-
+        {/* Route Database Section */}
+        <section className="py-12">
+          <div className="container mx-auto px-4">
+            <div className="max-w-6xl mx-auto">
+              <h2 className="text-3xl font-bold mb-6">Route Database</h2>
+              <div className="bg-white p-4 rounded-lg shadow-md">
+                <div className="aspect-[16/9] relative">
+                  <iframe
+                    src="https://docs.google.com/spreadsheets/d/e/2PACX-1vQy_RZcm7fYgsDP1kmXyUAdVonqUegj5MeoNmflJJxKGuers9kTO1mDlYdpRlDJU6OQTc-trocUHDM1/pubhtml"
+                    className="w-full h-full rounded"
+                    style={{ border: 0 }}
+                  />
+                </div>
+                <p className="text-center text-sm text-gray-500 mt-2">
+                  * Route Database displayed here may be outdated, please refer
+                  to crew center's routes for the most up-to-date information.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
         {/* Route Map */}
         <section className="py-12 bg-gray-50">
           <div className="container mx-auto px-4">
@@ -144,87 +60,114 @@ export default function RoutesPage() {
               <div className="prose prose-lg mb-8">
                 <p>
                   China Southern Virtual Group operates one of the most
-                  extensive networks in the virtual aviation community, with
-                  over 300 destinations and 1000+ routes across China and around
-                  the world.
+                  extensive networks in the Infinite Flight virtual aviation
+                  community, with over 300 destinations and 1000+ routes across
+                  China and around the world.
                 </p>
               </div>
-              <div className="bg-white p-4 rounded-lg shadow-md">
-                <div className="aspect-[16/9] relative">
-                  <Image
-                    src="/placeholder.svg?height=720&width=1280"
-                    alt="Route map"
-                    fill
-                    className="object-cover rounded"
-                  />
+              {[
+                {
+                  src: "https://www.google.com/maps/d/embed?mid=1WEqoxQ5vrtWtqnLRG3J6iZ8ETRALeGm6&ehbc=2E312F",
+                  title: "China Southern Airlines Route Network",
+                },
+                {
+                  src: "https://www.google.com/maps/d/embed?mid=1NsyoNS1wTR1EL6xqQVQekk-VzW_A-sGz&ehbc=2E312F",
+                  title: "Xiamen Airlines Route Network",
+                },
+                {
+                  src: "https://www.google.com/maps/d/embed?mid=1d9YI86mJca95WoM56MiP-p-My4JLyjv2&ehbc=2E312F",
+                  title: "Chengdu Airines Route Network",
+                },
+                {
+                  src: "https://www.google.com/maps/d/embed?mid=1bp5K5xbt6hIgRgyTtKj1h9aMMlKvUHzE&ehbc=2E312F",
+                  title: "Hebei Airlines Route Network",
+                },
+                {
+                  src: "https://www.google.com/maps/d/embed?mid=1aKencXbuaoExxWIkXPEEqQzf_nFCa-Mu&ehbc=2E312F",
+                  title: "Jiangxi Airlines Route Network",
+                },
+                {
+                  src: "https://www.google.com/maps/d/embed?mid=1ZPcLrGGiHFiJ6-wr6fPAbSyq9mEK49yy&ehbc=2E312F",
+                  title: "Chongqing Airlines Route Network",
+                },
+              ].map((map, index) => (
+                <div key={index} className="bg-white p-4 rounded-lg shadow-md">
+                  <div className="aspect-[16/9] relative">
+                    <iframe
+                      src={map.src}
+                      width="1280"
+                      height="720"
+                      className="w-full h-full rounded"
+                    />
+                  </div>
+                  <p className="text-center text-sm text-gray-500 mt-2">
+                    {map.title}
+                  </p>
                 </div>
-                <p className="text-center text-sm text-gray-500 mt-2">
-                  China Southern Virtual Group Route Network
-                </p>
+              ))}
+            </div>
+          </div>
+        </section>
+        {/* Codeshare Partners Section */}
+        <section className="py-12">
+          <div className="container mx-auto px-4">
+            <div className="max-w-6xl mx-auto">
+              <h2 className="text-3xl font-bold mb-6">Codeshare Partners</h2>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                {[
+                  {
+                    name: "American Virtual",
+                    logo: "https://global.discourse-cdn.com/infiniteflight/original/4X/f/6/6/f66924dfe2dd443e42ef83213071371331f0d375.png",
+                  },
+                  {
+                    name: "Air France KLM Group",
+                    logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/6/65/Air_France_KLM_Group_logo.svg/580px-Air_France_KLM_Group_logo.svg.png",
+                  },
+                  {
+                    name: "Air Europa Virtual",
+                    logo: "https://aireuropavirtual.digitalweb.app/images/AirEuropa%20Redesign%20-%20Logo%20-%20Horizontal%20with%20Text%202%20-%20Blue.png",
+                  },
+                  {
+                    name: "Qatar Airways",
+                    logo: "https://upload.wikimedia.org/wikipedia/en/thumb/9/9b/Qatar_Airways_Logo.svg/500px-Qatar_Airways_Logo.svg.png",
+                  },
+                  {
+                    name: "Dubai Virtual",
+                    logo: "https://dubaiva.weebly.com/uploads/1/3/2/6/132622991/dubai-virtual-airlines-logo-2-white-writing_orig.png",
+                  },
+                  {
+                    name: "Saudia Virtual",
+                    logo: "https://global.discourse-cdn.com/infiniteflight/original/4X/7/1/7/7175e1702c01503341f88921b30db1d60fa04747.png",
+                  },
+                  {
+                    name: "Etihad Virtual",
+                    logo: "https://sea1.discourse-cdn.com/infiniteflight/user_avatar/community.infiniteflight.com/etihad_virtual/288/851859_2.png",
+                  },
+                  {
+                    name: "WestJet",
+                    logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/16/WestJetLogo2018.svg/560px-WestJetLogo2018.svg.png",
+                  },
+                ].map((partner, index) => (
+                  <div
+                    key={index}
+                    className="bg-white p-4 rounded-lg shadow-md flex flex-col items-center"
+                  >
+                    <div className="w-32 h-32 relative mb-4">
+                      <Image
+                        src={partner.logo}
+                        alt={`${partner.name} logo`}
+                        fill
+                        className="object-contain"
+                      />
+                    </div>
+                    <h3 className="text-center font-medium">{partner.name}</h3>
+                  </div>
+                ))}
+                <p className="justify-center">and more...</p>
               </div>
             </div>
           </div>
         </section>
-
-        {/* Route Categories */}
-        {routeCategories.map((category, categoryIndex) => (
-          <section key={categoryIndex} className="py-16">
-            <div className="container mx-auto px-4">
-              <div className="max-w-6xl mx-auto">
-                <h2 className="text-3xl font-bold mb-4">{category.category}</h2>
-                <p className="text-lg text-gray-600 mb-8">
-                  {category.description}
-                </p>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse">
-                    <thead>
-                      <tr className="bg-gray-100">
-                        <th className="border px-4 py-3 text-left">Route</th>
-                        <th className="border px-4 py-3 text-left">Distance</th>
-                        <th className="border px-4 py-3 text-left">Duration</th>
-                        <th className="border px-4 py-3 text-left">
-                          Frequency
-                        </th>
-                        <th className="border px-4 py-3 text-left">Aircraft</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {category.routes.map((route, routeIndex) => (
-                        <tr
-                          key={routeIndex}
-                          className={
-                            routeIndex % 2 === 0 ? "bg-white" : "bg-gray-50"
-                          }
-                        >
-                          <td className="border px-4 py-3">
-                            <div className="font-medium">
-                              {route.from} to {route.to}
-                            </div>
-                          </td>
-                          <td className="border px-4 py-3">{route.distance}</td>
-                          <td className="border px-4 py-3">{route.duration}</td>
-                          <td className="border px-4 py-3">
-                            {route.frequency}
-                          </td>
-                          <td className="border px-4 py-3">
-                            <ul className="list-disc list-inside">
-                              {route.aircraft.map((aircraft, aircraftIndex) => (
-                                <li key={aircraftIndex} className="text-sm">
-                                  {aircraft}
-                                </li>
-                              ))}
-                            </ul>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </section>
-        ))}
 
         {/* CTA Section */}
         <section className="py-16 bg-blue-700 text-white">
@@ -239,7 +182,7 @@ export default function RoutesPage() {
               </p>
               <div className="flex justify-center space-x-4">
                 <Link
-                  href="/join-us"
+                  href="/crew"
                   className="bg-white text-blue-700 px-6 py-3 rounded font-medium hover:bg-gray-100 transition-colors"
                 >
                   Apply Now

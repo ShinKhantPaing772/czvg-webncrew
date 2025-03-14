@@ -27,9 +27,11 @@ export default function Home() {
                   </p>
                   <div className="flex flex-col gap-2 min-[400px]:flex-row justify-end">
                     <Button className="bg-primary text-white">
-                      Get Flying
+                      Returning Soon
                     </Button>
-                    <Button variant="outline">Learn More</Button>
+                    <Button variant="outline">
+                      <Link href="/about-us">Learn More</Link>
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -37,7 +39,7 @@ export default function Home() {
           </div>
           <div className="absolute inset-0 z-0">
             <Image
-              src="/placeholder.svg?height=1080&width=1920"
+              src="https://global.discourse-cdn.com/infiniteflight/optimized/4X/6/3/3/63360f0de130712d1a45d778e1187fea5359831a_2_1640x992.jpeg?height=1080&width=1920"
               alt="Airplane on runway"
               fill
               className="object-cover"
@@ -54,8 +56,10 @@ export default function Home() {
                     Our Fleet
                   </h2>
                   <p className="max-w-[600px] text-gray-500 md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
-                    Explore our diverse fleet of aircraft, from regional jets to
-                    wide-body airliners.
+                    China Southern Virtual Group has 10 different types of
+                    aircraft representing 6 different airlines. Explore our
+                    diverse fleet of aircrafts, from regional jets to wide-body
+                    airliners.
                   </p>
                 </div>
                 <div>
@@ -70,8 +74,10 @@ export default function Home() {
                     Our Routes
                   </h2>
                   <p className="max-w-[600px] text-gray-500 md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
-                    Discover our global network of destinations and plan your
-                    next virtual flight.
+                    China Southern operated to 300+ destinations and having a
+                    handful number of routes to explore the world. Discover our
+                    global network of destinations and take your next virtual
+                    flight.
                   </p>
                 </div>
                 <div>
@@ -83,11 +89,12 @@ export default function Home() {
               <div className="flex flex-col justify-center space-y-4">
                 <div className="space-y-2">
                   <h2 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl">
-                    Join Us
+                    Our Hubs
                   </h2>
                   <p className="max-w-[600px] text-gray-500 md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
-                    Become part of our virtual pilot community and start your
-                    journey today.
+                    China Southern and its subsidaries has a number of hubs and
+                    focus cities. Become part of our virtual pilot community and
+                    start your journey today.
                   </p>
                 </div>
                 <div>
@@ -120,7 +127,7 @@ export default function Home() {
               <div className="flex items-center justify-center">
                 <div className="relative h-[300px] w-full overflow-hidden rounded-lg md:h-[400px]">
                   <Image
-                    src="/placeholder.svg?height=400&width=600"
+                    src="https://static.wixstatic.com/media/470f17_1a99adec1142465db334d783e588796f~mv2.jpg/v1/fill/w_1792,h_1410,al_c,q_90,usm_0.66_1.00_0.01,enc_avif,quality_auto/470f17_1a99adec1142465db334d783e588796f~mv2.jpg"
                     alt="CEO portrait"
                     fill
                     className="object-cover"
@@ -142,7 +149,7 @@ export default function Home() {
               </p>
               <div className="flex flex-col gap-2 min-[400px]:flex-row justify-center pt-4">
                 <Button className="bg-white text-primary hover:bg-white/90">
-                  Apply Now
+                  <Link href="/crew">Apply Now</Link>
                 </Button>
                 <Button
                   variant="outline"

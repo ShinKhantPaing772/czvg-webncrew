@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { Plane, ChevronDown, X } from "lucide-react";
+import { ChevronDown, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -18,7 +18,11 @@ export function Header() {
       <div className="container flex h-16 items-center justify-between px-4 md:px-6">
         <div className="flex items-center gap-2">
           <Link href="/" className="flex items-center gap-2">
-            <Plane className="h-6 w-6 text-primary" />
+            <img
+              src="https://sea1.discourse-cdn.com/infiniteflight/user_avatar/community.infiniteflight.com/chinasouthernvg/288/886608_2.png"
+              alt="China Southern Virtual Group Logo"
+              className="h-6 w-6"
+            />
             <div className="flex flex-col">
               <span className="text-xl font-bold">
                 China Southern Virtual Group
@@ -35,16 +39,10 @@ export function Header() {
             Home
           </Link>
           <Link
-            href="/crew-center"
-            className="text-sm font-medium hover:underline underline-offset-4"
-          >
-            Crew Center
-          </Link>
-          <Link
             href="/about-us"
             className="text-sm font-medium hover:underline underline-offset-4"
           >
-            About
+            About Us
           </Link>
           <DropdownMenu>
             <DropdownMenuTrigger className="flex items-center gap-1 text-sm font-medium hover:underline underline-offset-4">
@@ -70,7 +68,7 @@ export function Header() {
             </DropdownMenuContent>
           </DropdownMenu>
           <Link
-            href="/join-us"
+            href="/crew"
             className="text-sm font-medium hover:underline underline-offset-4"
           >
             Join Us
@@ -82,7 +80,7 @@ export function Header() {
             variant="default"
             className="bg-primary text-white hidden md:inline-flex"
           >
-            <Link href="/pilot-portal">Pilot Portal</Link>
+            <Link href="/crew">Pilot Portal</Link>
           </Button>
           <Button
             variant="outline"
@@ -119,8 +117,14 @@ export function Header() {
       >
         <div className="flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <Plane className="h-6 w-6 text-primary" />
-            <span className="text-xl font-bold">CZVG</span>
+            <img
+              src="https://sea1.discourse-cdn.com/infiniteflight/user_avatar/community.infiniteflight.com/chinasouthernvg/288/886608_2.png"
+              alt="China Southern Virtual Group Logo"
+              className="h-6 w-6"
+            />
+            <span className="text-xl font-bold">
+              China Southern Virtual Group
+            </span>
           </Link>
           <Button
             variant="outline"
@@ -181,7 +185,7 @@ export function Header() {
                 Routes
               </Link>
               <Link
-                href="/join-us"
+                href="/crew"
                 className="-mx-3 block rounded-lg px-3 py-2 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50"
                 onClick={() => setMobileMenuOpen(false)}
               >
@@ -195,7 +199,7 @@ export function Header() {
                 className="w-full bg-primary text-white"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                <Link href="/pilot-portal">Pilot Portal</Link>
+                <Link href="/crew">Pilot Portal</Link>
               </Button>
             </div>
           </div>
