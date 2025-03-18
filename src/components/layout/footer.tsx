@@ -4,7 +4,7 @@ export function Footer() {
   return (
     <footer className="bg-gray-100 py-8">
       <div className="container mx-auto px-4">
-        <div className="flex flex-col md:flex-row justify-between items-center">
+        <div className="flex flex-col md:flex-row justify-between items-start">
           <div className="flex items-center space-x-2 mb-4 md:mb-0">
             <img
               src="https://sea1.discourse-cdn.com/infiniteflight/user_avatar/community.infiniteflight.com/chinasouthernvg/288/886608_2.png"
@@ -15,7 +15,7 @@ export function Footer() {
               China Southern Virtual Group
             </span>
           </div>
-          <div className="flex flex-col justify-start">
+          <div className="flex flex-col justify-start items-start">
             <span className="font-medium">Explore the community</span>
             <Link
               href="https://community.infiniteflight.com/"

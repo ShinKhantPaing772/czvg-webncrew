@@ -128,7 +128,7 @@ export default function Home() {
                 <div className="relative h-[300px] w-full overflow-hidden rounded-lg md:h-[400px]">
                   <Image
                     src="https://static.wixstatic.com/media/470f17_1a99adec1142465db334d783e588796f~mv2.jpg/v1/fill/w_1792,h_1410,al_c,q_90,usm_0.66_1.00_0.01,enc_avif,quality_auto/470f17_1a99adec1142465db334d783e588796f~mv2.jpg"
-                    alt="CEO portrait"
+                    alt="AP Landing Image"
                     fill
                     className="object-cover"
                   />
