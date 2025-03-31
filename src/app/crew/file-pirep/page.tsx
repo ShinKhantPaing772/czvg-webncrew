@@ -1,24 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { format } from "date-fns";
-import {
-  CalendarIcon,
-  ChevronDown,
-  Loader2,
-  PlaneIcon,
-  RefreshCw,
-} from "lucide-react";
+import { Loader2, PlaneIcon, RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
@@ -26,7 +19,6 @@ import {
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -38,8 +30,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Select,
   SelectContent,
@@ -48,43 +38,26 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CrewHeader } from "@/components/crew-header";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { cn } from "@/lib/utils";
 
-// Mock data - in a real app, this would come from an API
-const userData = {
-  name: "John Doe",
-  email: "john.doe@example.com",
-  avatar: "",
-  rank: "Captain",
-  flightTime: 256.5, // hours
-  pirepsFiled: 42,
-  joinDate: "January 15, 2023",
-};
-
-// Mock aircraft data - in a real app, this would come from an API
-const aircraftData = [
-  { id: "1", registration: "N12345", type: "B738", name: "Boeing 737-800" },
-  { id: "2", registration: "N54321", type: "A320", name: "Airbus A320" },
-  { id: "3", registration: "N78901", type: "B77W", name: "Boeing 777-300ER" },
-  { id: "4", registration: "N45678", type: "A359", name: "Airbus A350-900" },
-  { id: "5", registration: "N98765", type: "E190", name: "Embraer E190" },
-];
+interface aircraft {
+  id: string;
+  name: string;
+  liveryname: string;
+  ifaircraftid: string;
+  ifliveryid: string;
+  notes: string;
+}
+import { useSession } from "@/hooks/use-session";
 
 // Form schema with validation
 const formSchema = z.object({
-  flightNumber: z.string().min(2, {
+  flightnum: z.string().min(2, {
     message: "Flight number must be at least 2 characters.",
   }),
-  departureIcao: z.string().length(4, {
+  departure: z.string().length(4, {
     message: "Departure ICAO must be exactly 4 characters.",
   }),
-  arrivalIcao: z.string().length(4, {
+  arrival: z.string().length(4, {
     message: "Arrival ICAO must be exactly 4 characters.",
   }),
   flightTime: z.string().regex(/^\d+:\d{2}$/, {
@@ -99,29 +72,59 @@ const formSchema = z.object({
   fuelUsed: z.string().regex(/^\d+(\.\d+)?$/, {
     message: "Fuel used must be a number.",
   }),
-  multiplier: z.string().optional(),
+  multi: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
 export default function FilePirep() {
-  const [date, setDate] = useState<Date>();
-  const userName = "John Doe"; // This should be replaced with actual user data
+  const { user } = useSession();
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingAcars, setIsFetchingAcars] = useState(false);
+  // State for aircraft data
+  const [originalAircraftData, setOriginalAircraftData] = useState<aircraft[]>(
+    []
+  );
+  const [filteredAircraftData, setFilteredAircraftData] = useState<aircraft[]>(
+    []
+  );
+  const [isLoadingAircraft, setIsLoadingAircraft] = useState(false);
+
+  // Fetch aircraft data from API
+  useEffect(() => {
+    const fetchAircraft = async () => {
+      setIsLoadingAircraft(true);
+      try {
+        const response = await fetch("/api/aircraft");
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch aircraft data");
+        }
+        const data = await response.json();
+        setOriginalAircraftData(data.aircrafts);
+        setFilteredAircraftData(data.aircrafts);
+      } catch (error) {
+        console.error("Error fetching aircraft:", error);
+      } finally {
+        setIsLoadingAircraft(false);
+      }
+    };
+
+    fetchAircraft();
+  }, []);
 
   // Initialize form with default values
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      flightNumber: "",
-      departureIcao: "",
-      arrivalIcao: "",
+      flightnum: "",
+      departure: "",
+      arrival: "",
       flightTime: "",
       date: new Date(), // Default to today
       aircraftId: "",
       fuelUsed: "",
-      multiplier: "",
+      multi: "",
     },
   });
 
@@ -129,15 +132,21 @@ export default function FilePirep() {
   async function onSubmit(data: FormValues) {
     setIsLoading(true);
 
+    console.log(data);
     try {
-      // In a real app, you would send this data to your API
-      console.log("Form data:", data);
+      const response = await fetch("/api/pireps", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      });
 
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      if (!response.ok) {
+        throw new Error("Failed to submit PIREP");
+      }
 
-      // Optionally reset form after successful submission
-      // form.reset()
+      form.reset();
     } catch (error) {
       console.error(error);
     } finally {
@@ -150,20 +159,16 @@ export default function FilePirep() {
     setIsFetchingAcars(true);
 
     try {
-      // In a real app, you would fetch data from your ACARS API
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-
-      // Mock ACARS data
+      // TODO: Implement ACARS data fetching
       const acarsData = {
-        flightNumber: "VA143",
-        departureIcao: "KLAX",
-        arrivalIcao: "KSFO",
-        flightTime: "1:15",
+        flightnum: "",
+        departure: "",
+        arrival: "",
+        flightTime: "",
         date: new Date(),
-        aircraftId: "1", // ID of B738
-        fuelUsed: "2450.5",
-        multiplier: "1.5",
+        aircraftId: "",
+        fuelUsed: "",
+        multi: "",
       };
 
       // Update form with fetched data
@@ -176,15 +181,12 @@ export default function FilePirep() {
   }
 
   return (
-    <CrewHeader userName={userName}>
+    <CrewHeader userName={user?.name || ""}>
       <Card className="max-w-2xl mx-auto mt-4 z-0 overflow-visible">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="text-2xl">Submit PIREP</CardTitle>
-              <CardDescription>
-                File a Pilot Report for your completed flight
-              </CardDescription>
             </div>
             <Button
               variant="outline"
@@ -207,7 +209,7 @@ export default function FilePirep() {
               <div className="grid grid-cols-1 gap-4">
                 <FormField
                   control={form.control}
-                  name="flightNumber"
+                  name="flightnum"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Flight Number</FormLabel>
@@ -254,7 +256,7 @@ export default function FilePirep() {
 
                 <FormField
                   control={form.control}
-                  name="departureIcao"
+                  name="departure"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Departure ICAO</FormLabel>
@@ -268,7 +270,7 @@ export default function FilePirep() {
 
                 <FormField
                   control={form.control}
-                  name="arrivalIcao"
+                  name="arrival"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Arrival ICAO</FormLabel>
@@ -302,17 +304,57 @@ export default function FilePirep() {
                       <FormLabel>Aircraft</FormLabel>
                       <Select
                         onValueChange={field.onChange}
-                        defaultValue={field.value}
+                        value={field.value}
                       >
                         <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select aircraft" />
-                          </SelectTrigger>
+                          <div className="flex space-x-2">
+                            <SelectTrigger>
+                              <SelectValue
+                                placeholder={
+                                  originalAircraftData.find(
+                                    (aircraft: { id: string }) =>
+                                      aircraft.id === field.value
+                                  )?.name || "Select aircraft.."
+                                }
+                              />
+                            </SelectTrigger>
+
+                            <Input
+                              placeholder="Search aircraft..."
+                              className="mb-2"
+                              onChange={(e) => {
+                                const searchTerm = e.target.value.toLowerCase();
+                                const filtered = originalAircraftData.filter(
+                                  (aircraft) =>
+                                    aircraft.name
+                                      .toLowerCase()
+                                      .includes(searchTerm) ||
+                                    aircraft.liveryname
+                                      .toLowerCase()
+                                      .includes(searchTerm)
+                                );
+                                setFilteredAircraftData(filtered);
+                              }}
+                            />
+                          </div>
                         </FormControl>
-                        <SelectContent className="bg-white">
-                          {aircraftData.map((aircraft) => (
-                            <SelectItem key={aircraft.id} value={aircraft.id}>
-                              {aircraft.type} - {aircraft.registration}
+                        <SelectContent className="bg-white max-h-[200px] overflow-y-auto">
+                          {isLoadingAircraft && (
+                            <div className="flex items-center justify-center h-10">
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            </div>
+                          )}
+                          {filteredAircraftData.map((aircraft) => (
+                            <SelectItem
+                              key={aircraft.id}
+                              value={"" + aircraft.id}
+                            >
+                              {aircraft.name} - {aircraft.liveryname}
+                              {aircraft.notes && (
+                                <span className="text-xs text-muted-foreground block">
+                                  Notes: {aircraft.notes}
+                                </span>
+                              )}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -338,7 +380,7 @@ export default function FilePirep() {
 
                 <FormField
                   control={form.control}
-                  name="multiplier"
+                  name="multi"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Multiplier (if available)</FormLabel>

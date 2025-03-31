@@ -323,7 +323,7 @@ export default function AdminPermissions() {
 
   return (
     <CrewHeader userName="Admin User" isAdmin={true}>
-      <main className="flex-1 p-6 lg:px-8">
+      <main className="flex-1">
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <h1 className="text-2xl font-bold">Admin Permissions</h1>

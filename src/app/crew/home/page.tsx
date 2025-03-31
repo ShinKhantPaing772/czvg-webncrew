@@ -1,16 +1,7 @@
-import {
-  Award,
-  Clock,
-  FileText,
-  Plane,
-  UserIcon,
-  ChevronDown,
-  Calendar,
-  MapPin,
-  Timer,
-} from "lucide-react";
+"use client";
+
+import { Award, Clock, FileText, UserIcon } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -19,12 +10,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
   Table,
   TableBody,
   TableCell,
@@ -32,80 +17,97 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Header } from "@/components/layout/header";
 import { CrewHeader } from "@/components/crew-header";
 
-// Mock data - in a real app, this would come from an API
-const userData = {
-  name: "John Doe",
-  email: "john.doe@example.com",
-  avatar: "",
-  rank: "Captain",
-  flightTime: 256.5, // hours
-  pirepsFiled: 42,
-  joinDate: "January 15, 2023",
-};
+import { formatFlightTime } from "@/lib/utils/format-flight-time";
+import { useSession } from "@/hooks/use-session";
+import { useEffect, useState } from "react";
 
-const recentFlights = [
-  {
-    id: "FL-1234",
-    date: "2023-03-15",
-    departure: "KLAX",
-    arrival: "KSFO",
-    aircraft: "B738",
-    duration: "1:15",
-    status: "Approved",
-  },
-  {
-    id: "FL-1235",
-    date: "2023-03-10",
-    departure: "KSFO",
-    arrival: "KDEN",
-    aircraft: "A320",
-    duration: "2:30",
-    status: "Approved",
-  },
-  {
-    id: "FL-1236",
-    date: "2023-03-05",
-    departure: "KDEN",
-    arrival: "KATL",
-    aircraft: "B738",
-    duration: "2:45",
-    status: "Approved",
-  },
-  {
-    id: "FL-1237",
-    date: "2023-03-01",
-    departure: "KATL",
-    arrival: "KJFK",
-    aircraft: "B738",
-    duration: "2:10",
-    status: "Approved",
-  },
-  {
-    id: "FL-1238",
-    date: "2023-02-25",
-    departure: "KJFK",
-    arrival: "KBOS",
-    aircraft: "CRJ7",
-    duration: "1:05",
-    status: "Approved",
-  },
-];
+interface Pirep {
+  id: string;
+  date: string;
+  departure: string;
+  arrival: string;
+  aircraft: string;
+  duration: string;
+  status: string;
+}
 
 export default function UserDashboard() {
-  const formatFlightTime = (hours: number) => {
-    const wholeHours = Math.floor(hours);
-    const minutes = Math.round((hours - wholeHours) * 60);
-    return `${wholeHours}h ${minutes}m`;
-  };
+  const { user, loading, error } = useSession();
+  // Get recent flights from user's PIREPs
+  // Query pireps separately since they're not included in user data
+  const [pireps, setPireps] = useState<Pirep[]>([]);
+
+  useEffect(() => {
+    const fetchPireps = async () => {
+      try {
+        // TODO: Replace with actual API endpoint
+        const response = await fetch(`/api/pilots/${user?.id}/pireps`);
+        const data = await response.json();
+
+        const recentPireps = data.pireps
+          .slice(0, 5)
+          .map(
+            (pirep: {
+              flightnum: any;
+              date: string | number | Date;
+              departure: any;
+              arrival: any;
+              Aircraft: { name: any; liveryname: any };
+              aircraftid: any;
+              flighttime: any;
+              status: string;
+            }) => ({
+              id: pirep.flightnum,
+              date: new Date(pirep.date).toISOString().split("T")[0],
+              departure: pirep.departure,
+              arrival: pirep.arrival,
+              aircraft:
+                pirep.Aircraft?.name + " (" + pirep.Aircraft.liveryname + ")" ||
+                pirep.aircraftid ||
+                "N/A",
+              duration: formatFlightTime(pirep.flighttime),
+              status: pirep.status,
+            })
+          );
+
+        setPireps(recentPireps);
+      } catch (error) {
+        console.error("Failed to fetch PIREPs:", error);
+        setPireps([]);
+      }
+    };
+
+    if (user?.id) {
+      fetchPireps();
+    }
+  }, [user?.id]);
+
+  const recentFlights = pireps;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        Loading...
+      </div>
+    );
+  }
+
+  if (error || !user) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        Error: {error || "User not found"}
+      </div>
+    );
+  }
+
+  const userData = user;
 
   return (
     <CrewHeader userName={userData.name}>
-      <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
+      <main className="flex flex-1 flex-col gap-4 md:gap-8">
         <Card>
           <CardHeader>
             <CardTitle>Pilot Profile</CardTitle>
@@ -184,7 +186,9 @@ export default function UserDashboard() {
               <UserIcon className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{userData.joinDate}</div>
+              <div className="text-2xl font-bold">
+                {new Date(userData.joined).toLocaleDateString()}
+              </div>
               <p className="text-xs text-muted-foreground">
                 Active crew member
               </p>
@@ -210,20 +214,30 @@ export default function UserDashboard() {
               </TableHeader>
               <TableBody>
                 {recentFlights.map((flight) => (
-                  <TableRow key={flight.id}>
-                    <TableCell className="font-medium">{flight.id}</TableCell>
-                    <TableCell>{flight.date}</TableCell>
+                  <TableRow key={flight?.id}>
+                    <TableCell className="font-medium">{flight?.id}</TableCell>
+                    <TableCell>{flight?.date}</TableCell>
                     <TableCell>
-                      {flight.departure} → {flight.arrival}
+                      {flight?.departure} → {flight?.arrival}
                     </TableCell>
                     <TableCell>{flight.aircraft}</TableCell>
                     <TableCell>{flight.duration}</TableCell>
                     <TableCell>
                       <Badge
                         variant="outline"
-                        className="bg-green-50 text-green-700 border-green-200"
+                        className={
+                          parseInt(flight.status) === 0
+                            ? "bg-yellow-50 text-yellow-700 border-yellow-200"
+                            : parseInt(flight.status) === 1
+                            ? "bg-green-50 text-green-700 border-green-200"
+                            : "bg-red-50 text-red-700 border-red-200"
+                        }
                       >
-                        {flight.status}
+                        {parseInt(flight.status) === 0
+                          ? "Pending"
+                          : parseInt(flight.status) === 1
+                          ? "Accepted"
+                          : "Rejected"}
                       </Badge>
                     </TableCell>
                   </TableRow>

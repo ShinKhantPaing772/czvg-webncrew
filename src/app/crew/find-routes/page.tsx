@@ -4,7 +4,13 @@ import { useState, useEffect } from "react";
 import { Search, Filter, Plane, ArrowRight, Clock } from "lucide-react";
 import { CrewHeader } from "@/components/crew-header";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -238,7 +244,7 @@ export default function FindRoutes() {
       userName="John Doe"
       userAvatar="/placeholder.svg?height=80&width=80"
     >
-      <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
+      <main className="flex flex-1 flex-col gap-4  md:gap-8">
         <div className="flex flex-col gap-4">
           <h1 className="text-2xl font-bold">Find Routes</h1>
 
@@ -281,7 +287,7 @@ export default function FindRoutes() {
 
           {showFilters && (
             <Card>
-              <CardContent className="grid grid-cols-1 gap-4 p-4 md:grid-cols-3">
+              <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <div className="space-y-2">
                   <Label htmlFor="departure">Departure Airport</Label>
                   <Select
@@ -345,68 +351,72 @@ export default function FindRoutes() {
             </Card>
           )}
 
-          <div className="rounded-lg border bg-card">
+          <div className="rounded-lg bg-card">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsContent value="table" className="m-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Flight</TableHead>
-                      <TableHead>Route</TableHead>
-                      <TableHead>Duration</TableHead>
-                      <TableHead>Aircraft</TableHead>
-                      <TableHead>Notes</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredRoutes.length === 0 ? (
-                      <TableRow>
-                        <TableCell
-                          colSpan={6}
-                          className="text-center py-8 text-muted-foreground"
-                        >
-                          No routes found matching your criteria
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      filteredRoutes.map((route) => (
-                        <TableRow key={route.id}>
-                          <TableCell className="font-medium">
-                            {route.fltnum}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1">
-                              <span>{route.dep}</span>
-                              <ArrowRight className="h-3 w-3" />
-                              <span>{route.arr}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell>{route.duration}</TableCell>
-                          <TableCell>
-                            <div className="flex flex-wrap gap-1">
-                              {getAircraftForRoute(route.id).map((ac) => (
-                                <Badge
-                                  key={ac.id}
-                                  variant="outline"
-                                  className="text-xs"
-                                >
-                                  {ac.ifaircraftid}
-                                </Badge>
-                              ))}
-                            </div>
-                          </TableCell>
-                          <TableCell>{route.notes}</TableCell>
-                          <TableCell className="text-right">
-                            <Button variant="ghost" size="sm" asChild>
-                              <a href={`/crew/route/${route.id}`}>View</a>
-                            </Button>
-                          </TableCell>
+              <TabsContent value="table">
+                <Card>
+                  <CardContent className="p-0">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Flight</TableHead>
+                          <TableHead>Route</TableHead>
+                          <TableHead>Duration</TableHead>
+                          <TableHead>Aircraft</TableHead>
+                          <TableHead>Notes</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredRoutes.length === 0 ? (
+                          <TableRow>
+                            <TableCell
+                              colSpan={6}
+                              className="text-center text-muted-foreground"
+                            >
+                              No routes found matching your criteria
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          filteredRoutes.map((route) => (
+                            <TableRow key={route.id}>
+                              <TableCell className="font-medium">
+                                {route.fltnum}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-1">
+                                  <span>{route.dep}</span>
+                                  <ArrowRight className="h-3 w-3" />
+                                  <span>{route.arr}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell>{route.duration}</TableCell>
+                              <TableCell>
+                                <div className="flex flex-wrap gap-1">
+                                  {getAircraftForRoute(route.id).map((ac) => (
+                                    <Badge
+                                      key={ac.id}
+                                      variant="outline"
+                                      className="text-xs"
+                                    >
+                                      {ac.ifaircraftid}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              </TableCell>
+                              <TableCell>{route.notes}</TableCell>
+                              <TableCell className="text-right">
+                                <Button variant="ghost" size="sm" asChild>
+                                  <a href={`/crew/route/${route.id}`}>View</a>
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
               </TabsContent>
 
               <TabsContent value="cards" className="m-0 p-4">
