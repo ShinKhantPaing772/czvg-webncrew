@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { models } from "@/lib/db";
-import bcrypt from "bcrypt";
+import bcryptjs from "bcrypt";
 import jwt from "jsonwebtoken";
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -107,7 +107,7 @@ async function handleLogin({
         { status: 500 }
       );
     }
-    isValidPassword = await bcrypt.compare(password, pilot.password);
+    isValidPassword = await bcryptjs.compare(password, pilot.password);
     console.log(
       "[Login] Password comparison completed. Match result:",
       isValidPassword
@@ -203,7 +203,7 @@ async function handleSignup({
     );
   }
 
-  const hashedPassword = await bcrypt.hash(password, 10);
+  const hashedPassword = await bcryptjs.hash(password, 10);
   const callsign = await generateUniqueCallsign();
 
   const pilot = await models.Pilot.create({
