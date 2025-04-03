@@ -13,7 +13,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify token and get pilot
-    const response = await fetch("/api/auth/verify", {
+    // Import the utility function
+    const { getAbsoluteUrl } = await import("@/lib/utils/url");
+
+    const response = await fetch(getAbsoluteUrl("/api/auth/verify"), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

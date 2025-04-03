@@ -1,4 +1,3 @@
-import { stat } from "fs";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
@@ -17,7 +16,10 @@ export async function GET() {
 
     // Verify the token and get user data from database
     const token = authToken.value;
-    const response = await fetch("/api/auth/verify", {
+    // Import the utility function
+    const { getAbsoluteUrl } = await import("@/lib/utils/url");
+
+    const response = await fetch(getAbsoluteUrl("/api/auth/verify"), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -32,7 +34,9 @@ export async function GET() {
     const userData = await response.json();
 
     // Get pilot data and statistics
-    const pilotResponse = await fetch(`/api/pilots/${userData.id}`);
+    const pilotResponse = await fetch(
+      getAbsoluteUrl(`/api/pilots/${userData.id}`)
+    );
     if (!pilotResponse.ok) {
       return NextResponse.json(
         { error: "Failed to fetch pilot data" },
@@ -42,7 +46,9 @@ export async function GET() {
     const pilotData = await pilotResponse.json();
 
     // Get PIREPs and flight statistics
-    const pirepsResponse = await fetch(`/api/pilots/${userData.id}/pireps`);
+    const pirepsResponse = await fetch(
+      getAbsoluteUrl(`/api/pilots/${userData.id}/pireps`)
+    );
     if (!pirepsResponse.ok) {
       return NextResponse.json(
         { error: "Failed to fetch PIREP data" },
