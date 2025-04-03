@@ -193,17 +193,18 @@ Permission.init(
 class Route extends Model {
   declare id: number;
   declare fltnum: string;
-  declare departure: string;
-  declare arrival: string;
+  declare dep: string;
+  declare arr: string;
   declare duration: number;
   declare notes: string;
+  Aircraft: any;
 }
 Route.init(
   {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     fltnum: { type: DataTypes.TEXT },
-    departure: { type: DataTypes.STRING(4), allowNull: false },
-    arrival: { type: DataTypes.STRING(4), allowNull: false },
+    dep: { type: DataTypes.STRING(4), allowNull: false },
+    arr: { type: DataTypes.STRING(4), allowNull: false },
     duration: { type: DataTypes.INTEGER, allowNull: false },
     notes: { type: DataTypes.TEXT },
   },

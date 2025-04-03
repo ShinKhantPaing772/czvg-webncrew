@@ -1,7 +1,8 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { ChevronDown, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ChevronDown, User2, X, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -9,9 +10,28 @@ import {
   DropdownMenuTrigger,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
+import { useSession } from "@/hooks/use-session";
 
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const { user } = useSession();
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    try {
+      setIsLoggingOut(true);
+      const response = await fetch("/api/auth/logout");
+      if (!response.ok) {
+        throw new Error("Logout failed");
+      }
+      // Force a page refresh to clear the user state
+      window.location.href = "/crew";
+    } catch (error) {
+      console.error("Logout error:", error);
+      setIsLoggingOut(false);
+    }
+  };
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-white">
@@ -67,21 +87,63 @@ export function Header() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Link
-            href="/crew"
-            className="text-sm font-medium hover:underline underline-offset-4"
-          >
-            Join Us
-          </Link>
+          {!user ? (
+            <Link
+              href="/crew"
+              className="text-sm font-medium hover:underline underline-offset-4"
+            >
+              Join Us
+            </Link>
+          ) : (
+            <Link
+              href="/crew"
+              className="text-sm font-medium hover:underline underline-offset-4"
+            >
+              Crew Center
+            </Link>
+          )}
         </nav>
         <div className="flex items-center gap-4">
-          <Button
-            asChild
-            variant="default"
-            className="bg-primary text-white hidden md:inline-flex"
-          >
-            <Link href="/crew">Pilot Portal</Link>
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="default"
+                className="bg-primary text-white hidden md:inline-flex"
+              >
+                {!user ? (
+                  <Link href="/crew">Pilot Portal</Link>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <p>{user?.name}</p>
+                    <ChevronDown className="h-4 w-4" />
+                  </div>
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            {user && (
+              <DropdownMenuContent align="end" className="bg-white">
+                {/* <DropdownMenuItem>
+                  <Link href="/profile" className="w-full">
+                    Profile
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  <Link href="/settings" className="w-full">
+                    Settings
+                  </Link>
+                </DropdownMenuItem> */}
+                <DropdownMenuItem
+                  onClick={handleLogout}
+                  disabled={isLoggingOut}
+                >
+                  <div className="flex w-full items-center">
+                    <LogOut className="mr-2 h-4 w-4" />
+                    {isLoggingOut ? "Logging out..." : "Log Out"}
+                  </div>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            )}
+          </DropdownMenu>
           <Button
             variant="outline"
             size="icon"
@@ -184,23 +246,67 @@ export function Header() {
               >
                 Routes
               </Link>
-              <Link
-                href="/crew"
-                className="-mx-3 block rounded-lg px-3 py-2 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Join Us
-              </Link>
+              {!user ? (
+                <Link
+                  href="/crew"
+                  className="-mx-3 block rounded-lg px-3 py-2 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Join Us
+                </Link>
+              ) : (
+                <Link
+                  href="/crew"
+                  className="-mx-3 block rounded-lg px-3 py-2 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Crew Center
+                </Link>
+              )}
             </div>
             <div className="py-6">
-              <Button
-                asChild
-                variant="default"
-                className="w-full bg-primary text-white"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                <Link href="/crew">Pilot Portal</Link>
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="default"
+                    className="w-full bg-primary text-white"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    {!user ? (
+                      <Link href="/crew">Pilot Portal</Link>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <p>{user.name}</p>
+                        <ChevronDown className="h-4 w-4" />
+                      </div>
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                {user && (
+                  <DropdownMenuContent align="end">
+                    {/* <DropdownMenuItem>
+                    <Link href="/profile" className="w-full">
+                      Profile
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem>
+                    <Link href="/settings" className="w-full">
+                      Settings
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator /> */}
+                    <DropdownMenuItem
+                      onClick={handleLogout}
+                      disabled={isLoggingOut}
+                    >
+                      <div className="flex w-full items-center">
+                        <LogOut className="mr-2 h-4 w-4" />
+                        {isLoggingOut ? "Logging out..." : "Log Out"}
+                      </div>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                )}
+              </DropdownMenu>
             </div>
           </div>
         </nav>

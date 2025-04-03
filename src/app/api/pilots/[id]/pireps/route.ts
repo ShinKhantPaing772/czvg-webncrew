@@ -46,12 +46,49 @@ export async function GET(
       0
     );
 
-    console.log(formattedPireps);
+    // Fetch all ranks from the database
+    const ranks = await models.Rank.findAll({
+      order: [["timereq", "ASC"]],
+    });
+
+    // Determine the pilot's rank based on total flight time
+    let pilotRank = { id: 0, name: "Trainee", timereq: 0 }; // Default rank if no ranks found
+
+    for (const rank of ranks) {
+      if (totalSeconds >= rank.timereq) {
+        pilotRank = rank.get();
+      } else {
+        break; // Stop once we find a rank with higher requirements than the pilot's time
+      }
+    }
+
+    // Calculate progress to next rank
+    let nextRank = null;
+    let progressToNextRank = 100; // Default to 100% if there's no next rank
+
+    const currentRankIndex = ranks.findIndex(
+      (rank) => rank.id === pilotRank.id
+    );
+    if (currentRankIndex < ranks.length - 1) {
+      nextRank = ranks[currentRankIndex + 1].get();
+      const remainingTime = nextRank.timereq - totalSeconds;
+      const totalRankTime = nextRank.timereq - pilotRank.timereq;
+      progressToNextRank = Math.min(
+        100,
+        Math.max(0, ((totalRankTime - remainingTime) / totalRankTime) * 100)
+      );
+    }
+
     return NextResponse.json({
       pireps: formattedPireps,
       statistics: {
         totalFlightTime: formatFlightTime(totalSeconds),
         totalPireps: pireps.length,
+        rank: pilotRank.name,
+        rankId: pilotRank.id,
+        nextRank: nextRank ? nextRank.name : null,
+        nextRankTimeReq: nextRank ? formatFlightTime(nextRank.timereq) : null,
+        progressToNextRank: progressToNextRank.toFixed(2),
       },
     });
   } catch (error) {

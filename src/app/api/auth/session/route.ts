@@ -1,3 +1,4 @@
+import { stat } from "fs";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
@@ -54,7 +55,7 @@ export async function GET() {
       id: userData.id,
       name: userData.name,
       email: userData.email,
-      rank: "Captain",
+      rank: statistics.rank,
       flightTime: statistics.totalFlightTime,
       pirepsFiled: statistics.totalPireps,
       joined: pilotData.joined,

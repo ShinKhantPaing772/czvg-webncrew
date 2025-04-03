@@ -137,7 +137,10 @@ export function CrewHeader({
               const isActive = pathname === item.href;
 
               return (
-                <li key={item.href}>
+                <li
+                  key={item.href}
+                  className={` ${isSidebarOpen ? "" : "items-center"}`}
+                >
                   <a
                     href={item.href}
                     className={`flex items-center rounded-md px-3 py-2 text-sm transition-colors hover:bg-muted ${
@@ -147,8 +150,8 @@ export function CrewHeader({
                     }`}
                   >
                     <item.icon
-                      className={`mr-2 h-4 w-4 ${
-                        isSidebarOpen ? "" : "mx-auto"
+                      className={`h-4 w-4 ${
+                        isSidebarOpen ? "mr-2" : "mx-auto"
                       }`}
                     />
                     {isSidebarOpen && <span>{item.title}</span>}
@@ -161,15 +164,17 @@ export function CrewHeader({
 
         <div className="border-t p-4">
           <div className="flex items-center gap-3">
-            <Avatar className="h-8 w-8">
-              <AvatarImage src={userAvatar} alt={userName} />
-              <AvatarFallback>{userName.charAt(0)}</AvatarFallback>
-            </Avatar>
-
             {isSidebarOpen && (
-              <div className="flex-1 overflow-hidden">
-                <p className="text-sm font-medium">{userName}</p>
-              </div>
+              <>
+                <Avatar className="h-8 w-8">
+                  <AvatarImage src={userAvatar} alt={userName} />
+                  <AvatarFallback>{userName.charAt(0)}</AvatarFallback>
+                </Avatar>
+
+                <div className="flex-1 overflow-hidden">
+                  <p className="text-sm font-medium">{userName}</p>
+                </div>
+              </>
             )}
 
             <Button
@@ -179,7 +184,6 @@ export function CrewHeader({
               className="ml-auto h-8 w-8"
             >
               <Menu className="h-4 w-4" />
-              <span className="sr-only">Toggle sidebar</span>
             </Button>
           </div>
         </div>
@@ -191,13 +195,15 @@ export function CrewHeader({
           <Button
             variant="outline"
             size="icon"
-            className="fixed left-4 top-4 z-40 md:hidden"
+            className="fixed left-4 bottom-4 z-50 md:hidden"
           >
             <Menu className="h-4 w-4" />
-            <span className="sr-only">Toggle menu</span>
           </Button>
         </SheetTrigger>
-        <SheetContent side="left" className="w-64 p-0">
+        <p className="fixed left-16 bottom-4 z-50 md:hidden">
+          For Crew Center Sidebar
+        </p>
+        <SheetContent side="left" className="w-64 p-0 bg-white">
           <div className="flex h-16 items-center border-b px-4">
             <h2 className="text-lg font-semibold">Crew Center</h2>
           </div>
@@ -236,25 +242,6 @@ export function CrewHeader({
               <div className="flex-1 overflow-hidden">
                 <p className="text-sm font-medium">{userName}</p>
               </div>
-
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon">
-                    <ChevronDown className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>My Account</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem>Profile</DropdownMenuItem>
-                  <DropdownMenuItem>Settings</DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem>
-                    <LogOut className="mr-2 h-4 w-4" />
-                    <span>Log out</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
             </div>
           </div>
         </SheetContent>

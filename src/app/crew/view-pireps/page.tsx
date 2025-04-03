@@ -13,6 +13,7 @@ import {
   ChevronUp,
   Download,
   Eye,
+  Loader2,
 } from "lucide-react";
 import { CrewHeader } from "@/components/crew-header";
 import { Button } from "@/components/ui/button";
@@ -176,27 +177,8 @@ export default function ViewPireps() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        Loading...
-      </div>
-    );
-  }
-
-  if (error || !user) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        Error: {error || "User not found"}
-      </div>
-    );
-  }
-
   return (
-    <CrewHeader
-      userName={user.name}
-      userAvatar={user.avatar || "/placeholder.svg?height=80&width=80"}
-    >
+    <CrewHeader userName={"" + user?.name}>
       <main className="flex flex-1 flex-col gap-4 md:gap-8">
         <div className="flex flex-col gap-4">
           <div className="flex items-center justify-between">
@@ -236,13 +218,23 @@ export default function ViewPireps() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginatedPireps.length === 0 ? (
+                  {loading && (
+                    <TableRow>
+                      <TableCell colSpan={8}>
+                        <div className="flex items-center justify-center gap-2">
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                          <span>Loading...</span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {paginatedPireps.length === 0 && !loading ? (
                     <TableRow>
                       <TableCell
                         colSpan={8}
                         className="text-center py-8 text-muted-foreground"
                       >
-                        No PIREPs found matching your criteria
+                        Click Search
                       </TableCell>
                     </TableRow>
                   ) : (
