@@ -125,9 +125,26 @@ export function CrewHeader({
       >
         <div className="flex h-16 items-center border-b px-4">
           {isSidebarOpen ? (
-            <h2 className="text-lg font-semibold">Crew Center</h2>
+            <div className="flex items-center justify-between w-full">
+              <h2 className="flex text-lg font-semibold">Crew Center</h2>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                className="flex h-8 w-8"
+              >
+                <Menu className="h-4 w-4" />
+              </Button>
+            </div>
           ) : (
-            <span className="mx-auto font-bold">CC</span>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              className="flex h-8 w-8"
+            >
+              <Menu className="h-4 w-4" />
+            </Button>
           )}
         </div>
 
@@ -161,32 +178,6 @@ export function CrewHeader({
             })}
           </ul>
         </nav>
-
-        <div className="border-t p-4">
-          <div className="flex items-center gap-3">
-            {isSidebarOpen && (
-              <>
-                <Avatar className="h-8 w-8">
-                  <AvatarImage src={userAvatar} alt={userName} />
-                  <AvatarFallback>{userName.charAt(0)}</AvatarFallback>
-                </Avatar>
-
-                <div className="flex-1 overflow-hidden">
-                  <p className="text-sm font-medium">{userName}</p>
-                </div>
-              </>
-            )}
-
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="ml-auto h-8 w-8"
-            >
-              <Menu className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
       </aside>
 
       {/* Mobile Sidebar */}
@@ -231,19 +222,6 @@ export function CrewHeader({
               })}
             </ul>
           </nav>
-
-          <div className="border-t p-4">
-            <div className="flex items-center gap-3">
-              <Avatar className="h-8 w-8">
-                <AvatarImage src={userAvatar} alt={userName} />
-                <AvatarFallback>{userName.charAt(0)}</AvatarFallback>
-              </Avatar>
-
-              <div className="flex-1 overflow-hidden">
-                <p className="text-sm font-medium">{userName}</p>
-              </div>
-            </div>
-          </div>
         </SheetContent>
       </Sheet>
 

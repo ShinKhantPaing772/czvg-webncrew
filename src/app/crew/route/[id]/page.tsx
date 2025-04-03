@@ -5,13 +5,7 @@ import { useParams } from "next/navigation";
 import { ArrowLeft, Clock, MapPin, Loader2, ArrowRight } from "lucide-react";
 import { CrewHeader } from "@/components/crew-header";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import Link from "next/link";

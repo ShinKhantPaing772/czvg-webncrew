@@ -7,7 +7,6 @@ const JWT_SECRET = process.env.JWT_SECRET;
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("[Auth] Received auth request");
     if (!models?.Pilot) {
       console.error("[Auth] Error: Database connection not established");
       return NextResponse.json(
@@ -18,7 +17,6 @@ export async function POST(request: NextRequest) {
     let body;
     try {
       body = await request.json();
-      console.log("[Auth] Request body:", body);
     } catch (error) {
       console.error("[Auth] Error parsing request body:", error);
       return NextResponse.json(
@@ -28,11 +26,9 @@ export async function POST(request: NextRequest) {
     }
 
     const { action = "login", ...data } = body;
-    console.log("[Auth] Database connection status: Connected");
 
     switch (action) {
       case "login":
-        console.log("Processing login request");
         return handleLogin(data);
       case "signup":
         return handleSignup(data);
@@ -61,10 +57,7 @@ async function handleLogin({
   email: string;
   password: string;
 }) {
-  console.log("[Login] Attempt for email:", email);
   const normalizedEmail = email.trim().toLowerCase();
-  console.log("[Login] Normalized email:", normalizedEmail);
-  console.log("[Login] Attempting database query...");
 
   let pilot;
   try {
@@ -72,7 +65,6 @@ async function handleLogin({
       where: { email: normalizedEmail },
       attributes: ["id", "email", "password", "name", "callsign"],
     });
-    console.log("[Login] Database query successful");
   } catch (error) {
     console.error("[Login] Database query error:", error);
     return NextResponse.json(
@@ -82,48 +74,21 @@ async function handleLogin({
   }
 
   if (!pilot) {
-    console.log("No pilot found with email:", normalizedEmail);
     return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
   }
-
-  console.log("[Login] Pilot found:", { id: pilot.id, email: pilot.email });
-  console.log("[Login] Stored hash length:", pilot.password?.length);
-  console.log("[Login] Input password length:", password?.length);
-  console.log("[Login] Starting password comparison...");
 
   let isValidPassword = false;
   try {
     if (!password || !pilot.password) {
-      console.log("[Login] Error: Missing password or stored hash");
       return NextResponse.json(
         { error: "Invalid credentials" },
         { status: 401 }
       );
     }
-    if (!/^\$2[abxy]\$\d+\$/.test(pilot.password)) {
-      console.log("[Login] Error: Invalid hash format in database");
-      return NextResponse.json(
-        { error: "Authentication error" },
-        { status: 500 }
-      );
-    }
+    // bcrypt.compare already handles hash validation internally
     isValidPassword = await bcryptjs.compare(password, pilot.password);
-    console.log(
-      "[Login] Password comparison completed. Match result:",
-      isValidPassword
-    );
   } catch (error) {
     console.error("[Login] Error comparing passwords:", error);
-    if (
-      error instanceof Error &&
-      error.message.includes("Invalid salt version")
-    ) {
-      console.log("[Login] Invalid hash format detected in error");
-      return NextResponse.json(
-        { error: "Authentication error" },
-        { status: 500 }
-      );
-    }
     return NextResponse.json(
       { error: "Authentication error" },
       { status: 500 }

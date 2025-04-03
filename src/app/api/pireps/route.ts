@@ -40,8 +40,6 @@ export async function POST(request: NextRequest) {
       multi,
     } = body;
 
-    console.log(body);
-
     // Validate aircraftId
     if (!aircraftId) {
       console.error("Aircraft ID is required");

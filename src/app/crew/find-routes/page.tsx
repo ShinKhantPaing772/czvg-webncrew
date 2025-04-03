@@ -24,6 +24,15 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import { useSession } from "@/hooks/use-session";
 
 interface Aircraft {
@@ -295,12 +304,12 @@ export default function FindRoutes() {
 
           <div className="flex flex-col gap-4 md:flex-row md:items-end">
             <div className="flex-1 space-y-2">
-              <Label htmlFor="search">Search Routes</Label>
+              <Label htmlFor="search">Search by Flight Number</Label>
               <div className="relative">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   id="search"
-                  placeholder="Search by flight number, airport code..."
+                  placeholder="Search by flight number"
                   className="pl-8"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -438,29 +447,84 @@ export default function FindRoutes() {
 
           {/* Pagination controls */}
           <div className="flex justify-center mt-4">
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-              >
-                Previous
-              </Button>
-              <div className="flex items-center px-4 text-sm">
-                Page {currentPage} of {totalPages}
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  setCurrentPage((prev) => Math.min(prev + 1, totalPages))
-                }
-                disabled={currentPage === totalPages || totalPages === 0}
-              >
-                Next
-              </Button>
-            </div>
+            {totalPages > 1 && (
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setCurrentPage((prev) => Math.max(prev - 1, 1));
+                      }}
+                      aria-disabled={currentPage === 1}
+                      className={
+                        currentPage === 1
+                          ? "pointer-events-none opacity-50"
+                          : ""
+                      }
+                    />
+                  </PaginationItem>
+
+                  {Array.from({ length: totalPages }).map((_, i) => {
+                    const page = i + 1;
+                    // Show first page, last page, and pages around current page
+                    if (
+                      page === 1 ||
+                      page === totalPages ||
+                      (page >= currentPage - 1 && page <= currentPage + 1)
+                    ) {
+                      return (
+                        <PaginationItem key={page}>
+                          <PaginationLink
+                            href="#"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setCurrentPage(page);
+                            }}
+                            isActive={page === currentPage}
+                          >
+                            {page}
+                          </PaginationLink>
+                        </PaginationItem>
+                      );
+                    }
+
+                    // Show ellipsis for gaps
+                    if (
+                      (page === 2 && currentPage > 3) ||
+                      (page === totalPages - 1 && currentPage < totalPages - 2)
+                    ) {
+                      return (
+                        <PaginationItem key={page}>
+                          <PaginationEllipsis />
+                        </PaginationItem>
+                      );
+                    }
+
+                    return null;
+                  })}
+
+                  <PaginationItem>
+                    <PaginationNext
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setCurrentPage((prev) =>
+                          Math.min(prev + 1, totalPages)
+                        );
+                      }}
+                      aria-disabled={currentPage === totalPages}
+                      className={
+                        currentPage === totalPages
+                          ? "pointer-events-none opacity-50"
+                          : ""
+                      }
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            )}
           </div>
         </div>
       </main>

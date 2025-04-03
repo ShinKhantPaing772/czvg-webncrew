@@ -3,8 +3,6 @@ import { cookies } from "next/headers";
 
 export async function GET() {
   try {
-    console.log("[Logout] Processing logout request");
-
     // Create a response object
     const response = NextResponse.json(
       { message: "Logout successful" },
@@ -19,7 +17,6 @@ export async function GET() {
       maxAge: 0, // This immediately expires the cookie
     });
 
-    console.log("[Logout] Token cookie cleared successfully");
     return response;
   } catch (error) {
     console.error("[Logout] Error:", error);
