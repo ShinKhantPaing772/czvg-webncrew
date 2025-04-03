@@ -2,6 +2,10 @@ import { stat } from "fs";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
+// Mark this route as dynamic to prevent static optimization
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
 export async function GET() {
   try {
     const cookieStore = cookies();
