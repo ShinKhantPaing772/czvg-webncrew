@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import sequelize from "@/lib/database";
 import { formatFlightTime } from "@/lib/utils/time";
 
+// Mark this route as dynamic to prevent static optimization
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
