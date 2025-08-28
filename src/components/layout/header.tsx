@@ -1,8 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { ChevronDown, User2, X, LogOut } from "lucide-react";
+import { ChevronDown, X, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -11,16 +10,17 @@ import {
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 import { useSession } from "@/hooks/use-session";
+import { logout } from "@/lib/utils/auth";
 
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const { user } = useSession();
-  const router = useRouter();
 
   const handleLogout = async () => {
     try {
       setIsLoggingOut(true);
+      logout();
       const response = await fetch("/api/auth/logout");
       if (!response.ok) {
         throw new Error("Logout failed");

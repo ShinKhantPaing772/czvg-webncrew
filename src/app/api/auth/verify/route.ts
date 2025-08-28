@@ -4,19 +4,50 @@ import { models } from "@/lib/models";
 
 export async function POST(request: Request) {
   try {
-    const { token } = await request.json();
+    let token: string | null = null;
+
+    // Try to get token from request body
+    try {
+      const body = await request.json();
+      token = body.token;
+    } catch {
+      // If body parsing fails, continue to check headers
+    }
+
+    // If token not in body, try to get from Authorization header
+    if (!token) {
+      const authHeader = request.headers.get("Authorization");
+      if (authHeader && authHeader.startsWith("Bearer ")) {
+        token = authHeader.substring(7);
+      }
+    }
 
     if (!token) {
       return NextResponse.json({ error: "Token is required" }, { status: 400 });
     }
 
-    // Verify JWT token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as {
-      id: string;
-    };
+    // Find token in database
+    const tokenRecord = await models.Token.findOne({
+      where: { token },
+    });
+
+    // Check if token exists
+    if (!tokenRecord) {
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+    }
+
+    // Check if token is expired
+    if (new Date() > tokenRecord.expiresAt) {
+      return NextResponse.json({ error: "Token expired" }, { status: 401 });
+    }
+
+    // Check if token is revoked
+    if (tokenRecord.isRevoked) {
+      return NextResponse.json({ error: "Token revoked" }, { status: 401 });
+    }
 
     // Get user data from database
-    const user = await models.Pilot.findByPk(decoded.id, {
+    const user = await models.Pilot.findByPk(tokenRecord.pilotId, {
       attributes: [
         "id",
         "name",

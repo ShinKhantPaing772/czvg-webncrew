@@ -319,6 +319,8 @@ Route.belongsToMany(Aircraft, {
 });
 Pirep.belongsTo(Route, { foreignKey: "routeid" });
 
+import Token from "./token";
+
 export const models = {
   Aircraft,
   Rank,
@@ -333,4 +335,5 @@ export const models = {
   News,
   Notification,
   PirepComment,
+  Token,
 };

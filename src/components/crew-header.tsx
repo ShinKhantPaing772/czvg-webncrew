@@ -3,26 +3,15 @@
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import {
-  ChevronDown,
   Menu,
   FileText,
   Search,
   Home,
-  LogOut,
   PlaneTakeoff,
   Shield,
   FileStack,
 } from "lucide-react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Header } from "./layout/header";
 

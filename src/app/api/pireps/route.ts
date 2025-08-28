@@ -1,12 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { models } from "@/lib/models";
+import { cookies, headers } from "next/headers";
 
 export async function POST(request: NextRequest) {
   try {
-    // Check authentication
+    // Check authentication - Get token from cookies or headers
+    let authToken = null;
+    
+    // Try to get from cookies first
     const cookieStore = cookies();
-    const authToken = cookieStore.get("token");
+    authToken = cookieStore.get("auth_token")?.value || null;
+    
+    // If not in cookies, try to get from Authorization header
+    if (!authToken) {
+      const headersList = headers();
+      const authHeader = headersList.get("Authorization");
+      if (authHeader && authHeader.startsWith("Bearer ")) {
+        authToken = authHeader.substring(7);
+      }
+    }
 
     if (!authToken) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -21,7 +33,7 @@ export async function POST(request: NextRequest) {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ token: authToken.value }),
+      body: JSON.stringify({ token: authToken }),
     });
 
     if (!response.ok) {
@@ -51,6 +63,21 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+    
+    // Validate date
+    let parsedDate;
+    try {
+      parsedDate = date instanceof Date ? date : new Date(date);
+      if (isNaN(parsedDate.getTime())) {
+        throw new Error("Invalid date");
+      }
+    } catch (error) {
+      console.error("Invalid date format", error);
+      return NextResponse.json(
+        { error: "Invalid date format" },
+        { status: 400 }
+      );
+    }
 
     // Validate and convert flighttime from HH:MM format to minutes
     if (
@@ -61,6 +88,21 @@ export async function POST(request: NextRequest) {
       console.error("Invalid flight time format. Expected HH:MM");
       return NextResponse.json(
         { error: "Invalid flight time format. Expected HH:MM" },
+        { status: 400 }
+      );
+    }
+    
+    // Validate fuelUsed
+    let parsedFuel;
+    try {
+      parsedFuel = parseFloat(fuelUsed);
+      if (isNaN(parsedFuel)) {
+        throw new Error("Invalid fuel amount");
+      }
+    } catch (error) {
+      console.error("Invalid fuel amount", error);
+      return NextResponse.json(
+        { error: "Invalid fuel amount" },
         { status: 400 }
       );
     }
@@ -75,9 +117,9 @@ export async function POST(request: NextRequest) {
       arrival: arrival,
       flighttime: totalSeconds,
       pilotid: pilot.id,
-      date: new Date(date),
+      date: parsedDate,
       aircraftid: aircraftId,
-      fuelused: parseFloat(fuelUsed),
+      fuelused: parsedFuel,
       multi: multi || "None",
       status: 0, // Pending approval
     });

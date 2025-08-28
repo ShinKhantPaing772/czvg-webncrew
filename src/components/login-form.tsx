@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { setToken } from "@/lib/utils/auth";
 
 export function LoginForm() {
   const router = useRouter();
@@ -44,6 +45,11 @@ export function LoginForm() {
 
       if (!response.ok) {
         throw new Error(data.error || "Login failed");
+      }
+
+      // Store token and user data
+      if (data.token) {
+        setToken(data.token);
       }
 
       setMessage({ type: "success", text: "Login successful" });

@@ -71,10 +71,18 @@ export function SignupForm() {
         throw new Error(data.error || "Registration failed");
       }
 
+      // No need to store token for signup as it doesn't return one
+      // User will need to login after registration
+
       setMessage({
         type: "success",
         text: data.message || "Registration successful",
       });
+
+      // Redirect to login page after successful registration
+      setTimeout(() => {
+        router.push("/crew");
+      }, 2000);
     } catch (error) {
       setMessage({
         type: "error",

@@ -39,11 +39,11 @@ export default function UserDashboard() {
   // Get recent flights from user's PIREPs
   // Query pireps separately since they're not included in user data
   const [pireps, setPireps] = useState<Pirep[]>([]);
+  console.log(user);
 
   useEffect(() => {
     const fetchPireps = async () => {
       try {
-        // TODO: Replace with actual API endpoint
         const response = await fetch(`/api/pilots/${user?.id}/pireps`);
         const data = await response.json();
 
@@ -106,14 +106,14 @@ export default function UserDashboard() {
             <CardContent className="grid gap-6">
               <div className="flex items-center gap-4">
                 <Avatar className="h-16 w-16">
-                  <AvatarImage src={user.avatar} alt={user.name} />
+                  <AvatarImage alt={user.name} />
                   <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
                 </Avatar>
                 <div className="grid gap-1">
                   <h3 className="font-semibold">{user.name}</h3>
                   <p className="text-sm text-muted-foreground">{user.email}</p>
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline">{user.rank}</Badge>
+                    <Badge variant="outline">{user.callsign}</Badge>
                   </div>
                 </div>
               </div>
@@ -129,7 +129,7 @@ export default function UserDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {formatFlightTime(user.flightTime)}
+                  {formatFlightTime(Number(user.flightTime))}
                 </div>
               </CardContent>
             </Card>

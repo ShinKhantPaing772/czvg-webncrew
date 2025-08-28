@@ -134,10 +134,14 @@ export default function FilePirep() {
 
     console.log(data);
     try {
+      // Get the authentication token
+      const token = localStorage.getItem("auth_token");
+
       const response = await fetch("/api/pireps", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(data),
       });
@@ -151,6 +155,7 @@ export default function FilePirep() {
       console.error(error);
     } finally {
       setIsLoading(false);
+      window.location.href = "/crew/view-pireps";
     }
   }
 

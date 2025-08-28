@@ -99,36 +99,50 @@ async function handleLogin({
     return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
   }
 
-  const token = jwt.sign(
-    { id: pilot.id, email: pilot.email },
-    JWT_SECRET as string,
-    {
-      expiresIn: "7d",
-    }
-  );
+  // Store token in database
+  try {
+    const tokenString = jwt.sign(
+      { id: pilot.id, email: pilot.email },
+      JWT_SECRET as string,
+      {
+        expiresIn: "7d",
+      }
+    );
 
-  const response = NextResponse.json(
-    {
-      message: "Login successful",
-      user: {
-        id: pilot.id,
-        name: pilot.name,
-        email: pilot.email,
-        callsign: pilot.callsign,
+    // Calculate expiration date (7 days from now)
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    // Create token in database
+    await models.Token.create({
+      pilotId: pilot.id,
+      token: tokenString,
+      expiresAt,
+    });
+
+    // Return token in response body
+    const response = NextResponse.json(
+      {
+        message: "Login successful",
+        token: tokenString, // Include database token in response
+        user: {
+          id: pilot.id,
+          name: pilot.name,
+          email: pilot.email,
+          callsign: pilot.callsign,
+        },
       },
-    },
-    { status: 200 }
-  );
+      { status: 200 }
+    );
 
-  response.cookies.set("token", token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 7 * 24 * 60 * 60, // 7 days
-    path: "/",
-  });
-
-  return response;
+    return response;
+  } catch (error) {
+    console.error("[Login] Error creating token:", error);
+    return NextResponse.json(
+      { error: "Authentication error" },
+      { status: 500 }
+    );
+  }
 }
 
 async function generateUniqueCallsign() {

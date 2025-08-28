@@ -1,5 +1,5 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { cookies, headers } from "next/headers";
 
 // Mark this route as dynamic to prevent static optimization
 export const dynamic = "force-dynamic";
@@ -7,15 +7,28 @@ export const runtime = "nodejs";
 
 export async function GET() {
   try {
+    // Get token from cookies or headers
+    let authToken = null;
+
+    // Try to get from cookies first
     const cookieStore = cookies();
-    const authToken = cookieStore.get("token");
+    authToken = cookieStore.get("auth_token")?.value || null;
+
+    // If not in cookies, try to get from Authorization header
+    if (!authToken) {
+      const headersList = headers();
+      const authHeader = headersList.get("Authorization");
+      if (authHeader && authHeader.startsWith("Bearer ")) {
+        authToken = authHeader.substring(7);
+      }
+    }
 
     if (!authToken) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     // Verify the token and get user data from database
-    const token = authToken.value;
+    const token = authToken;
     // Import the utility function
     const { getAbsoluteUrl } = await import("@/lib/utils/url");
 

@@ -1,24 +1,33 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import Token from "@/lib/models/token";
 
-export async function GET() {
+export async function POST(request: Request) {
+  let token: string | null = null;
+
+  // Try to get token from request body
   try {
-    // Create a response object
-    const response = NextResponse.json(
-      { message: "Logout successful" },
-      { status: 200 }
-    );
+    const body = await request.json();
+    token = body.token;
+  } catch {
+    // If body parsing fails, continue to check headers
+  }
 
-    // Clear the token cookie by setting maxAge to 0
-    response.cookies.set("token", "", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 0, // This immediately expires the cookie
-      path: "/",
-    });
+  // If token not in body, try to get from Authorization header
+  if (!token) {
+    const authHeader = request.headers.get("Authorization");
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      token = authHeader.substring(7);
+    }
+  }
 
-    return response;
+  if (!token) {
+    return NextResponse.json({ error: "Token is required" }, { status: 400 });
+  }
+
+  try {
+    // Delete token from database
+    await Token.destroy({ where: { token } });
+    return NextResponse.json({ success: true });
   } catch (error) {
     console.error("[Logout] Error:", error);
     return NextResponse.json({ error: "Failed to logout" }, { status: 500 });
