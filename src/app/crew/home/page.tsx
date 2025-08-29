@@ -26,6 +26,7 @@ import { useEffect, useState } from "react";
 
 interface Pirep {
   id: string;
+  fltnum: string;
   date: string;
   departure: string;
   arrival: string;
@@ -39,18 +40,18 @@ export default function UserDashboard() {
   // Get recent flights from user's PIREPs
   // Query pireps separately since they're not included in user data
   const [pireps, setPireps] = useState<Pirep[]>([]);
-  console.log(user);
 
   useEffect(() => {
     const fetchPireps = async () => {
       try {
         const response = await fetch(`/api/pilots/${user?.id}/pireps`);
         const data = await response.json();
-
+        console.log(data);
         const recentPireps = data.pireps
           .slice(0, 5)
           .map(
             (pirep: {
+              id: any;
               flightnum: any;
               date: string | number | Date;
               departure: any;
@@ -60,7 +61,8 @@ export default function UserDashboard() {
               flighttime: any;
               status: string;
             }) => ({
-              id: pirep.flightnum,
+              id: pirep.id,
+              fltnum: pirep.flightnum,
               date: new Date(pirep.date).toISOString().split("T")[0],
               departure: pirep.departure,
               arrival: pirep.arrival,
@@ -190,7 +192,7 @@ export default function UserDashboard() {
                   {recentFlights.map((flight) => (
                     <TableRow key={flight?.id}>
                       <TableCell className="font-medium">
-                        {flight?.id}
+                        {flight?.fltnum}
                       </TableCell>
                       <TableCell>{flight?.date}</TableCell>
                       <TableCell>

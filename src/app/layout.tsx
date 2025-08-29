@@ -1,5 +1,6 @@
 import type React from "react";
 import "@/app/globals.css";
+import "react-day-picker/src/style.css";
 import { ThemeProvider } from "@/components/theme-provider";
 
 export const metadata = {
