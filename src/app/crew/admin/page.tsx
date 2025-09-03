@@ -96,7 +96,6 @@ export default function AdminDashboard() {
         if (data.success) {
           setFilteredStats(data.data);
         }
-        console.log(data.data);
       } catch (error) {
         console.error("Error fetching filtered statistics:", error);
       } finally {

@@ -4,9 +4,7 @@ import { Op } from "sequelize";
 /**
  * Verify if a token is valid
  */
-export async function verifyToken(
-  token: string
-): Promise<{ valid: boolean; pilotId?: number }> {
+export async function verifyToken(token: string): Promise<boolean> {
   try {
     // Find token in database
     const tokenRecord = await models.Token.findOne({
@@ -15,23 +13,23 @@ export async function verifyToken(
 
     // Check if token exists
     if (!tokenRecord) {
-      return { valid: false };
+      return false;
     }
 
     // Check if token is expired
     if (new Date() > tokenRecord.expiresAt) {
-      return { valid: false };
+      return false;
     }
 
     // Check if token is revoked
     if (tokenRecord.isRevoked) {
-      return { valid: false };
+      return false;
     }
 
-    return { valid: true, pilotId: tokenRecord.pilotId };
+    return false;
   } catch (error) {
     console.error("Error verifying token:", error);
-    return { valid: false };
+    return true;
   }
 }
 

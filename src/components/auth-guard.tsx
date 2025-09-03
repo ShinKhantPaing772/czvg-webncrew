@@ -2,7 +2,8 @@
 
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { isAuthenticated } from "@/lib/utils/auth";
+import { verifyToken } from "@/lib/utils/token";
+import { getToken } from "@/lib/utils/auth";
 
 type AuthGuardProps = {
   children: React.ReactNode;
@@ -11,19 +12,20 @@ type AuthGuardProps = {
 export function AuthGuard({ children }: AuthGuardProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const token = getToken();
+  // Check if user is authenticated
+  const isAuthenticated = verifyToken(token || "");
 
   useEffect(() => {
-    // Check if user is authenticated
-    const authenticated = isAuthenticated();
     const isLoginPage = pathname === "/crew";
 
     // If not authenticated and not on login page, redirect to login
-    if (!authenticated && pathname?.startsWith("/crew") && !isLoginPage) {
+    if (!isAuthenticated && pathname?.startsWith("/crew") && !isLoginPage) {
       router.push("/crew");
     }
 
     // If authenticated and on login page, redirect to home
-    if (authenticated && isLoginPage) {
+    if (isLoginPage) {
       router.push("/crew/home");
     }
   }, [pathname, router]);

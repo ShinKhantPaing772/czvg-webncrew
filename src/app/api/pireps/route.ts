@@ -6,11 +6,11 @@ export async function POST(request: NextRequest) {
   try {
     // Check authentication - Get token from cookies or headers
     let authToken = null;
-    
+
     // Try to get from cookies first
     const cookieStore = cookies();
     authToken = cookieStore.get("auth_token")?.value || null;
-    
+
     // If not in cookies, try to get from Authorization header
     if (!authToken) {
       const headersList = headers();
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    
+
     // Validate date
     let parsedDate;
     try {
@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    
+
     // Validate fuelUsed
     let parsedFuel;
     try {

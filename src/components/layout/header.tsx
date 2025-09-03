@@ -21,10 +21,6 @@ export function Header() {
     try {
       setIsLoggingOut(true);
       logout();
-      const response = await fetch("/api/auth/logout");
-      if (!response.ok) {
-        throw new Error("Logout failed");
-      }
       // Force a page refresh to clear the user state
       window.location.href = "/crew";
     } catch (error) {
