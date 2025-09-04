@@ -317,7 +317,6 @@ Route.belongsToMany(Aircraft, {
   through: RouteAircraft,
   foreignKey: "routeid",
 });
-Pirep.belongsTo(Route, { foreignKey: "routeid" });
 
 import Token from "./token";
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Search,
   Filter,
@@ -13,6 +13,7 @@ import {
   Eye,
   Clock,
   Calendar,
+  Loader2,
 } from "lucide-react";
 import { CrewHeader } from "@/components/crew-header";
 import { Button } from "@/components/ui/button";
@@ -62,12 +63,6 @@ import {
 } from "@/components/ui/pagination";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -79,87 +74,57 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-// Mock data for PIREPs
-const pirepsData = [
-  {
-    id: 1001,
-    flightnum: "VA101",
-    departure: "KLAX",
-    arrival: "KSFO",
-    flighttime: 75,
-    pilotid: 1,
-    date: "2023-03-15",
-    aircraftid: 1,
-    fuelused: 2450,
-    multi: 1,
-    status: 1,
-  },
-  {
-    id: 1002,
-    flightnum: "VA202",
-    departure: "KSFO",
-    arrival: "KDEN",
-    flighttime: 150,
-    pilotid: 1,
-    date: "2023-03-10",
-    aircraftid: 2,
-    fuelused: 3850,
-    multi: 1,
-    status: 1,
-  },
-  {
-    id: 1003,
-    flightnum: "VA303",
-    departure: "KDEN",
-    arrival: "KATL",
-    flighttime: 165,
-    pilotid: 1,
-    date: "2023-03-05",
-    aircraftid: 1,
-    fuelused: 4120,
-    multi: 1,
-    status: 0,
-  },
-  {
-    id: 1004,
-    flightnum: "VA404",
-    departure: "KATL",
-    arrival: "KJFK",
-    flighttime: 130,
-    pilotid: 1,
-    date: "2023-03-01",
-    aircraftid: 1,
-    fuelused: 3750,
-    multi: 1,
-    status: 2,
-  },
-  {
-    id: 1005,
-    flightnum: "VA505",
-    departure: "KJFK",
-    arrival: "KBOS",
-    flighttime: 65,
-    pilotid: 1,
-    date: "2023-02-25",
-    aircraftid: 4,
-    fuelused: 1850,
-    multi: 1,
-    status: 1,
-  },
-  {
-    id: 1006,
-    flightnum: "VA606",
-    departure: "KBOS",
-    arrival: "KLAX",
-    flighttime: 375,
-    pilotid: 1,
-    date: "2023-02-20",
-    aircraftid: 3,
-    fuelused: 12500,
-    multi: 2,
-    status: 0,
-  },
-];
+// Define types for API responses
+interface Pilot {
+  id: number;
+  callsign: string;
+  name: string;
+}
+
+interface Aircraft {
+  id: number;
+  name: string;
+}
+
+interface Pirep {
+  id: number;
+  flightnum: string;
+  departure: string;
+  arrival: string;
+  flighttime: number;
+  pilotid: number;
+  date: string;
+  aircraftid: number;
+  fuelused: number;
+  multi: string;
+  status: number;
+  Pilot?: Pilot;
+  Aircraft?: Aircraft;
+  adminRemarks?: string;
+}
+
+interface PaginationData {
+  total: number;
+  totalPages: number;
+  currentPage: number;
+  limit: number;
+}
+
+interface CountsData {
+  pending: number;
+  approved: number;
+  rejected: number;
+  total: number;
+}
+
+interface PirepsResponse {
+  success: boolean;
+  data: {
+    pireps: Pirep[];
+    pagination: PaginationData;
+    counts: CountsData;
+  };
+}
 
 export default function AdminPireps() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -167,45 +132,59 @@ export default function AdminPireps() {
   const [pilotFilter, setPilotFilter] = useState("all");
   const [dateSort, setDateSort] = useState("desc");
   const [showFilters, setShowFilters] = useState(false);
-  const [selectedPirep, setSelectedPirep] = useState<
-    (typeof pirepsData)[0] | null
-  >(null);
+  const [selectedPirep, setSelectedPirep] = useState<Pirep | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [adminRemarks, setAdminRemarks] = useState("");
   const [activeTab, setActiveTab] = useState("0");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [pirepsData, setPirepsData] = useState<Pirep[]>([]);
+  const [pagination, setPagination] = useState<PaginationData>({
+    total: 0,
+    totalPages: 0,
+    currentPage: 1,
+    limit: 5,
+  });
+  const [counts, setCounts] = useState<CountsData>({
+    pending: 0,
+    approved: 0,
+    rejected: 0,
+    total: 0,
+  });
   const itemsPerPage = 5;
 
-  // Filter PIREPs based on search, filters, and active tab
-  const filteredPireps = pirepsData.filter((pirep) => {
-    const matchesSearch =
-      pirep.flightnum.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      pirep.departure.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      pirep.arrival.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      String(pirep.id).toLowerCase().includes(searchQuery.toLowerCase());
+  // Fetch PIREPs from API - simplified with no filters
+  const fetchPireps = async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-    const matchesStatus =
-      statusFilter === 0 ? true : pirep.status === statusFilter;
-    const matchesPilot =
-      pilotFilter === "all" ? true : pirep.pilotid === parseInt(pilotFilter);
-    const matchesTab =
-      activeTab === "0" ? true : pirep.status === parseInt(activeTab);
+      // Simplified fetch with no parameters
+      const response = await fetch(`/api/admin/pireps`);
+      const data: PirepsResponse = await response.json();
 
-    return matchesSearch && matchesStatus && matchesPilot && matchesTab;
-  });
+      if (!data.success) {
+        throw new Error("Failed to fetch PIREPs");
+      }
 
-  // Sort PIREPs by date
-  const sortedPireps = [...filteredPireps].sort((a, b) => {
-    const dateA = new Date(a.date).getTime();
-    const dateB = new Date(b.date).getTime();
-    return dateSort === "desc" ? dateB - dateA : dateA - dateB;
-  });
+      // Update state with fetched data
+      setPirepsData(data.data.pireps);
+      setPagination(data.data.pagination);
+      setCounts(data.data.counts);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "An unknown error occurred"
+      );
+      console.error("Error fetching PIREPs:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  // Paginate PIREPs
-  const totalPages = Math.ceil(sortedPireps.length / itemsPerPage);
-  const paginatedPireps = sortedPireps.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+  // Fetch PIREPs when component mounts - simplified with no dependencies on filters
+  useEffect(() => {
+    fetchPireps();
+  }, []);
 
   // Get unique pilots for filter
   const uniquePilots = Array.from(
@@ -262,48 +241,82 @@ export default function AdminPireps() {
   };
 
   // Handle PIREP approval
-  const handleApprovePirep = (pirep: (typeof pirepsData)[0]) => {
-    // In a real app, you would call an API to update the PIREP status
-    console.log(`Approving PIREP ${pirep.id} with remarks: ${adminRemarks}`);
-    // Update PIREP status and add admin remarks
-    const updatedPirep = {
-      ...pirep,
-      status: 1,
-      approvedAt: new Date().toISOString(),
-      approvedBy: "Admin User",
-      adminRemarks: adminRemarks || "Approved without remarks",
-    };
-    // Here you would update the PIREP in your database
-    console.log("Updated PIREP:", updatedPirep);
-    // Reset admin remarks
-    setAdminRemarks("");
-    setSelectedPirep(null);
+  const handleApprovePirep = async (pirep: Pirep) => {
+    try {
+      const response = await fetch(`/api/admin/pireps`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: pirep.id,
+          status: 1, // Approved
+          adminRemarks: adminRemarks || "Approved without remarks",
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || "Failed to approve PIREP");
+      }
+
+      // Refresh the PIREPs list
+      fetchPireps();
+
+      // Reset admin remarks and selected PIREP
+      setAdminRemarks("");
+      setSelectedPirep(null);
+    } catch (error) {
+      console.error("Error approving PIREP:", error);
+      // Show error message to user
+      setError(
+        error instanceof Error ? error.message : "Failed to approve PIREP"
+      );
+    }
   };
 
   // Handle PIREP rejection
-  const handleRejectPirep = (pirep: (typeof pirepsData)[0]) => {
-    // In a real app, you would call an API to update the PIREP status
-    console.log(`Rejecting PIREP ${pirep.id} with remarks: ${adminRemarks}`);
-    // Update PIREP status and add admin remarks
-    const updatedPirep = {
-      ...pirep,
-      status: 2,
-      approvedAt: new Date().toISOString(),
-      approvedBy: "Admin User",
-      adminRemarks: adminRemarks || "Rejected without remarks",
-      flightPoints: null,
-    };
-    // Here you would update the PIREP in your database
-    console.log("Updated PIREP:", updatedPirep);
-    // Reset admin remarks
-    setAdminRemarks("");
-    setSelectedPirep(null);
+  const handleRejectPirep = async (pirep: Pirep) => {
+    try {
+      const response = await fetch(`/api/admin/pireps`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: pirep.id,
+          status: 2, // Rejected
+          adminRemarks: adminRemarks || "Rejected without remarks",
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || "Failed to reject PIREP");
+      }
+
+      // Refresh the PIREPs list
+      fetchPireps();
+
+      // Reset admin remarks and selected PIREP
+      setAdminRemarks("");
+      setSelectedPirep(null);
+    } catch (error) {
+      console.error("Error rejecting PIREP:", error);
+      // Show error message to user
+      setError(
+        error instanceof Error ? error.message : "Failed to reject PIREP"
+      );
+    }
   };
 
-  // Count PIREPs by status
-  const pendingCount = pirepsData.filter((pirep) => pirep.status === 0).length;
-  const approvedCount = pirepsData.filter((pirep) => pirep.status === 1).length;
-  const rejectedCount = pirepsData.filter((pirep) => pirep.status === 2).length;
+  // Use counts from API response
+  const pendingCount = counts.pending;
+  const approvedCount = counts.approved;
+  const rejectedCount = counts.rejected;
+  const totalCount = counts.total;
 
   return (
     <CrewHeader userName="Admin User" isAdmin={true}>
@@ -338,7 +351,7 @@ export default function AdminPireps() {
                 <TabsTrigger value="0" className="relative">
                   All
                   <Badge className="ml-2 bg-primary/10 text-primary">
-                    {pirepsData.length}
+                    {totalCount}
                   </Badge>
                 </TabsTrigger>
                 <TabsTrigger value="1" className="relative">
@@ -406,83 +419,7 @@ export default function AdminPireps() {
                     />
                   </div>
                 </div>
-
-                <div className="md:hidden flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      setDateSort(dateSort === "desc" ? "asc" : "desc")
-                    }
-                    className="flex items-center gap-1"
-                  >
-                    <Calendar className="h-4 w-4" />
-                    <span>Date</span>
-                    <ChevronDown
-                      className={`h-4 w-4 transition-transform ${
-                        dateSort === "asc" ? "rotate-180" : ""
-                      }`}
-                    />
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowFilters(!showFilters)}
-                    className="flex items-center gap-1"
-                  >
-                    <Filter className="h-4 w-4" />
-                    <span>Filters</span>
-                  </Button>
-                </div>
               </div>
-
-              {showFilters && (
-                <Card>
-                  <CardContent className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="status">Status</Label>
-                      <Select
-                        value={String(statusFilter)}
-                        onValueChange={(value) =>
-                          setStatusFilter(Number(value))
-                        }
-                      >
-                        <SelectTrigger id="status">
-                          <SelectValue placeholder="Filter by status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="0">All Statuses</SelectItem>
-                          <SelectItem value="1">Approved</SelectItem>
-                          <SelectItem value="0">Pending</SelectItem>
-                          <SelectItem value="2">Rejected</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="pilot">Pilot</Label>
-                      <Select
-                        value={pilotFilter}
-                        onValueChange={setPilotFilter}
-                      >
-                        <SelectTrigger id="pilot">
-                          <SelectValue placeholder="Filter by pilot" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Pilots</SelectItem>
-                          {/* {uniquePilots.map((pilot) => (
-                            <SelectItem key={pilot?.id} value={pilot?.id || ""}>
-                              {pilot?.name} ({pilot?.rank})
-                            </SelectItem>
-                          ))} */}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
               <TabsContent value="all" className="m-0">
                 <Card>
                   <CardHeader className="p-4">
@@ -495,7 +432,6 @@ export default function AdminPireps() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>PIREP ID</TableHead>
                           <TableHead>Flight</TableHead>
                           <TableHead>Date</TableHead>
                           <TableHead>Pilot</TableHead>
@@ -510,7 +446,25 @@ export default function AdminPireps() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {paginatedPireps.length === 0 ? (
+                        {loading ? (
+                          <TableRow>
+                            <TableCell
+                              colSpan={8}
+                              className="text-center py-8 text-muted-foreground"
+                            >
+                              Loading PIREPs...
+                            </TableCell>
+                          </TableRow>
+                        ) : error ? (
+                          <TableRow>
+                            <TableCell
+                              colSpan={8}
+                              className="text-center py-8 text-red-500"
+                            >
+                              Error: {error}
+                            </TableCell>
+                          </TableRow>
+                        ) : pirepsData.length === 0 ? (
                           <TableRow>
                             <TableCell
                               colSpan={8}
@@ -520,19 +474,17 @@ export default function AdminPireps() {
                             </TableCell>
                           </TableRow>
                         ) : (
-                          paginatedPireps.map((pirep) => (
+                          pirepsData.map((pirep) => (
                             <TableRow key={pirep.id}>
-                              <TableCell className="font-medium">
-                                {pirep.id}
-                              </TableCell>
                               <TableCell>{pirep.flightnum}</TableCell>
                               <TableCell>{pirep.date}</TableCell>
                               <TableCell>
                                 <div className="flex flex-col">
-                                  {/* <span>{pirep.pilot.name}</span>
-                                  <span className="text-xs text-muted-foreground">
-                                    {pirep.pilot.rank}
-                                  </span> */}
+                                  <span>
+                                    {pirep.Pilot
+                                      ? `${pirep.Pilot.callsign} (${pirep.Pilot.name})`
+                                      : pirep.pilotid}
+                                  </span>
                                 </div>
                               </TableCell>
                               <TableCell className="hidden md:table-cell">
@@ -543,7 +495,9 @@ export default function AdminPireps() {
                                 </div>
                               </TableCell>
                               <TableCell className="hidden md:table-cell">
-                                {pirep.aircraftid}
+                                {pirep.Aircraft
+                                  ? pirep.Aircraft.name
+                                  : pirep.aircraftid}
                               </TableCell>
                               <TableCell>
                                 {getStatusBadge(pirep.status)}
@@ -634,17 +588,6 @@ export default function AdminPireps() {
                                                   </dt>
                                                   <dd>{pirep.flighttime}</dd>
                                                 </div>
-                                                {/* <div className="flex justify-between">
-                                                <dt className="text-muted-foreground">
-                                                  Detailed Route:
-                                                </dt>
-                                                <dd
-                                                  className="truncate max-w-[150px]"
-                                                  title={pirep.route}
-                                                >
-                                                  {pirep.route}
-                                                </dd>
-                                              </div> */}
                                               </dl>
                                             </CardContent>
                                             <CardContent className=" pt-0">
@@ -655,12 +598,6 @@ export default function AdminPireps() {
                                                   </dt>
                                                   <dd>{pirep.aircraftid}</dd>
                                                 </div>
-                                                {/* <div className="flex justify-between">
-                                                <dt className="text-muted-foreground">
-                                                  Registration:
-                                                </dt>
-                                                <dd>{pirep.registration}</dd>
-                                              </div> */}
                                                 <div className="flex justify-between">
                                                   <dt className="text-muted-foreground">
                                                     Fuel Used:
@@ -670,44 +607,6 @@ export default function AdminPireps() {
                                               </dl>
                                             </CardContent>
                                           </Card>
-
-                                          {/* <Card>
-                                          <CardHeader className="p-3">
-                                            <CardTitle className="text-sm font-medium">
-                                              Pilot Information
-                                            </CardTitle>
-                                          </CardHeader>
-                                          <CardContent className="p-3 pt-0">
-                                            <dl className="space-y-2 text-sm">
-                                              <div className="flex justify-between">
-                                                <dt className="text-muted-foreground">
-                                                  Name:
-                                                </dt>
-                                                <dd>{pirep.pilot.name}</dd>
-                                              </div>
-                                              <div className="flex justify-between">
-                                                <dt className="text-muted-foreground">
-                                                  Rank:
-                                                </dt>
-                                                <dd>{pirep.pilot.rank}</dd>
-                                              </div>
-                                              <div className="flex justify-between">
-                                                <dt className="text-muted-foreground">
-                                                  Email:
-                                                </dt>
-                                                <dd className="truncate max-w-[150px]">
-                                                  {pirep.pilot.email}
-                                                </dd>
-                                              </div>
-                                              <div className="flex justify-between">
-                                                <dt className="text-muted-foreground">
-                                                  Flight Hours:
-                                                </dt>
-                                                <dd>{pirep.pilot.hours}</dd>
-                                              </div>
-                                            </dl>
-                                          </CardContent>
-                                        </Card> */}
 
                                           <Card>
                                             <CardHeader className="">
@@ -727,75 +626,16 @@ export default function AdminPireps() {
                                                     )}
                                                   </dd>
                                                 </div>
-                                                {/* <div className="flex justify-between">
-                                              <dt className="text-muted-foreground">
-                                                Submitted:
-                                              </dt>
-                                              <dd>
-                                                {new Date(
-                                                  pirep.submittedAt
-                                                ).toLocaleString()}
-                                              </dd>
-                                            </div>
-                                            {pirep.approvedAt && (
-                                              <div className="flex justify-between">
-                                                <dt className="text-muted-foreground">
-                                                  Processed:
-                                                </dt>
-                                                <dd>
-                                                  {new Date(
-                                                    pirep.approvedAt
-                                                  ).toLocaleString()}
-                                                </dd>
-                                              </div>
-                                            )}
-                                            {pirep.approvedBy && (
-                                              <div className="flex justify-between">
-                                                <dt className="text-muted-foreground">
-                                                  Processed By:
-                                                </dt>
-                                                <dd>{pirep.approvedBy}</dd>
-                                              </div>
-                                            )} */}
                                                 <div className="flex justify-between">
                                                   <dt className="text-muted-foreground">
                                                     Multiplier:
                                                   </dt>
-                                                  <dd>{pirep.multi}x</dd>
+                                                  <dd>{pirep.multi}</dd>
                                                 </div>
                                               </dl>
                                             </CardContent>
                                           </Card>
                                         </div>
-                                        {/* <Accordion
-                                        type="single"
-                                        collapsible
-                                        className="w-full"
-                                      >
-                                        <AccordionItem value="comments">
-                                          <AccordionTrigger>
-                                            Pilot Comments
-                                          </AccordionTrigger>
-                                          <AccordionContent>
-                                            <p className="text-sm">
-                                              {pirep.comments}
-                                            </p>
-                                          </AccordionContent>
-                                        </AccordionItem>
-
-                                        {pirep.adminRemarks && (
-                                          <AccordionItem value="admin-remarks">
-                                            <AccordionTrigger>
-                                              Admin Remarks
-                                            </AccordionTrigger>
-                                            <AccordionContent>
-                                              <p className="text-sm">
-                                                {pirep.adminRemarks}
-                                              </p>
-                                            </AccordionContent>
-                                          </AccordionItem>
-                                        )}
-                                      </Accordion> */}
 
                                         {pirep.status === 0 && (
                                           <div className="space-y-2">
@@ -869,11 +709,10 @@ export default function AdminPireps() {
                   </CardContent>
                   <CardFooter className="flex items-center justify-between p-4">
                     <div className="text-sm text-muted-foreground">
-                      Showing {paginatedPireps.length} of{" "}
-                      {filteredPireps.length} PIREPs
+                      Showing {pirepsData.length} of {totalCount} PIREPs
                     </div>
 
-                    {totalPages > 1 && (
+                    {pagination && pagination.totalPages > 1 && (
                       <Pagination>
                         <PaginationContent>
                           <PaginationItem>
@@ -892,46 +731,48 @@ export default function AdminPireps() {
                             />
                           </PaginationItem>
 
-                          {Array.from({ length: totalPages }).map((_, i) => {
-                            const page = i + 1;
-                            // Show first page, last page, and pages around current page
-                            if (
-                              page === 1 ||
-                              page === totalPages ||
-                              (page >= currentPage - 1 &&
-                                page <= currentPage + 1)
-                            ) {
-                              return (
-                                <PaginationItem key={page}>
-                                  <PaginationLink
-                                    href="#"
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      setCurrentPage(page);
-                                    }}
-                                    isActive={page === currentPage}
-                                  >
-                                    {page}
-                                  </PaginationLink>
-                                </PaginationItem>
-                              );
-                            }
+                          {Array.from({ length: pagination.totalPages }).map(
+                            (_, i) => {
+                              const page = i + 1;
+                              // Show first page, last page, and pages around current page
+                              if (
+                                page === 1 ||
+                                page === pagination.totalPages ||
+                                (page >= currentPage - 1 &&
+                                  page <= currentPage + 1)
+                              ) {
+                                return (
+                                  <PaginationItem key={page}>
+                                    <PaginationLink
+                                      href="#"
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        setCurrentPage(page);
+                                      }}
+                                      isActive={page === currentPage}
+                                    >
+                                      {page}
+                                    </PaginationLink>
+                                  </PaginationItem>
+                                );
+                              }
 
-                            // Show ellipsis for gaps
-                            if (
-                              (page === 2 && currentPage > 3) ||
-                              (page === totalPages - 1 &&
-                                currentPage < totalPages - 2)
-                            ) {
-                              return (
-                                <PaginationItem key={page}>
-                                  <PaginationEllipsis />
-                                </PaginationItem>
-                              );
-                            }
+                              // Show ellipsis for gaps
+                              if (
+                                (page === 2 && currentPage > 3) ||
+                                (page === pagination.totalPages - 1 &&
+                                  currentPage < pagination.totalPages - 2)
+                              ) {
+                                return (
+                                  <PaginationItem key={page}>
+                                    <PaginationEllipsis />
+                                  </PaginationItem>
+                                );
+                              }
 
-                            return null;
-                          })}
+                              return null;
+                            }
+                          )}
 
                           <PaginationItem>
                             <PaginationNext
@@ -939,12 +780,14 @@ export default function AdminPireps() {
                               onClick={(e) => {
                                 e.preventDefault();
                                 setCurrentPage((prev) =>
-                                  Math.min(prev + 1, totalPages)
+                                  Math.min(prev + 1, pagination.totalPages)
                                 );
                               }}
-                              aria-disabled={currentPage === totalPages}
+                              aria-disabled={
+                                currentPage === pagination.totalPages
+                              }
                               className={
-                                currentPage === totalPages
+                                currentPage === pagination.totalPages
                                   ? "pointer-events-none opacity-50"
                                   : ""
                               }
@@ -953,174 +796,6 @@ export default function AdminPireps() {
                         </PaginationContent>
                       </Pagination>
                     )}
-                  </CardFooter>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="pending" className="m-0">
-                <Card>
-                  <CardHeader className="p-4">
-                    <CardTitle>Pending PIREPs</CardTitle>
-                    <CardDescription>
-                      Review and process pending pilot reports
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="p-0">
-                    {/* Same table structure as "all" tab but filtered for pending PIREPs */}
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>PIREP ID</TableHead>
-                          <TableHead>Flight</TableHead>
-                          <TableHead>Date</TableHead>
-                          <TableHead>Pilot</TableHead>
-                          <TableHead className="hidden md:table-cell">
-                            Route
-                          </TableHead>
-                          <TableHead className="hidden md:table-cell">
-                            Aircraft
-                          </TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {paginatedPireps.length === 0 ? (
-                          <TableRow>
-                            <TableCell
-                              colSpan={8}
-                              className="text-center py-8 text-muted-foreground"
-                            >
-                              No pending PIREPs found
-                            </TableCell>
-                          </TableRow>
-                        ) : (
-                          paginatedPireps.map((pirep) => (
-                            <TableRow key={pirep.id}>
-                              <TableCell className="font-medium">
-                                {pirep.id}
-                              </TableCell>
-                              <TableCell>{pirep.flightnum}</TableCell>
-                              <TableCell>{pirep.date}</TableCell>
-                              {/* <TableCell>
-                                <div className="flex flex-col">
-                                  <span>{pirep.pilot.name}</span>
-                                  <span className="text-xs text-muted-foreground">
-                                    {pirep.pilot.rank}
-                                  </span>
-                                </div>
-                              </TableCell> */}
-                              <TableCell className="hidden md:table-cell">
-                                <div className="flex items-center gap-1">
-                                  <span>{pirep.departure}</span>
-                                  <span>→</span>
-                                  <span>{pirep.arrival}</span>
-                                </div>
-                              </TableCell>
-                              <TableCell className="hidden md:table-cell">
-                                {pirep.aircraftid}
-                              </TableCell>
-                              <TableCell>
-                                {getStatusBadge(pirep.status)}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <div className="flex justify-end gap-2">
-                                  {pirep.status === 0 && (
-                                    <>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="text-green-600 hover:text-green-700"
-                                        onClick={() =>
-                                          handleApprovePirep(pirep)
-                                        }
-                                      >
-                                        <CheckCircle className="h-4 w-4" />
-                                      </Button>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="text-red-600 hover:text-red-700"
-                                        onClick={() => handleRejectPirep(pirep)}
-                                      >
-                                        <XCircle className="h-4 w-4" />
-                                      </Button>
-                                    </>
-                                  )}
-                                  <Dialog>
-                                    <DialogTrigger asChild>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => setSelectedPirep(pirep)}
-                                      >
-                                        <Eye className="h-4 w-4 mr-1" />
-                                        <span className="hidden sm:inline">
-                                          View
-                                        </span>
-                                      </Button>
-                                    </DialogTrigger>
-                                    {/* Same dialog content as in "all" tab */}
-                                  </Dialog>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          ))
-                        )}
-                      </TableBody>
-                    </Table>
-                  </CardContent>
-                  <CardFooter className="flex items-center justify-between p-4">
-                    <div className="text-sm text-muted-foreground">
-                      Showing {paginatedPireps.length} of{" "}
-                      {filteredPireps.length} PIREPs
-                    </div>
-
-                    {/* Same pagination as in "all" tab */}
-                  </CardFooter>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="approved" className="m-0">
-                <Card>
-                  <CardHeader className="p-4">
-                    <CardTitle>Approved PIREPs</CardTitle>
-                    <CardDescription>
-                      View all approved pilot reports
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="p-0">
-                    {/* Same table structure as "all" tab but filtered for approved PIREPs */}
-                  </CardContent>
-                  <CardFooter className="flex items-center justify-between p-4">
-                    <div className="text-sm text-muted-foreground">
-                      Showing {paginatedPireps.length} of{" "}
-                      {filteredPireps.length} PIREPs
-                    </div>
-
-                    {/* Same pagination as in "all" tab */}
-                  </CardFooter>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="rejected" className="m-0">
-                <Card>
-                  <CardHeader className="p-4">
-                    <CardTitle>Rejected PIREPs</CardTitle>
-                    <CardDescription>
-                      View all rejected pilot reports
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="p-0">
-                    {/* Same table structure as "all" tab but filtered for rejected PIREPs */}
-                  </CardContent>
-                  <CardFooter className="flex items-center justify-between p-4">
-                    <div className="text-sm text-muted-foreground">
-                      Showing {paginatedPireps.length} of{" "}
-                      {filteredPireps.length} PIREPs
-                    </div>
-
-                    {/* Same pagination as in "all" tab */}
                   </CardFooter>
                 </Card>
               </TabsContent>
