@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { models } from "@/lib/models";
-import { Op } from "sequelize";
 
 // Mark this route as dynamic to prevent static optimization
 export const dynamic = "force-dynamic";

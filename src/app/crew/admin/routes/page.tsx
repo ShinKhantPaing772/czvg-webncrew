@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, Edit, Trash, ArrowRight } from "lucide-react";
 import {
   Table,
@@ -41,200 +41,118 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-// Mock data for airports
-const airportsData = [
-  { code: "KLAX", name: "Los Angeles International Airport" },
-  { code: "KSFO", name: "San Francisco International Airport" },
-  { code: "KDEN", name: "Denver International Airport" },
-  { code: "KATL", name: "Hartsfield-Jackson Atlanta International Airport" },
-  { code: "KJFK", name: "John F. Kennedy International Airport" },
-  { code: "KBOS", name: "Boston Logan International Airport" },
-  { code: "KMIA", name: "Miami International Airport" },
-  { code: "KORD", name: "O'Hare International Airport" },
-  { code: "KDFW", name: "Dallas/Fort Worth International Airport" },
-];
-
-// Mock data for aircraft
-const aircraftData = [
-  {
-    id: "AC-001",
-    code: "B738",
-    name: "Boeing 737-800",
-    seats: 162,
-    status: "Active",
-    notes: "Popular narrow-body aircraft for short to medium-haul routes",
-  },
-  {
-    id: "AC-002",
-    code: "B77W",
-    name: "Boeing 777-300ER",
-    seats: 368,
-    status: "Active",
-    notes: "Long-haul wide-body aircraft for international routes",
-  },
-  {
-    id: "AC-003",
-    code: "A320",
-    name: "Airbus A320",
-    seats: 180,
-    status: "Active",
-    notes: "Versatile narrow-body aircraft for regional routes",
-  },
-];
-
-// Mock data for route-aircraft relationships
-const routeAircraftData = [
-  { routeId: "RT-1001", aircraftId: "AC-001" },
-  { routeId: "RT-1001", aircraftId: "AC-003" },
-  { routeId: "RT-1002", aircraftId: "AC-001" },
-  { routeId: "RT-1002", aircraftId: "AC-003" },
-  { routeId: "RT-1003", aircraftId: "AC-001" },
-  { routeId: "RT-1003", aircraftId: "AC-002" },
-  { routeId: "RT-1004", aircraftId: "AC-003" },
-  { routeId: "RT-1005", aircraftId: "AC-001" },
-  { routeId: "RT-1006", aircraftId: "AC-002" },
-];
-
-// Mock data for routes
-const routesData = [
-  {
-    id: "RT-1001",
-    fltnum: "VA101",
-    dep: "KLAX",
-    arr: "KSFO",
-    duration: "1:15",
-    notes: "Popular commuter route with high demand.",
-    status: "Active",
-  },
-  {
-    id: "RT-1002",
-    fltnum: "VA202",
-    dep: "KSFO",
-    arr: "KDEN",
-    duration: "2:30",
-    notes: "Mountain crossing route with occasional turbulence.",
-    status: "Active",
-  },
-  {
-    id: "RT-1003",
-    fltnum: "VA303",
-    dep: "KDEN",
-    arr: "KATL",
-    duration: "2:45",
-    notes: "Cross-country route connecting mountain west to southeast.",
-    status: "Active",
-  },
-  {
-    id: "RT-1004",
-    fltnum: "VA404",
-    dep: "KATL",
-    arr: "KJFK",
-    duration: "2:10",
-    notes: "East coast connector between major hubs.",
-    status: "Active",
-  },
-  {
-    id: "RT-1005",
-    fltnum: "VA505",
-    dep: "KJFK",
-    arr: "KBOS",
-    duration: "1:05",
-    notes: "Short northeast corridor route, popular with business travelers.",
-    status: "Active",
-  },
-  {
-    id: "RT-1006",
-    fltnum: "VA606",
-    dep: "KBOS",
-    arr: "KLAX",
-    duration: "6:15",
-    notes:
-      "Transcontinental red-eye flight. Currently inactive due to seasonal adjustments.",
-    status: "Inactive",
-  },
-  {
-    id: "RT-1007",
-    fltnum: "VA707",
-    dep: "KMIA",
-    arr: "KJFK",
-    duration: "2:50",
-    notes: "Popular route connecting south Florida to New York.",
-  },
-  {
-    id: "RT-1008",
-    fltnum: "VA808",
-    dep: "KORD",
-    arr: "KDFW",
-    duration: "2:15",
-    notes: "Midwest to south central route, connecting major hubs.",
-  },
-];
-
-const statusOptions = ["active", "inactive", "pending"];
-const aircraftOptions = ["B737", "A320", "B777", "A350"];
-
-// Helper function to get aircraft for a route
-const getAircraftForRoute = (routeId: string) => {
-  const aircraftIds = routeAircraftData
-    .filter((ra) => ra.routeId === routeId)
-    .map((ra) => ra.aircraftId);
-  return aircraftData.filter((ac) => aircraftIds.includes(ac.id));
-};
-
-const getStatusBadge = (status: string) => {
-  switch (status?.toLowerCase()) {
-    case "active":
-      return <Badge variant="default">Active</Badge>;
-    case "inactive":
-      return <Badge variant="destructive">Inactive</Badge>;
-    case "pending":
-      return <Badge variant="secondary">Pending</Badge>;
-    default:
-      return <Badge variant="outline">Unknown</Badge>;
-  }
+// Helper function to convert seconds to HH:MM format
+const formatDuration = (seconds: number) => {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  return `${hours}:${minutes.toString().padStart(2, "0")}`;
 };
 
 export default function RoutesPage() {
-  const [routes, setRoutes] = useState(routesData);
+  const [routes, setRoutes] = useState<Route[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [totalRoutes, setTotalRoutes] = useState(0);
+  const [aircraftOptions, setAircraftOptions] = useState<Aircraft[]>([]);
+
   const [aircraftFilter, setAircraftFilter] = useState("all");
   const [isAddingRoute, setIsAddingRoute] = useState(false);
   const [isEditingRoute, setIsEditingRoute] = useState(false);
   const [selectedRoute, setSelectedRoute] = useState(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 5;
+  const itemsPerPage = 10;
 
   const [newRoute, setNewRoute] = useState({
-    id: "",
     fltnum: "",
     dep: "",
     arr: "",
     duration: "",
     notes: "",
+    aircraft: [],
   });
 
-  const filteredRoutes = routesData.filter((route) => {
-    const matchesSearch =
-      route.fltnum.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      route.dep.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      route.arr.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      route.id.toLowerCase().includes(searchQuery.toLowerCase());
+  interface Route {
+    id: number;
+    fltnum: string;
+    dep: string;
+    arr: string;
+    duration: number;
+    notes: string;
+    aircraft: Aircraft[];
+  }
 
-    const matchesAircraft =
-      aircraftFilter === "all"
-        ? true
-        : getAircraftForRoute(route.id).some(
-            (ac) => ac.code === aircraftFilter
-          );
+  interface Aircraft {
+    id: number;
+    name: string;
+    ifaircraftid: string;
+    liveryname: string;
+    ifliveryid: string;
+    notes: string;
+  }
 
-    return matchesSearch && matchesAircraft;
-  });
+  // Fetch routes from API
+  const fetchRoutes = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(
+        `/api/admin/routes?fltnum=${searchQuery}&aircraftId=${
+          aircraftFilter === "all" ? "" : aircraftFilter
+        }`
+      );
 
-  const sortedRoutes = [...filteredRoutes].sort((a, b) => {
-    return a.fltnum.localeCompare(b.fltnum);
-  });
+      if (!response.ok) {
+        throw new Error("Failed to fetch routes");
+      }
+
+      const data = await response.json();
+      setRoutes(data.data.routes);
+      setTotalRoutes(data.data.total);
+      setError("");
+    } catch (err) {
+      setError("Error fetching routes. Please try again.");
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch aircraft options
+  const fetchAircraft = async () => {
+    try {
+      const response = await fetch("/api/aircraft");
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch aircraft");
+      }
+
+      const data = await response.json();
+      setAircraftOptions(
+        data.aircrafts.map((aircraft: any) => ({
+          id: aircraft.id,
+          name: aircraft.name,
+          liveryname: aircraft.liveryname,
+        }))
+      );
+    } catch (err) {
+      console.error("Error fetching aircraft:", err);
+    }
+  };
+
+  // Load data on component mount
+  useEffect(() => {
+    fetchRoutes();
+    fetchAircraft();
+  }, []);
+
+  // Reload when search or filter changes
+  useEffect(() => {
+    fetchRoutes();
+  }, [searchQuery, aircraftFilter]);
+
+  const filteredRoutes = routes;
+  const sortedRoutes = [...filteredRoutes];
 
   const pageCount = Math.ceil(sortedRoutes.length / itemsPerPage);
   const paginatedRoutes = sortedRoutes.slice(
@@ -242,9 +160,8 @@ export default function RoutesPage() {
     currentPage * itemsPerPage
   );
 
-  const handleAddRoute = () => {
+  const handleAddRoute = async () => {
     if (
-      !newRoute.id ||
       !newRoute.fltnum ||
       !newRoute.dep ||
       !newRoute.arr ||
@@ -256,58 +173,115 @@ export default function RoutesPage() {
       return;
     }
 
-    setRoutes([...routes, { ...newRoute }]);
-    setNewRoute({
-      id: "",
-      fltnum: "",
-      dep: "",
-      arr: "",
-      duration: "",
-      notes: "",
-    });
-    setIsAddingRoute(false);
-    Toast({
-      title: "Route added successfully.",
-    });
+    try {
+      const response = await fetch("/api/admin/routes", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(newRoute),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to add route");
+      }
+
+      setNewRoute({
+        fltnum: "",
+        dep: "",
+        arr: "",
+        duration: "",
+        notes: "",
+        aircraft: [],
+      });
+      setIsAddingRoute(false);
+      Toast({
+        title: "Route added successfully.",
+      });
+      fetchRoutes();
+    } catch (err) {
+      console.error("Error adding route:", err);
+      Toast({
+        title: "Failed to add route. Please try again.",
+      });
+    }
   };
 
-  const handleEditRoute = () => {
+  const handleEditRoute = async () => {
     if (!selectedRoute) return;
 
-    const updatedRoutes = routes.map((route) =>
-      route.id === (selectedRoute as any).id ? selectedRoute : route
-    );
-    setRoutes(updatedRoutes);
-    setIsEditingRoute(false);
-    Toast({
-      title: "Route updated successfully.",
-    });
+    try {
+      const response = await fetch("/api/admin/routes", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(selectedRoute),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update route");
+      }
+
+      setIsEditingRoute(false);
+      Toast({
+        title: "Route updated successfully.",
+      });
+      fetchRoutes();
+    } catch (err) {
+      console.error("Error updating route:", err);
+      Toast({
+        title: "Failed to update route. Please try again.",
+      });
+    }
   };
 
-  const handleDeleteRoute = () => {
+  const handleDeleteRoute = async () => {
     if (!selectedRoute) return;
 
-    const updatedRoutes = routes.filter(
-      (route) => route.id !== (selectedRoute as any).id
-    );
-    setRoutes(updatedRoutes);
-    setShowDeleteDialog(false);
-    Toast({
-      title: "Route deleted successfully.",
-    });
+    try {
+      const response = await fetch(
+        `/api/admin/routes?id=${(selectedRoute as any).id}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to delete route");
+      }
+
+      setShowDeleteDialog(false);
+      Toast({
+        title: "Route deleted successfully.",
+      });
+      fetchRoutes();
+    } catch (err) {
+      console.error("Error deleting route:", err);
+      Toast({
+        title: "Failed to delete route. Please try again.",
+      });
+    }
   };
 
-  const initEditForm = (route: {
-    id: string;
-    fltnum: string;
-    dep: string;
-    arr: string;
-    duration: string;
-    notes: string;
-    status?: string;
-  }) => {
-    setSelectedRoute(route as any);
-    setIsEditingRoute(true);
+  const initEditForm = async (route: any) => {
+    try {
+      // Fetch the full route details including aircraft
+      const response = await fetch(`/api/admin/routes/${route.id}`);
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch route details");
+      }
+
+      const data = await response.json();
+      setSelectedRoute(data.data);
+      setIsEditingRoute(true);
+    } catch (err) {
+      console.error("Error fetching route details:", err);
+      Toast({
+        title: "Failed to load route details. Please try again.",
+      });
+    }
   };
 
   return (
@@ -329,20 +303,6 @@ export default function RoutesPage() {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
 
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger>
-              <SelectValue placeholder="Filter by status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Statuses</SelectItem>
-              {statusOptions.map((status) => (
-                <SelectItem key={status} value={status}>
-                  {status}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
           <Select value={aircraftFilter} onValueChange={setAircraftFilter}>
             <SelectTrigger>
               <SelectValue placeholder="Filter by aircraft" />
@@ -350,8 +310,8 @@ export default function RoutesPage() {
             <SelectContent>
               <SelectItem value="all">All Aircraft</SelectItem>
               {aircraftOptions.map((aircraft) => (
-                <SelectItem key={aircraft} value={aircraft}>
-                  {aircraft}
+                <SelectItem key={aircraft.id} value={aircraft.id + ""}>
+                  {aircraft.name} - {aircraft.liveryname}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -370,7 +330,6 @@ export default function RoutesPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>ID</TableHead>
                     <TableHead>Flight Number</TableHead>
                     <TableHead>Route</TableHead>
                     <TableHead className="hidden md:table-cell">
@@ -380,15 +339,33 @@ export default function RoutesPage() {
                       Notes
                     </TableHead>
                     <TableHead>Aircraft</TableHead>
-                    <TableHead>Status</TableHead>
+
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginatedRoutes.length === 0 ? (
+                  {loading ? (
                     <TableRow>
                       <TableCell
-                        colSpan={7}
+                        colSpan={6}
+                        className="text-center py-8 text-muted-foreground"
+                      >
+                        Loading routes...
+                      </TableCell>
+                    </TableRow>
+                  ) : error ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={6}
+                        className="text-center py-8 text-muted-foreground"
+                      >
+                        {error}
+                      </TableCell>
+                    </TableRow>
+                  ) : paginatedRoutes.length === 0 ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={6}
                         className="text-center py-8 text-muted-foreground"
                       >
                         No routes found matching your criteria
@@ -397,9 +374,6 @@ export default function RoutesPage() {
                   ) : (
                     paginatedRoutes.map((route) => (
                       <TableRow key={route.id}>
-                        <TableCell className="font-medium">
-                          {route.id}
-                        </TableCell>
                         <TableCell>{route.fltnum}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
@@ -415,23 +389,19 @@ export default function RoutesPage() {
                           {route.notes}
                         </TableCell>
                         <TableCell>
-                          {getAircraftForRoute(route.id).map((ac) => (
-                            <Badge
-                              key={ac.id}
-                              variant="outline"
-                              className="mr-1"
-                            >
-                              {ac.code}
-                            </Badge>
-                          ))}
+                          {route.aircraft &&
+                            route.aircraft.map((ac: any) => (
+                              <Badge
+                                key={ac.id}
+                                variant="outline"
+                                className="mr-1"
+                              >
+                                {ac.name} - {ac.liveryname}
+                                {ac.notes ? ` - ${ac.notes}` : ""}
+                              </Badge>
+                            ))}
                         </TableCell>
-                        <TableCell>
-                          {route.status ? (
-                            getStatusBadge(route.status)
-                          ) : (
-                            <Badge variant="outline">Unknown</Badge>
-                          )}
-                        </TableCell>
+
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
                             <Button
@@ -439,7 +409,7 @@ export default function RoutesPage() {
                               size="icon"
                               onClick={() => {
                                 setSelectedRoute(route as any);
-                                initEditForm(route);
+                                initEditForm(route as any);
                               }}
                             >
                               <Edit className="h-4 w-4" />
@@ -506,22 +476,7 @@ export default function RoutesPage() {
 
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="id">ID *</Label>
-                  <Input
-                    id="id"
-                    value={newRoute.id}
-                    onChange={(e) =>
-                      setNewRoute({
-                        ...newRoute,
-                        id: e.target.value,
-                      })
-                    }
-                    placeholder="RT-1001"
-                  />
-                </div>
-
-                <div className="space-y-2">
+                <div className="space-y-2 col-span-2">
                   <Label htmlFor="fltnum">Flight Number *</Label>
                   <Input
                     id="fltnum"
@@ -538,44 +493,34 @@ export default function RoutesPage() {
 
                 <div className="space-y-2">
                   <Label htmlFor="dep">Departure Airport *</Label>
-                  <Select
+                  <Input
+                    id="dep"
                     value={newRoute.dep}
-                    onValueChange={(value) =>
-                      setNewRoute({ ...newRoute, dep: value })
+                    onChange={(e) =>
+                      setNewRoute({
+                        ...newRoute,
+                        dep: e.target.value.toUpperCase(),
+                      })
                     }
-                  >
-                    <SelectTrigger id="dep">
-                      <SelectValue placeholder="Select departure airport" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {airportsData.map((airport) => (
-                        <SelectItem key={airport.code} value={airport.code}>
-                          {airport.code} - {airport.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    placeholder="Enter departure ICAO code"
+                    maxLength={4}
+                  />
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="arr">Arrival Airport *</Label>
-                  <Select
+                  <Input
+                    id="arr"
                     value={newRoute.arr}
-                    onValueChange={(value) =>
-                      setNewRoute({ ...newRoute, arr: value })
+                    onChange={(e) =>
+                      setNewRoute({
+                        ...newRoute,
+                        arr: e.target.value.toUpperCase(),
+                      })
                     }
-                  >
-                    <SelectTrigger id="arr">
-                      <SelectValue placeholder="Select arrival airport" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {airportsData.map((airport) => (
-                        <SelectItem key={airport.code} value={airport.code}>
-                          {airport.code} - {airport.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    placeholder="Enter arrival ICAO code"
+                    maxLength={4}
+                  />
                 </div>
 
                 <div className="space-y-2">
@@ -591,6 +536,68 @@ export default function RoutesPage() {
                     }
                     placeholder="1:15"
                   />
+                </div>
+
+                <div className="space-y-2 col-span-2">
+                  <Label htmlFor="aircraft">Aircraft</Label>
+                  <Select
+                    onValueChange={(value) => {
+                      const selectedAircraft = aircraftOptions.find(
+                        (ac: any) => ac.id.toString() === value
+                      );
+                      if (selectedAircraft) {
+                        setNewRoute({
+                          ...newRoute,
+                          aircraft: [...(newRoute.aircraft || [])],
+                        });
+                      }
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select aircraft" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {aircraftOptions.map((aircraft: any) => (
+                        <SelectItem
+                          key={aircraft.id}
+                          value={aircraft.id.toString()}
+                        >
+                          {" "}
+                          {aircraft.name} - {aircraft.liveryname}
+                          {aircraft.notes ? ` - ${aircraft.notes}` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {newRoute.aircraft &&
+                      newRoute.aircraft.map((aircraftId: number) => {
+                        const aircraft = aircraftOptions.find(
+                          (ac: any) => ac.id === aircraftId
+                        );
+                        return aircraft ? (
+                          <Badge
+                            key={aircraftId}
+                            variant="secondary"
+                            className="mr-1"
+                          >
+                            <button
+                              className="ml-1 text-xs"
+                              onClick={() => {
+                                setNewRoute({
+                                  ...newRoute,
+                                  aircraft: newRoute.aircraft.filter(
+                                    (id: number) => id !== aircraftId
+                                  ),
+                                });
+                              }}
+                            >
+                              ×
+                            </button>
+                          </Badge>
+                        ) : null;
+                      })}
+                  </div>
                 </div>
               </div>
 
@@ -615,7 +622,6 @@ export default function RoutesPage() {
               <Button
                 onClick={handleAddRoute}
                 disabled={
-                  !newRoute.id ||
                   !newRoute.fltnum ||
                   !newRoute.dep ||
                   !newRoute.arr ||
@@ -649,12 +655,7 @@ export default function RoutesPage() {
                     <Input
                       id="edit-id"
                       value={(selectedRoute as any).id}
-                      onChange={(e) =>
-                        setSelectedRoute({
-                          ...(selectedRoute as any),
-                          id: e.target.value,
-                        })
-                      }
+                      disabled
                     />
                   </div>
 
@@ -716,6 +717,72 @@ export default function RoutesPage() {
                         })
                       }
                     />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-aircraft">Aircraft</Label>
+                    <Select
+                      onValueChange={(value) => {
+                        const selectedAircraft = aircraftOptions.find(
+                          (ac: any) => ac.id.toString() === value
+                        );
+                        if (selectedAircraft) {
+                          const currentAircraftIds = (
+                            selectedRoute as any
+                          ).aircraft.map((a: any) => a.id);
+                          if (!currentAircraftIds.includes(parseInt(value))) {
+                            setSelectedRoute({
+                              ...(selectedRoute as any),
+                              aircraft: [
+                                ...(selectedRoute as any).aircraft,
+                                selectedAircraft,
+                              ],
+                            });
+                          }
+                        }
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Add aircraft" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {aircraftOptions.map((aircraft: any) => (
+                          <SelectItem
+                            key={aircraft.id}
+                            value={aircraft.id.toString()}
+                          >
+                            {aircraft.name} - {aircraft.liveryname}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {(selectedRoute as any).aircraft &&
+                        (selectedRoute as any).aircraft.map((aircraft: any) => (
+                          <Badge
+                            key={aircraft.id}
+                            variant="secondary"
+                            className="mr-1"
+                          >
+                            {aircraft.name} - {aircraft.liveryname}
+                            <button
+                              className="ml-1 text-xs"
+                              onClick={() => {
+                                setSelectedRoute({
+                                  ...(selectedRoute as any),
+                                  aircraft: (
+                                    selectedRoute as any
+                                  ).aircraft.filter(
+                                    (a: any) => a.id !== aircraft.id
+                                  ),
+                                });
+                              }}
+                            >
+                              ×
+                            </button>
+                          </Badge>
+                        ))}
+                    </div>
                   </div>
                 </div>
 
