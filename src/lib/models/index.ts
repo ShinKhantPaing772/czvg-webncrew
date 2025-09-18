@@ -317,6 +317,8 @@ Route.belongsToMany(Aircraft, {
   through: RouteAircraft,
   foreignKey: "routeid",
 });
+Pilot.hasMany(Permission, { foreignKey: "userId" });
+Permission.belongsTo(Pilot, { foreignKey: "userId" });
 
 import Token from "./token";
 

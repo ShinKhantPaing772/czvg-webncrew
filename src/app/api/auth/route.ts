@@ -62,7 +62,10 @@ async function handleLogin({
   let pilot;
   try {
     pilot = await models.Pilot.findOne({
-      where: { email: normalizedEmail },
+      where: {
+        email: normalizedEmail,
+        status: 1,
+      },
       attributes: ["id", "email", "password", "name", "callsign"],
     });
   } catch (error) {
@@ -74,14 +77,20 @@ async function handleLogin({
   }
 
   if (!pilot) {
-    return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+    return NextResponse.json(
+      {
+        error:
+          "Login Failed. Your application may still be pending or it may have been denied. Please contact us for more details if you believe this is an error.",
+      },
+      { status: 401 }
+    );
   }
 
   let isValidPassword = false;
   try {
     if (!password || !pilot.password) {
       return NextResponse.json(
-        { error: "Invalid credentials" },
+        { error: "Invalid Credentials" },
         { status: 401 }
       );
     }

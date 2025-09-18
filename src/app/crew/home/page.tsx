@@ -46,7 +46,6 @@ export default function UserDashboard() {
       try {
         const response = await fetch(`/api/pilots/${user?.id}/pireps`);
         const data = await response.json();
-        console.log(data);
         const recentPireps = data.pireps
           .slice(0, 5)
           .map(

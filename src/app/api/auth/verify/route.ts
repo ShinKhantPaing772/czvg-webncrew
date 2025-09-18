@@ -46,7 +46,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Token revoked" }, { status: 401 });
     }
 
-    // Get user data from database
     const user = await models.Pilot.findByPk(tokenRecord.pilotId, {
       attributes: [
         "id",
@@ -58,6 +57,12 @@ export async function POST(request: Request) {
         "transflights",
         "joined",
         "status",
+      ],
+      include: [
+        {
+          model: models.Permission,
+          attributes: ["userid", "name"], // whatever fields you want
+        },
       ],
     });
 

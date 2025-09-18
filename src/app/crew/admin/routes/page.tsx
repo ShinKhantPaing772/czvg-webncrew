@@ -31,7 +31,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Toast } from "@radix-ui/react-toast";
 import { CrewHeader } from "@/components/crew-header";
 import {
   Card,
@@ -40,20 +39,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-
-// Helper function to convert seconds to HH:MM format
-const formatDuration = (seconds: number) => {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  return `${hours}:${minutes.toString().padStart(2, "0")}`;
-};
+import { formatFlightTime } from "@/lib/utils/format-flight-time";
 
 export default function RoutesPage() {
   const [routes, setRoutes] = useState<Route[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [totalRoutes, setTotalRoutes] = useState(0);
   const [aircraftOptions, setAircraftOptions] = useState<Aircraft[]>([]);
 
   const [aircraftFilter, setAircraftFilter] = useState("all");
@@ -108,7 +100,6 @@ export default function RoutesPage() {
 
       const data = await response.json();
       setRoutes(data.data.routes);
-      setTotalRoutes(data.data.total);
       setError("");
     } catch (err) {
       setError("Error fetching routes. Please try again.");
@@ -161,15 +152,13 @@ export default function RoutesPage() {
   );
 
   const handleAddRoute = async () => {
+    console.log(newRoute);
     if (
       !newRoute.fltnum ||
       !newRoute.dep ||
       !newRoute.arr ||
       !newRoute.duration
     ) {
-      Toast({
-        title: "Please fill in all required fields.",
-      });
       return;
     }
 
@@ -194,16 +183,12 @@ export default function RoutesPage() {
         notes: "",
         aircraft: [],
       });
+
       setIsAddingRoute(false);
-      Toast({
-        title: "Route added successfully.",
-      });
+      alert("Route added successfully.");
       fetchRoutes();
     } catch (err) {
       console.error("Error adding route:", err);
-      Toast({
-        title: "Failed to add route. Please try again.",
-      });
     }
   };
 
@@ -216,7 +201,15 @@ export default function RoutesPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(selectedRoute),
+        body: JSON.stringify({
+          id: (selectedRoute as Route).id,
+          fltnum: (selectedRoute as Route).fltnum,
+          dep: (selectedRoute as Route).dep,
+          arr: (selectedRoute as Route).arr,
+          duration: (selectedRoute as Route).duration,
+          notes: (selectedRoute as Route).notes,
+          aircraft: (selectedRoute as any).aircraft.map((a: any) => a.id), // ✅ only IDs
+        }),
       });
 
       if (!response.ok) {
@@ -224,15 +217,11 @@ export default function RoutesPage() {
       }
 
       setIsEditingRoute(false);
-      Toast({
-        title: "Route updated successfully.",
-      });
+      alert("Route updated successfully.");
       fetchRoutes();
     } catch (err) {
       console.error("Error updating route:", err);
-      Toast({
-        title: "Failed to update route. Please try again.",
-      });
+      alert("Failed to update route. Please try again.");
     }
   };
 
@@ -252,15 +241,11 @@ export default function RoutesPage() {
       }
 
       setShowDeleteDialog(false);
-      Toast({
-        title: "Route deleted successfully.",
-      });
+      alert("Route deleted successfully.");
       fetchRoutes();
     } catch (err) {
       console.error("Error deleting route:", err);
-      Toast({
-        title: "Failed to delete route. Please try again.",
-      });
+      alert("Failed to delete route. Please try again.");
     }
   };
 
@@ -278,9 +263,7 @@ export default function RoutesPage() {
       setIsEditingRoute(true);
     } catch (err) {
       console.error("Error fetching route details:", err);
-      Toast({
-        title: "Failed to load route details. Please try again.",
-      });
+      alert("Failed to load route details. Please try again.");
     }
   };
 
@@ -383,7 +366,7 @@ export default function RoutesPage() {
                           </div>
                         </TableCell>
                         <TableCell className="hidden md:table-cell">
-                          {route.duration}
+                          {formatFlightTime(route.duration)}
                         </TableCell>
                         <TableCell className="hidden md:table-cell">
                           {route.notes}
@@ -817,27 +800,35 @@ export default function RoutesPage() {
 
         {/* Delete Route Dialog */}
         <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-          <DialogContent>
+          <DialogContent className="bg-white">
             <DialogHeader>
               <DialogTitle>Delete Route</DialogTitle>
               <DialogDescription>
                 Are you sure you want to delete route{" "}
-                {(selectedRoute as any)?.id}? This action cannot be undone.
+                {(selectedRoute as any)?.fltnum}? This action cannot be undone.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
               <Button
                 variant="outline"
                 onClick={() => setShowDeleteDialog(false)}
+                className="bg-white hover:bg-gray-300"
               >
                 Cancel
               </Button>
-              <Button variant="destructive" onClick={handleDeleteRoute}>
+              <Button
+                variant="destructive"
+                onClick={handleDeleteRoute}
+                className="bg-red-500 text-white hover:bg-red-600"
+              >
                 Delete
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        <div>
+          <span>Total Routes : {routes.length}</span>
+        </div>
       </div>
     </CrewHeader>
   );

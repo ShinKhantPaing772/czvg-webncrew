@@ -1,46 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 
 export default function ComingSoonPage() {
-  // Countdown timer state
-  const [timeLeft, setTimeLeft] = useState({
-    days: 0,
-    hours: 0,
-    minutes: 0,
-    seconds: 0,
-  });
-
-  // Set launch date - change this to your actual launch date
-  const launchDate = new Date("2025-04-15T00:00:00");
-
-  // Update countdown timer
-  useEffect(() => {
-    const timer = setInterval(() => {
-      const now = new Date();
-      const difference = launchDate.getTime() - now.getTime();
-
-      if (difference <= 0) {
-        clearInterval(timer);
-        setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-        return;
-      }
-
-      const days = Math.floor(difference / (1000 * 60 * 60 * 24));
-      const hours = Math.floor(
-        (difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
-      );
-      const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((difference % (1000 * 60)) / 1000);
-
-      setTimeLeft({ days, hours, minutes, seconds });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, []);
-
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
@@ -67,109 +30,6 @@ export default function ComingSoonPage() {
           </div>
         </div>
       </main>
-
-      {/* Countdown Timer
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
-              <div className="bg-white p-4 rounded-lg shadow-md border">
-                <div className="text-4xl font-bold text-blue-700">
-                  {timeLeft.days}
-                </div>
-                <div className="text-gray-500">Days</div>
-              </div>
-              <div className="bg-white p-4 rounded-lg shadow-md border">
-                <div className="text-4xl font-bold text-blue-700">
-                  {timeLeft.hours}
-                </div>
-                <div className="text-gray-500">Hours</div>
-              </div>
-              <div className="bg-white p-4 rounded-lg shadow-md border">
-                <div className="text-4xl font-bold text-blue-700">
-                  {timeLeft.minutes}
-                </div>
-                <div className="text-gray-500">Minutes</div>
-              </div>
-              <div className="bg-white p-4 rounded-lg shadow-md border">
-                <div className="text-4xl font-bold text-blue-700">
-                  {timeLeft.seconds}
-                </div>
-                <div className="text-gray-500">Seconds</div>
-              </div>
-            </div>
-
-            {/* Features Preview 
-            <div className="grid md:grid-cols-3 gap-8">
-              <div className="bg-white p-6 rounded-lg shadow-sm border">
-                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-4 mx-auto">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-6 w-6 text-blue-700"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                </div>
-                <h3 className="text-lg font-bold mb-2">Virtual Flights</h3>
-                <p className="text-gray-600">
-                  Experience realistic virtual flights with our extensive route
-                  network and diverse fleet.
-                </p>
-              </div>
-              <div className="bg-white p-6 rounded-lg shadow-sm border">
-                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-4 mx-auto">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-6 w-6 text-blue-700"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
-                    />
-                  </svg>
-                </div>
-                <h3 className="text-lg font-bold mb-2">Pilot Community</h3>
-                <p className="text-gray-600">
-                  Join our growing community of virtual pilots and aviation
-                  enthusiasts.
-                </p>
-              </div>
-              <div className="bg-white p-6 rounded-lg shadow-sm border">
-                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-4 mx-auto">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-6 w-6 text-blue-700"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-                    />
-                  </svg>
-                </div>
-                <h3 className="text-lg font-bold mb-2">Career Progression</h3>
-                <p className="text-gray-600">
-                  Advance through our ranks and track your progress as a virtual
-                  pilot.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>*/}
 
       {/* Social Media Links */}
       <div className="py-8 bg-gray-50">

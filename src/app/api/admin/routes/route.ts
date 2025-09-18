@@ -131,9 +131,9 @@ export async function POST(request: Request) {
 
     // Add aircraft associations if provided
     if (Array.isArray(aircraft) && aircraft.length > 0) {
-      const routeAircraftEntries = aircraft.map((aircraftId) => ({
+      const routeAircraftEntries = aircraft.map((aircraft) => ({
         routeid: route.id,
-        aircraftid: aircraftId,
+        aircraftid: aircraft.id,
       }));
 
       await models.RouteAircraft.bulkCreate(routeAircraftEntries);
