@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { verifyToken } from "@/lib/utils/token";
 import { getToken } from "@/lib/utils/auth";
 
 type AuthGuardProps = {
@@ -12,23 +11,67 @@ type AuthGuardProps = {
 export function AuthGuard({ children }: AuthGuardProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const token = getToken();
-  // Check if user is authenticated
-  const isAuthenticated = verifyToken(token || "");
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+
+  const token = getToken(); // from localStorage or cookie
+
+  async function checkSession() {
+    try {
+      if (!token) {
+        setIsAuthenticated(false);
+        return;
+      }
+
+      const res = await fetch("/api/auth/verify", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ token: token }),
+      });
+
+      if (res.ok) {
+        setIsAuthenticated(true);
+      } else {
+        setIsAuthenticated(false);
+      }
+    } catch {
+      setIsAuthenticated(false);
+    }
+  }
 
   useEffect(() => {
-    const isLoginPage = pathname === "/crew";
+    checkSession();
+  }, []);
 
-    // If not authenticated and not on login page, redirect to login
+  useEffect(() => {
+    if (isAuthenticated === null) return; // wait for check
+
+    const isLoginPage = pathname === "/crew";
+    const isAdminPage = pathname?.startsWith("/crew/admin");
+
     if (!isAuthenticated && pathname?.startsWith("/crew") && !isLoginPage) {
-      router.push("/crew");
+      router.push("/crew"); // force to login
     }
 
-    // If authenticated and on login page, redirect to home
-    if (isLoginPage) {
+    if (isAuthenticated && isLoginPage) {
+      router.push("/crew/home"); // logged-in users skip login
+    }
+
+    if (isAuthenticated && isAdminPage) {
       router.push("/crew/home");
     }
-  }, [pathname, router]);
+  }, [isAuthenticated, pathname, router]);
+
+  // ⬇️ Show loading screen while checking auth
+  if (isAuthenticated === null) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center">
+        {/* Replace with spinner/skeleton if you like */}
+        <p className="text-gray-500">Loading...</p>
+      </div>
+    );
+  }
 
   return <>{children}</>;
 }

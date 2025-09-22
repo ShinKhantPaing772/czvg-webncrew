@@ -7,11 +7,9 @@ export async function POST(request: NextRequest) {
     // Check authentication - Get token from cookies or headers
     let authToken = null;
 
-    // Try to get from cookies first
     const cookieStore = cookies();
     authToken = cookieStore.get("auth_token")?.value || null;
 
-    // If not in cookies, try to get from Authorization header
     if (!authToken) {
       const headersList = headers();
       const authHeader = headersList.get("Authorization");
@@ -24,15 +22,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Verify token and get pilot
-    // Import the utility function
     const { getAbsoluteUrl } = await import("@/lib/utils/url");
 
     const response = await fetch(getAbsoluteUrl("/api/auth/verify"), {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token: authToken }),
     });
 
@@ -55,52 +49,40 @@ export async function POST(request: NextRequest) {
       multi,
     } = body;
 
-    // Validate aircraftId
     if (!aircraftId) {
-      console.error("Aircraft ID is required");
       return NextResponse.json(
         { error: "Aircraft ID is required" },
         { status: 400 }
       );
     }
 
-    // Validate date
     let parsedDate;
     try {
       parsedDate = date instanceof Date ? date : new Date(date);
-      if (isNaN(parsedDate.getTime())) {
-        throw new Error("Invalid date");
-      }
-    } catch (error) {
-      console.error("Invalid date format", error);
+      if (isNaN(parsedDate.getTime())) throw new Error("Invalid date");
+    } catch {
       return NextResponse.json(
         { error: "Invalid date format" },
         { status: 400 }
       );
     }
 
-    // Validate and convert flighttime from HH:MM format to minutes
     if (
       !flightTime ||
       typeof flightTime !== "string" ||
       !flightTime.includes(":")
     ) {
-      console.error("Invalid flight time format. Expected HH:MM");
       return NextResponse.json(
         { error: "Invalid flight time format. Expected HH:MM" },
         { status: 400 }
       );
     }
 
-    // Validate fuelUsed
     let parsedFuel;
     try {
       parsedFuel = parseFloat(fuelUsed);
-      if (isNaN(parsedFuel)) {
-        throw new Error("Invalid fuel amount");
-      }
-    } catch (error) {
-      console.error("Invalid fuel amount", error);
+      if (isNaN(parsedFuel)) throw new Error("Invalid fuel amount");
+    } catch {
       return NextResponse.json(
         { error: "Invalid fuel amount" },
         { status: 400 }
@@ -112,18 +94,62 @@ export async function POST(request: NextRequest) {
 
     // Create PIREP
     const pirep = await models.Pirep.create({
-      flightnum: flightnum,
-      departure: departure,
-      arrival: arrival,
+      flightnum,
+      departure,
+      arrival,
       flighttime: totalSeconds,
       pilotid: pilot.id,
       date: parsedDate,
       aircraftid: aircraftId,
       fuelused: parsedFuel,
       multi: multi || "None",
-      status: 0, // Pending approval
+      status: 0,
     });
-    console.log(pirep);
+
+    // --- Send Discord Webhook ---
+    const webhookUrl = process.env.DISCORD_WEBHOOK;
+    if (webhookUrl) {
+      const discordPayload = {
+        embeds: [
+          {
+            title: "New PIREP submitted!",
+            color: 3447003, // blue
+            fields: [
+              { name: "Flight Number", value: flightnum, inline: false },
+              {
+                name: "Pilot",
+                value: `${pilot.name} (${pilot.callsign})`,
+                inline: false,
+              },
+              {
+                name: "Route",
+                value: `${departure} - ${arrival}`,
+                inline: false,
+              },
+              {
+                name: "Operator",
+                value: "China Southern Airlines Virtual Group",
+                inline: false,
+              },
+              { name: "Flight Time", value: flightTime, inline: false },
+            ],
+            footer: {
+              text: `China Southern Virtual Group • ${parsedDate.toLocaleDateString()} ${parsedDate.toLocaleTimeString(
+                [],
+                { hour: "2-digit", minute: "2-digit" }
+              )}`,
+            },
+          },
+        ],
+      };
+
+      await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(discordPayload),
+      });
+    }
+
     return NextResponse.json({ pirep });
   } catch (error) {
     console.error("[PIREP] Error:", error);

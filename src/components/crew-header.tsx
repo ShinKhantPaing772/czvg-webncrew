@@ -22,12 +22,7 @@ interface CrewHeaderProps {
   children?: React.ReactNode;
 }
 
-export function CrewHeader({
-  userName,
-  userAvatar,
-  isAdmin = false,
-  children,
-}: CrewHeaderProps) {
+export function CrewHeader({ isAdmin = false, children }: CrewHeaderProps) {
   const pathname = usePathname();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 

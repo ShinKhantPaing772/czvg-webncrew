@@ -6,7 +6,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 export const metadata = {
   title: "China Southern Virtual Group IF",
   description:
-    "Official website of China Southern Virtual Group - A leading IFVARB approved virtual airline group operating in China.",
+    "Official website of China Southern Virtual Group - An IFVARB approved virtual airline.",
 };
 
 export default function RootLayout({

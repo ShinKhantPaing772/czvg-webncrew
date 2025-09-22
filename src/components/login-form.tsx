@@ -3,14 +3,12 @@
 import type React from "react";
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { setToken } from "@/lib/utils/auth";
 
 export function LoginForm() {
-  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
   const [formData, setFormData] = useState({
@@ -53,7 +51,9 @@ export function LoginForm() {
       }
 
       setMessage({ type: "success", text: "Login successful" });
-      router.push("/crew/home");
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
     } catch (error) {
       setMessage({
         type: "error",
