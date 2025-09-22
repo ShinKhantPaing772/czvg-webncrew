@@ -132,7 +132,6 @@ export default function FilePirep() {
   async function onSubmit(data: FormValues) {
     setIsLoading(true);
 
-    console.log(data);
     try {
       // Get the authentication token
       const token = localStorage.getItem("auth_token");

@@ -1,22 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { models } from "@/lib/models";
-import { cookies, headers } from "next/headers";
+import { headers } from "next/headers";
 
 export async function POST(request: NextRequest) {
   try {
     // Check authentication - Get token from cookies or headers
     let authToken = null;
 
-    const cookieStore = cookies();
-    authToken = cookieStore.get("auth_token")?.value || null;
-
-    if (!authToken) {
-      const headersList = headers();
-      const authHeader = headersList.get("Authorization");
-      if (authHeader && authHeader.startsWith("Bearer ")) {
-        authToken = authHeader.substring(7);
-      }
+    const headersList = headers();
+    const authHeader = headersList.get("Authorization");
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      authToken = authHeader.substring(7);
     }
+
+    console.log(authToken);
 
     if (!authToken) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
