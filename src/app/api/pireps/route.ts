@@ -1,38 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { models } from "@/lib/models";
-import { headers } from "next/headers";
 
 export async function POST(request: NextRequest) {
   try {
-    // Check authentication - Get token from cookies or headers
-    let authToken = null;
-
-    const headersList = headers();
-    const authHeader = headersList.get("Authorization");
-    if (authHeader && authHeader.startsWith("Bearer ")) {
-      authToken = authHeader.substring(7);
-    }
-
-    console.log(authToken);
-
-    if (!authToken) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const { getAbsoluteUrl } = await import("@/lib/utils/url");
-
-    const response = await fetch(getAbsoluteUrl("/api/auth/verify"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token: authToken }),
-    });
-
-    if (!response.ok) {
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-    }
-
-    const pilot = await response.json();
-
     // Parse request body
     const body = await request.json();
     const {
@@ -44,7 +14,17 @@ export async function POST(request: NextRequest) {
       aircraftId,
       fuelUsed,
       multi,
+      pilotid,
+      pilotname,
+      pilotcallsign,
     } = body;
+
+    if (!pilotid) {
+      return NextResponse.json(
+        { error: "Pilot ID is required" },
+        { status: 400 }
+      );
+    }
 
     if (!aircraftId) {
       return NextResponse.json(
@@ -95,7 +75,7 @@ export async function POST(request: NextRequest) {
       departure,
       arrival,
       flighttime: totalSeconds,
-      pilotid: pilot.id,
+      pilotid,
       date: parsedDate,
       aircraftid: aircraftId,
       fuelused: parsedFuel,
@@ -110,12 +90,12 @@ export async function POST(request: NextRequest) {
         embeds: [
           {
             title: "New PIREP submitted!",
-            color: 3447003, // blue
+            color: 3447003,
             fields: [
               { name: "Flight Number", value: flightnum, inline: false },
               {
                 name: "Pilot",
-                value: `${pilot.name} (${pilot.callsign})`,
+                value: `${pilotname} (${pilotcallsign})`,
                 inline: false,
               },
               {

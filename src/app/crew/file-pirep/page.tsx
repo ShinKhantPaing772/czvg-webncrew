@@ -133,16 +133,17 @@ export default function FilePirep() {
     setIsLoading(true);
 
     try {
-      // Get the authentication token
-      const token = localStorage.getItem("auth_token");
-
       const response = await fetch("/api/pireps", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          ...data,
+          pilotid: user?.id, // pass user id directly
+          pilotname: user?.name,
+          pilotcallsign: user?.callsign,
+        }),
       });
 
       if (!response.ok) {
@@ -150,11 +151,11 @@ export default function FilePirep() {
       }
 
       form.reset();
+      window.location.href = "/crew/view-pireps";
     } catch (error) {
       console.error(error);
     } finally {
       setIsLoading(false);
-      window.location.href = "/crew/view-pireps";
     }
   }
 
