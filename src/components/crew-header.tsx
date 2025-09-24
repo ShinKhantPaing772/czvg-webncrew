@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import {
   Menu,
@@ -14,17 +14,27 @@ import {
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Header } from "./layout/header";
+import { useSession } from "@/hooks/use-session";
 
 interface CrewHeaderProps {
-  userName: string;
-  userAvatar?: string;
-  isAdmin?: boolean;
   children?: React.ReactNode;
 }
 
-export function CrewHeader({ isAdmin = false, children }: CrewHeaderProps) {
+export function CrewHeader({ children }: CrewHeaderProps) {
   const pathname = usePathname();
+  const [isAdmin, setIsAdmin] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+  const { user } = useSession();
+  useEffect(() => {
+    setIsAdmin(
+      Boolean(
+        user?.Permissions?.some(
+          (permission: { name: string }) => permission.name === "admin"
+        )
+      )
+    );
+  }, [user]);
 
   const baseNavItems = [
     {

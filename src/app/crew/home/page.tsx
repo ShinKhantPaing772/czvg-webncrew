@@ -89,7 +89,7 @@ export default function UserDashboard() {
   const recentFlights = pireps;
 
   return (
-    <CrewHeader userName={"" + user?.name}>
+    <CrewHeader>
       {loading && (
         <div className="flex items-center justify-center min-h-screen">
           Loading...

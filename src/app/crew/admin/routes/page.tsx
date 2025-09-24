@@ -152,7 +152,6 @@ export default function RoutesPage() {
   );
 
   const handleAddRoute = async () => {
-    console.log(newRoute);
     if (
       !newRoute.fltnum ||
       !newRoute.dep ||
@@ -268,7 +267,7 @@ export default function RoutesPage() {
   };
 
   return (
-    <CrewHeader userName="Admin User" isAdmin={true}>
+    <CrewHeader>
       <div>
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-2xl font-bold">Routes</h1>

@@ -116,16 +116,6 @@ export default function FilePirep() {
   // Initialize form with default values
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: {
-      flightnum: "",
-      departure: "",
-      arrival: "",
-      flightTime: "",
-      date: new Date(), // Default to today
-      aircraftId: "",
-      fuelUsed: "",
-      multi: "",
-    },
   });
 
   // Handle form submission
@@ -186,7 +176,7 @@ export default function FilePirep() {
   }
 
   return (
-    <CrewHeader userName={user?.name || ""}>
+    <CrewHeader>
       <Card className="max-w-2xl mx-auto mt-4 z-0 overflow-visible">
         <CardHeader>
           <div className="flex items-center justify-between">

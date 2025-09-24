@@ -8,9 +8,26 @@ type AuthGuardProps = {
   children: React.ReactNode;
 };
 
+type User = {
+  callsign: string;
+  id: string;
+  name: string;
+  email: string;
+  rank: string;
+  flightTime: string;
+  pirepsFiled: number;
+  joined: string;
+  status: number;
+  Permissions: Array<{
+    userid: string;
+    name: string;
+  }>;
+};
+
 export function AuthGuard({ children }: AuthGuardProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
 
   const token = getToken(); // from localStorage or cookie
@@ -29,7 +46,14 @@ export function AuthGuard({ children }: AuthGuardProps) {
         },
         body: JSON.stringify({ token: token }),
       });
-
+      const user = await res.json();
+      setIsAdmin(
+        Boolean(
+          user?.Permissions?.some(
+            (permission: { name: string }) => permission.name === "admin"
+          )
+        )
+      );
       if (res.ok) {
         setIsAuthenticated(true);
       } else {
@@ -58,10 +82,10 @@ export function AuthGuard({ children }: AuthGuardProps) {
       router.push("/crew/home"); // logged-in users skip login
     }
 
-    if (isAuthenticated && isAdminPage) {
+    if (isAuthenticated && isAdminPage && !isAdmin) {
       router.push("/crew/home");
     }
-  }, [isAuthenticated, pathname, router]);
+  }, [isAuthenticated, pathname, router, isAdmin]);
 
   // ⬇️ Show loading screen while checking auth
   if (isAuthenticated === null) {

@@ -52,7 +52,6 @@ export default function ViewRoute() {
           ...data.data,
           duration: formatFlightTime(data.data.duration),
         };
-        console.log(formattedRoute);
         if (data.success) {
           setRoute(formattedRoute);
         }
@@ -68,7 +67,7 @@ export default function ViewRoute() {
 
   if (loading) {
     return (
-      <CrewHeader userName={user?.name || ""}>
+      <CrewHeader>
         <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
           <div className="flex items-center gap-4">
             <Button variant="outline" size="icon" asChild>
@@ -90,10 +89,7 @@ export default function ViewRoute() {
 
   if (!route) {
     return (
-      <CrewHeader
-        userName="John Doe"
-        userAvatar="/placeholder.svg?height=80&width=80"
-      >
+      <CrewHeader>
         <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
           <div className="flex items-center gap-4">
             <Button variant="outline" size="icon" asChild>
@@ -114,10 +110,7 @@ export default function ViewRoute() {
   }
 
   return (
-    <CrewHeader
-      userName="John Doe"
-      userAvatar="/placeholder.svg?height=80&width=80"
-    >
+    <CrewHeader>
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
         <div className="flex items-center gap-4">
           <Button variant="outline" size="icon" asChild>

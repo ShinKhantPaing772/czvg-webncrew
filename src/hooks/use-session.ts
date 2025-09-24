@@ -12,6 +12,11 @@ type User = {
   flightTime: string;
   pirepsFiled: number;
   joined: string;
+  status: number;
+  Permissions: Array<{
+    userid: string;
+    name: string;
+  }>;
 };
 
 export function useSession() {
@@ -40,16 +45,12 @@ export function useSession() {
             throw new Error(userData?.error || "Failed to verify token");
           }
 
-          // Now fetch the pilot data using the ID from verification
-          const response = await fetch(`/api/pilots/${userData.id}`);
-          const data = await response.json();
-
           const pilotResponse = await fetch(
             `/api/pilots/${userData.id}/pireps`
           );
           const pilotData = await pilotResponse.json();
           setUser({
-            ...data,
+            ...userData,
             flightTime: pilotData.statistics.totalFlightTime,
             pirepsFiled: pilotData.statistics.totalPireps,
             rank: pilotData.statistics.rank,

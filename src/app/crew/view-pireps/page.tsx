@@ -164,7 +164,7 @@ export default function ViewPireps() {
   };
 
   return (
-    <CrewHeader userName={"" + user?.name}>
+    <CrewHeader>
       <main className="flex flex-1 flex-col gap-4 md:gap-8">
         <div className="flex flex-col gap-4">
           <div className="flex items-center justify-between">

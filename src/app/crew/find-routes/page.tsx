@@ -230,7 +230,7 @@ export default function FindRoutes() {
   );
 
   return (
-    <CrewHeader userName={user?.name || ""}>
+    <CrewHeader>
       <main className="flex flex-1 flex-col gap-4  md:gap-8">
         <div className="flex flex-col gap-4">
           <h1 className="text-2xl font-bold">Find Routes</h1>

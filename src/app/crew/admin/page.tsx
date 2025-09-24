@@ -136,7 +136,7 @@ export default function AdminDashboard() {
   };
 
   return (
-    <CrewHeader userName="Admin User" isAdmin={true}>
+    <CrewHeader>
       {loading && (
         <div className="flex items-center justify-center min-h-screen">
           Loading...
