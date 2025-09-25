@@ -206,7 +206,7 @@ async function handleSignup({
 
   return NextResponse.json(
     {
-      message: `Registration successful. Your callsign is ${pilot.callsign}. Please check your inbox for an email with more information incoming.`,
+      message: `Registration successful. Your callsign is assigned to ${pilot.callsign}. Our staff will contact you on the IFC soon.`,
     },
     { status: 201 }
   );

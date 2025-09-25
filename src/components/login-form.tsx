@@ -76,6 +76,7 @@ export function LoginForm() {
           placeholder="pilot@example.com"
           required
           className="border-blue-200 focus-visible:ring-blue-500"
+          autoComplete="username"
           value={formData.email}
           onChange={handleChange}
         />
@@ -97,6 +98,7 @@ export function LoginForm() {
           type="password"
           required
           className="border-blue-200 focus-visible:ring-blue-500"
+          autoComplete="current-password"
           value={formData.password}
           onChange={handleChange}
         />

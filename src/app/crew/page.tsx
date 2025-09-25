@@ -36,7 +36,7 @@ export default function Home() {
                   <LoginForm />
                   <div className="mt-6 text-center">
                     <p className="text-gray-600">
-                      Register today to be a part of CZVG:{" "}
+                      Apply today to be a part of CZVG!{" "}
                       <button
                         onClick={() => setIsLogin(false)}
                         className="font-medium text-blue-600 hover:underline"

@@ -1,17 +1,19 @@
 "use client";
 
 import type React from "react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CheckCircle2, AlertCircle } from "lucide-react";
+import { CheckCircle2, AlertCircle, Loader2, XCircle } from "lucide-react";
 
 export function SignupForm() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingIFC, setLoadingIFC] = useState(false);
+  const [validIFC, setValidIFC] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
   const [formData, setFormData] = useState({
     email: "",
@@ -26,6 +28,28 @@ export function SignupForm() {
     const { id, value } = e.target;
     setFormData((prev) => ({ ...prev, [id]: value }));
   };
+
+  useEffect(() => {
+    const checkIFC = async () => {
+      try {
+        setLoadingIFC(true);
+        const response = await fetch(`/api/auth/ifc/${formData.ifc}`);
+        if (!response.ok) throw new Error("IFC check failed");
+
+        const data = await response.json();
+        setValidIFC(data.result.length !== 0);
+      } catch (error) {
+        setMessage({
+          type: "error",
+          text: error instanceof Error ? error.message : "IFC check failed",
+        });
+      } finally {
+        setLoadingIFC(false);
+      }
+    };
+
+    if (formData.ifc) checkIFC();
+  }, [formData.ifc]);
 
   function validatePassword() {
     if (formData.password.length < 8) {
@@ -118,6 +142,7 @@ export function SignupForm() {
           type="email"
           placeholder="pilot@example.com"
           required
+          autoComplete="username"
           className="border-blue-200 focus-visible:ring-blue-500"
           value={formData.email}
           onChange={handleChange}
@@ -132,14 +157,27 @@ export function SignupForm() {
           <span className="inline-flex h-10 items-center rounded-l-md border border-r-0 border-blue-200 bg-blue-50 px-3 text-sm text-gray-600">
             https://community.infinitefllight.com/u/
           </span>
-          <Input
-            id="ifc"
-            className="rounded-l-none border-blue-200 focus-visible:ring-blue-500"
-            placeholder="username"
-            required
-            value={formData.ifc}
-            onChange={handleChange}
-          />
+          <div className="relative w-full">
+            <Input
+              id="ifc"
+              className="rounded-l-none border-blue-200 focus-visible:ring-blue-500 pr-10"
+              placeholder="username"
+              required
+              value={formData.ifc}
+              onChange={handleChange}
+            />
+            <span className="absolute inset-y-0 right-2 flex items-center">
+              {loadingIFC && (
+                <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+              )}
+              {!loadingIFC && formData.ifc && validIFC && (
+                <CheckCircle2 className="h-4 w-4 text-green-500" />
+              )}
+              {!loadingIFC && formData.ifc && !validIFC && (
+                <XCircle className="h-4 w-4 text-red-500" />
+              )}
+            </span>
+          </div>
         </div>
         <p className="text-xs text-gray-600">
           All pilots are required to have an active{" "}
@@ -163,6 +201,7 @@ export function SignupForm() {
           value={formData.password}
           onChange={handleChange}
           required
+          autoComplete="new-password"
           className="border-blue-200 focus-visible:ring-blue-500"
         />
         <div className="flex items-center gap-1 text-xs">
@@ -191,6 +230,7 @@ export function SignupForm() {
           value={formData.passwordConfirm}
           onChange={handleChange}
           required
+          autoComplete="new-password"
           className="border-blue-200 focus-visible:ring-blue-500"
         />
         {passwordError && (
