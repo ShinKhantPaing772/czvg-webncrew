@@ -3,7 +3,6 @@
 import { ForgotPasswordForm } from "@/components/forgot-password-form";
 import { motion } from "framer-motion";
 import { Header } from "@/components/layout/header";
-import Link from "next/link";
 
 export default function ForgotPassword() {
   return (
@@ -22,21 +21,8 @@ export default function ForgotPassword() {
                 <h2 className="text-2xl font-semibold text-gray-900">
                   Reset Your Password
                 </h2>
-                <p className="text-gray-600">
-                  Enter your email to receive a password reset code
-                </p>
               </div>
               <ForgotPasswordForm />
-              <div className="mt-6 text-center">
-                <p className="text-gray-600">
-                  <Link
-                    href="/crew"
-                    className="font-medium text-blue-600 hover:underline"
-                  >
-                    Back
-                  </Link>
-                </p>
-              </div>
             </motion.div>
           </div>
         </div>

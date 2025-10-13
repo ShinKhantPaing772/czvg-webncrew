@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
+import Link from "next/link";
+import { OtpInput } from "./otpinput";
 
 export function ForgotPasswordForm() {
   const [isLoading, setIsLoading] = useState(false);
@@ -172,7 +174,7 @@ export function ForgotPasswordForm() {
         <form onSubmit={requestOTP} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="email" className="text-gray-700">
-              Email Address
+              Enter your Email Address
             </Label>
             <Input
               id="email"
@@ -198,6 +200,16 @@ export function ForgotPasswordForm() {
               "Send Reset Code"
             )}
           </Button>
+          <div className="mt-6 text-center">
+            <p className="text-gray-600">
+              <Link
+                href="/crew"
+                className="font-medium text-blue-600 hover:underline"
+              >
+                Back
+              </Link>
+            </p>
+          </div>
           {message.text && (
             <div
               className={`mt-2 text-sm ${
@@ -214,16 +226,10 @@ export function ForgotPasswordForm() {
         <form onSubmit={verifyOTP} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="otp" className="text-gray-700">
-              Enter OTP Code
+              OTP Code
             </Label>
-            <Input
-              id="otp"
-              placeholder="Enter the 6-digit code sent to your email"
-              required
-              className="border-blue-200 focus-visible:ring-blue-500"
-              value={otp}
-              onChange={handleChange}
-            />
+            <OtpInput onChange={(val) => setOtp(val)} />
+
             <p className="text-xs text-gray-600">
               Please check your email for a 6-digit code
             </p>
