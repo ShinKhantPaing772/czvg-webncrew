@@ -70,6 +70,17 @@ export function SignupForm() {
     event.preventDefault();
 
     if (!validatePassword()) {
+      setMessage({
+        type: "error",
+        text: "Please check the password field.",
+      });
+      return;
+    }
+    if (!validIFC) {
+      setMessage({
+        type: "error",
+        text: "IFC username entered is not valid, please enter a valid IFC username.",
+      });
       return;
     }
 
@@ -222,7 +233,7 @@ export function SignupForm() {
 
       <div className="space-y-2">
         <Label htmlFor="passwordConfirm" className="text-gray-700">
-          Password Again
+          Confirm Password
         </Label>
         <Input
           id="passwordConfirm"

@@ -71,14 +71,19 @@ export function AuthGuard({ children }: AuthGuardProps) {
   useEffect(() => {
     if (isAuthenticated === null) return; // wait for check
 
-    const isLoginPage = pathname === "/crew";
+    const isLoginorForgetPasswordPage =
+      pathname === "/crew" || pathname === "/crew/forgot-password";
     const isAdminPage = pathname?.startsWith("/crew/admin");
 
-    if (!isAuthenticated && pathname?.startsWith("/crew") && !isLoginPage) {
+    if (
+      !isAuthenticated &&
+      pathname?.startsWith("/crew") &&
+      !isLoginorForgetPasswordPage
+    ) {
       router.push("/crew"); // force to login
     }
 
-    if (isAuthenticated && isLoginPage) {
+    if (isAuthenticated && isLoginorForgetPasswordPage) {
       router.push("/crew/home"); // logged-in users skip login
     }
 

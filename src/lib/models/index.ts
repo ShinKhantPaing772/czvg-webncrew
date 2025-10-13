@@ -321,6 +321,7 @@ Pilot.hasMany(Permission, { foreignKey: "userId" });
 Permission.belongsTo(Pilot, { foreignKey: "userId" });
 
 import Token from "./token";
+import OTP from "./otp";
 
 export const models = {
   Aircraft,
@@ -337,4 +338,5 @@ export const models = {
   Notification,
   PirepComment,
   Token,
+  OTP,
 };
