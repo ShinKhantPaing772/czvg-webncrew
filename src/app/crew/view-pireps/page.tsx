@@ -170,7 +170,7 @@ export default function ViewPireps() {
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-bold">My PIREPs</h1>
             <Button asChild>
-              <a href="/file-pirep">Submit New PIREP</a>
+              <a href="/crew/file-pirep">Submit New PIREP</a>
             </Button>
           </div>
 
@@ -178,7 +178,7 @@ export default function ViewPireps() {
             <CardHeader className="p-4">
               <CardTitle>Flight Reports</CardTitle>
               <CardDescription>
-                View and manage your submitted pilot reports
+                View your submitted pilot reports
               </CardDescription>
             </CardHeader>
             <CardContent className="p-0">
@@ -220,7 +220,9 @@ export default function ViewPireps() {
                         colSpan={8}
                         className="text-center py-8 text-muted-foreground"
                       >
-                        Click Search
+                        <span className="text-muted-foreground">
+                          No PIREPs found. Take a flight and file a PIREP now!
+                        </span>
                       </TableCell>
                     </TableRow>
                   ) : (

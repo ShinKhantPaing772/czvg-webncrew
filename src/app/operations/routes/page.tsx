@@ -125,7 +125,7 @@ export default function RoutesPage() {
                   },
                   {
                     name: "Air Europa Virtual",
-                    logo: "https://aireuropavirtual.digitalweb.app/images/AirEuropa%20Redesign%20-%20Logo%20-%20Horizontal%20with%20Text%202%20-%20Blue.png",
+                    logo: "https://sea1.discourse-cdn.com/infiniteflight/user_avatar/community.infiniteflight.com/aireuropavirtual/288/799321_2.png",
                   },
                   {
                     name: "Qatar Airways",

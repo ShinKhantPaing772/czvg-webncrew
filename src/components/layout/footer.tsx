@@ -70,12 +70,6 @@ export function Footer() {
             <span className="font-bold text-lg">
               China Southern Virtual Group
             </span>
-            <span className="sr-only">IFC</span>
-            <img
-              src="https://webcdn.infiniteflight.com/static/favicon.png"
-              alt="IFC icon"
-              className="h-6 w-6"
-            />
           </div>
           <div className="flex flex-col justify-start items-start">
             <span className="font-medium">Explore the community</span>

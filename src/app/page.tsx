@@ -26,11 +26,8 @@ export default function Home() {
                     FLY INTO YOUR DREAMS
                   </p>
                   <div className="flex flex-col gap-2 min-[400px]:flex-row justify-end">
-                    <Button className="bg-primary text-white">
-                      Returning Soon
-                    </Button>
-                    <Button variant="outline">
-                      <Link href="/about-us">Learn More</Link>
+                    <Button className="bg-primary border border-white text-white">
+                      <Link href="/crew">Apply Now</Link>
                     </Button>
                   </div>
                 </div>
@@ -117,11 +114,10 @@ export default function Home() {
                   <blockquote className="border-l-4 border-primary pl-4 italic">
                     Welcome IF Pilots, As the CEO of this virtual airline. I
                     hope this VA brings you an excellent experience. Our virtual
-                    airline has a significant number of routes and aircraft to
-                    fly. Come and join us in the IF skies. And Stay Safe, Take
-                    Care
+                    airline has a welcoming community together with countless
+                    routes you can fly. Come and join us in the IF skies. <br />
                   </blockquote>
-                  <p className="font-semibold">- Yang-le-duo, CEO</p>
+                  <p className="font-semibold">- Nelson Paing, CEO</p>
                 </div>
               </div>
               <div className="flex items-center justify-center">

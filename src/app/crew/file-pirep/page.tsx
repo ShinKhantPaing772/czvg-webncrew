@@ -183,7 +183,7 @@ export default function FilePirep() {
             <div>
               <CardTitle className="text-2xl">Submit PIREP</CardTitle>
             </div>
-            <Button
+            {/* <Button
               variant="outline"
               onClick={fetchAcarsData}
               disabled={isFetchingAcars}
@@ -195,7 +195,7 @@ export default function FilePirep() {
                 <RefreshCw className="h-4 w-4" />
               )}
               Fetch ACARS
-            </Button>
+            </Button> */}
           </div>
         </CardHeader>
         <CardContent>
@@ -412,7 +412,7 @@ export default function FilePirep() {
         </CardContent>
         <CardFooter className="flex flex-col text-sm text-muted-foreground">
           <p>All flight times are recorded in hours:minutes format.</p>
-          <p>ACARS data will automatically populate this form if available.</p>
+          {/* <p>ACARS data will automatically populate this form if available.</p> */}
         </CardFooter>
       </Card>
     </CrewHeader>

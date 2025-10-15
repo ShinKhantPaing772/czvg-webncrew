@@ -35,7 +35,21 @@ export async function POST(request: NextRequest) {
 
     let parsedDate;
     try {
-      parsedDate = date instanceof Date ? date : new Date(date);
+      // Handle date with timezone preservation to prevent day offset issues
+      if (date instanceof Date) {
+        parsedDate = new Date(date.getTime());
+      } else {
+        // Parse the date and adjust for timezone to preserve the selected date
+        const dateObj = new Date(date);
+        parsedDate = new Date(
+          dateObj.getFullYear(),
+          dateObj.getMonth(),
+          dateObj.getDate(),
+          12,
+          0,
+          0
+        );
+      }
       if (isNaN(parsedDate.getTime())) throw new Error("Invalid date");
     } catch {
       return NextResponse.json(
@@ -111,7 +125,7 @@ export async function POST(request: NextRequest) {
               { name: "Flight Time", value: flightTime, inline: false },
             ],
             footer: {
-              text: `China Southern Virtual Group • ${parsedDate.toLocaleDateString()} ${parsedDate.toLocaleTimeString(
+              text: `China Southern Virtual Group • ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString(
                 [],
                 { hour: "2-digit", minute: "2-digit" }
               )}`,

@@ -9,7 +9,7 @@ export async function GET(
   try {
     const pilotId = params.id;
 
-    // Fetch all PIREPs for the pilot
+    // Fetch ALL PIREPs for the pilot (regardless of status)
     const pireps = await models.Pirep.findAll({
       where: { pilotId },
       include: [
@@ -34,37 +34,39 @@ export async function GET(
       order: [["date", "DESC"]],
     });
 
-    // Format flight time for each PIREP
+    // Format flight time for each PIREP (for display)
     const formattedPireps = pireps.map((pirep) => ({
       ...pirep.get(),
       flighttime: formatFlightTime(pirep.flighttime || 0),
     }));
 
-    // Calculate total flight time in seconds
-    const totalSeconds = pireps.reduce(
+    // Filter only APPROVED PIREPs (status = 1)
+    const approvedPireps = pireps.filter((pirep) => pirep.status === 1);
+
+    // Calculate total flight time using only approved PIREPs
+    const totalSeconds = approvedPireps.reduce(
       (total, pirep) => total + (pirep.flighttime || 0),
       0
     );
 
-    // Fetch all ranks from the database
+    // Fetch all ranks
     const ranks = await models.Rank.findAll({
       order: [["timereq", "ASC"]],
     });
 
-    // Determine the pilot's rank based on total flight time
-    let pilotRank = { id: 0, name: "Trainee", timereq: 0 }; // Default rank if no ranks found
-
+    // Determine the pilot's rank based on total approved flight time
+    let pilotRank = { id: 0, name: "Trainee", timereq: 0 }; // Default rank
     for (const rank of ranks) {
       if (totalSeconds >= rank.timereq) {
         pilotRank = rank.get();
       } else {
-        break; // Stop once we find a rank with higher requirements than the pilot's time
+        break;
       }
     }
 
-    // Calculate progress to next rank
+    // Calculate progress toward next rank
     let nextRank = null;
-    let progressToNextRank = 100; // Default to 100% if there's no next rank
+    let progressToNextRank = 100;
 
     const currentRankIndex = ranks.findIndex(
       (rank) => rank.id === pilotRank.id
@@ -79,11 +81,12 @@ export async function GET(
       );
     }
 
+    // Return all PIREPs but stats based only on approved ones
     return NextResponse.json({
       pireps: formattedPireps,
       statistics: {
         totalFlightTime: formatFlightTime(totalSeconds),
-        totalPireps: pireps.length,
+        totalPireps: approvedPireps.length,
         rank: pilotRank.name,
         rankId: pilotRank.id,
         nextRank: nextRank ? nextRank.name : null,

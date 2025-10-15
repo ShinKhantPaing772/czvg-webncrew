@@ -38,7 +38,8 @@ export default function AboutPage() {
                 </p>
                 <br />
                 <p className="font-medium">
-                  Join China Southern Virtual Group to Fly Into Your Dreams.
+                  Join China Southern Virtual Group today to explore the
+                  exciting world of virtual flight with us!
                 </p>
               </div>
             </div>
