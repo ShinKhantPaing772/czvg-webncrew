@@ -118,8 +118,8 @@ export async function POST(request: NextRequest) {
                 inline: false,
               },
               {
-                name: "Operator",
-                value: "China Southern Airlines Virtual Group",
+                name: "Fuel Used",
+                value: `${parsedFuel} KG`,
                 inline: false,
               },
               { name: "Flight Time", value: flightTime, inline: false },

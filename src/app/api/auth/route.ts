@@ -204,6 +204,46 @@ async function handleSignup({
     status: 0, // Pending approval
   });
 
+  const webhookUrl = process.env.DISCORD_WEBHOOK_ADMIN;
+  if (webhookUrl) {
+    const discordPayload = {
+      embeds: [
+        {
+          title: "New Pilot Applicaation!",
+          color: 3447003,
+          fields: [
+            {
+              name: "Pilot",
+              value: `${name} (${callsign})`,
+              inline: false,
+            },
+            {
+              name: "IFC Username",
+              value: `${ifc.trim()}`,
+              inline: false,
+            },
+            {
+              name: "Email",
+              value: `${normalizedEmail}`,
+              inline: false,
+            },
+          ],
+          footer: {
+            text: `China Southern Virtual Group • ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString(
+              [],
+              { hour: "2-digit", minute: "2-digit" }
+            )}`,
+          },
+        },
+      ],
+    };
+
+    await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(discordPayload),
+    });
+  }
   return NextResponse.json(
     {
       message: `Registration successful. Your callsign is assigned to ${pilot.callsign}. Our staff will contact you on the IFC soon.`,
