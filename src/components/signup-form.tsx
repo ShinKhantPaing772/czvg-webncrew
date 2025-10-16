@@ -3,14 +3,12 @@
 import type React from "react";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CheckCircle2, AlertCircle, Loader2, XCircle } from "lucide-react";
 
 export function SignupForm() {
-  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [loadingIFC, setLoadingIFC] = useState(false);
   const [validIFC, setValidIFC] = useState(false);
@@ -116,8 +114,8 @@ export function SignupForm() {
 
       // Redirect to login page after successful registration
       setTimeout(() => {
-        router.push("/crew");
-      }, 2000);
+        window.location.reload;
+      }, 6000);
     } catch (error) {
       setMessage({
         type: "error",

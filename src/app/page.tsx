@@ -27,7 +27,7 @@ export default function Home() {
                   </p>
                   <div className="flex flex-col gap-2 min-[400px]:flex-row justify-end">
                     <Button className="bg-primary border border-white text-white">
-                      <Link href="/crew">Apply Now</Link>
+                      <Link href="/crew?type=signup">Apply Now</Link>
                     </Button>
                   </div>
                 </div>
@@ -145,7 +145,7 @@ export default function Home() {
               </p>
               <div className="flex flex-col gap-2 min-[400px]:flex-row justify-center pt-4">
                 <Button className="bg-white text-primary hover:bg-white/90">
-                  <Link href="/crew">Apply Now</Link>
+                  <Link href="/crew?type=signup">Apply Now</Link>
                 </Button>
                 <Button
                   variant="outline"

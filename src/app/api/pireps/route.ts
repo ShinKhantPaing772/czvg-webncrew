@@ -80,6 +80,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const multiplier = await models.Multiplier.findOne({
+      where: {
+        code: multi,
+      },
+    });
+
     const [hours, minutes] = flightTime.split(":").map(Number);
     const totalSeconds = hours * 3600 + minutes * 60;
 
@@ -88,12 +94,14 @@ export async function POST(request: NextRequest) {
       flightnum,
       departure,
       arrival,
-      flighttime: totalSeconds,
+      flighttime: multiplier
+        ? totalSeconds * multiplier.multiplier
+        : totalSeconds,
       pilotid,
       date: parsedDate,
       aircraftid: aircraftId,
       fuelused: parsedFuel,
-      multi: multi || "None",
+      multi: multiplier ? multiplier.name : "None",
       status: 0,
     });
 

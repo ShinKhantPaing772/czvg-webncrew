@@ -187,7 +187,7 @@ async function handleSignup({
 
   if (existingPilot) {
     return NextResponse.json(
-      { error: "Email already registered" },
+      { error: "An account is already registered with this Email" },
       { status: 400 }
     );
   }

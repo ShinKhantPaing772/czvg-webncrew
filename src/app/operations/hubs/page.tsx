@@ -372,7 +372,7 @@ export default function HubsPage() {
               </p>
               <div className="flex justify-center space-x-4">
                 <Link
-                  href="/crew"
+                  href="/crew?type=signup"
                   className="bg-white text-blue-700 px-6 py-3 rounded font-medium hover:bg-gray-100 transition-colors"
                 >
                   Apply Now

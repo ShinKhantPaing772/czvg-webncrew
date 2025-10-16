@@ -1,13 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { LoginForm } from "@/components/login-form";
 import { SignupForm } from "@/components/signup-form";
 import { motion, AnimatePresence } from "framer-motion";
 import { Header } from "@/components/layout/header";
 
 export default function Home() {
+  const searchParams = useSearchParams();
+  const type = searchParams.get("type");
   const [isLogin, setIsLogin] = useState(true);
+
+  useEffect(() => {
+    // If URL query is ?type=signup, switch to signup form
+    if (type === "signup") {
+      setIsLogin(false);
+    } else {
+      setIsLogin(true);
+    }
+  }, [type]);
 
   return (
     <div>

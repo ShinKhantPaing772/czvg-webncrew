@@ -378,9 +378,9 @@ export default function FilePirep() {
                   name="multi"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Multiplier (if available)</FormLabel>
+                      <FormLabel>Multiplier Code(if available)</FormLabel>
                       <FormControl>
-                        <Input placeholder="1.0" {...field} />
+                        <Input placeholder="888888" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

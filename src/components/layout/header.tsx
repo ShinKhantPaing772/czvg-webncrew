@@ -85,14 +85,14 @@ export function Header() {
           </DropdownMenu>
           {!user ? (
             <Link
-              href="/crew"
+              href="/crew?type=signup"
               className="text-sm font-medium hover:underline underline-offset-4"
             >
               Join Us
             </Link>
           ) : (
             <Link
-              href="/crew"
+              href="/crew/home"
               className="text-sm font-medium hover:underline underline-offset-4"
             >
               Crew Center
@@ -205,7 +205,7 @@ export function Header() {
                 Home
               </Link>
               <Link
-                href="/crew-center"
+                href="/crew"
                 className="-mx-3 block rounded-lg px-3 py-2 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50"
                 onClick={() => setMobileMenuOpen(false)}
               >

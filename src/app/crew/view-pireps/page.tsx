@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Calendar,
   FileText,
@@ -9,6 +9,7 @@ import {
   AlertCircle,
   Eye,
   Loader2,
+  Search,
 } from "lucide-react";
 import { CrewHeader } from "@/components/crew-header";
 import { Button } from "@/components/ui/button";
@@ -46,8 +47,8 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+import { Input } from "@/components/ui/input"; // 🔍 new import
 import { useSession } from "@/hooks/use-session";
-import { useEffect } from "react";
 import { formatFlightTime } from "@/lib/utils/format-flight-time";
 
 interface Pirep {
@@ -79,13 +80,14 @@ export default function ViewPireps() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // 🔍 Search Feature
+  const [searchTerm, setSearchTerm] = useState("");
+
   useEffect(() => {
     const fetchPireps = async () => {
       try {
         const response = await fetch(`/api/pilots/${user?.id}/pireps`);
-        if (!response.ok) {
-          throw new Error("Failed to fetch PIREPs");
-        }
+        if (!response.ok) throw new Error("Failed to fetch PIREPs");
         const data = await response.json();
         setPirepsData(data.pireps);
       } catch (err) {
@@ -94,27 +96,41 @@ export default function ViewPireps() {
         setLoading(false);
       }
     };
-
-    if (user?.id) {
-      fetchPireps();
-    }
+    if (user?.id) fetchPireps();
   }, [user?.id]);
 
-  // Sort PIREPs by date
+  // Sort by date
   const sortedPireps = [...pirepsData].sort((a, b) => {
     const dateA = new Date(a.date).getTime();
     const dateB = new Date(b.date).getTime();
     return dateSort === "desc" ? dateB - dateA : dateA - dateB;
   });
 
-  // Paginate PIREPs
-  const totalPages = Math.ceil(sortedPireps.length / itemsPerPage);
-  const paginatedPireps = sortedPireps.slice(
+  // 🔍 Filter PIREPs by search term
+  const filteredPireps = sortedPireps.filter((p) => {
+    const search = searchTerm.toLowerCase();
+    return (
+      p.flightnum.toLowerCase().includes(search) ||
+      p.departure.toLowerCase().includes(search) ||
+      p.arrival.toLowerCase().includes(search) ||
+      p.date.toLowerCase().includes(search) ||
+      p.fuelused.toString().includes(search) ||
+      p.multi.toString().includes(search) ||
+      p.Aircraft?.name.toLowerCase().includes(search) ||
+      p.Aircraft?.liveryname.toLowerCase().includes(search) ||
+      (p.status === 1 && "approved".includes(search)) ||
+      (p.status === 0 && "pending".includes(search)) ||
+      (p.status === 2 && "rejected".includes(search))
+    );
+  });
+
+  // Pagination
+  const totalPages = Math.ceil(filteredPireps.length / itemsPerPage);
+  const paginatedPireps = filteredPireps.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
 
-  // Get status badge variant
   const getStatusBadge = (status: number) => {
     switch (status) {
       case 1:
@@ -149,7 +165,6 @@ export default function ViewPireps() {
     }
   };
 
-  // Get status icon
   const getStatusIcon = (status: string) => {
     switch (status.toLowerCase()) {
       case "approved":
@@ -167,20 +182,38 @@ export default function ViewPireps() {
     <CrewHeader>
       <main className="flex flex-1 flex-col gap-4 md:gap-8">
         <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <h1 className="text-2xl font-bold">My PIREPs</h1>
-            <Button asChild>
-              <a href="/crew/file-pirep">Submit New PIREP</a>
-            </Button>
+
+            <div className="flex gap-2 items-center w-full sm:w-auto">
+              {/* 🔍 Search bar */}
+              <div className="relative w-full sm:w-64">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search PIREPs..."
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="pl-8"
+                />
+              </div>
+
+              <Button asChild>
+                <a href="/crew/file-pirep">Submit New PIREP</a>
+              </Button>
+            </div>
           </div>
 
           <Card>
             <CardHeader className="p-4">
               <CardTitle>Flight Reports</CardTitle>
               <CardDescription>
-                View your submitted pilot reports
+                View and search your submitted pilot reports
               </CardDescription>
             </CardHeader>
+
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
@@ -214,157 +247,144 @@ export default function ViewPireps() {
                       </TableCell>
                     </TableRow>
                   )}
-                  {paginatedPireps.length === 0 && !loading ? (
+                  {!loading && paginatedPireps.length === 0 && (
                     <TableRow>
                       <TableCell
                         colSpan={8}
                         className="text-center py-8 text-muted-foreground"
                       >
-                        <span className="text-muted-foreground">
-                          No PIREPs found. Take a flight and file a PIREP now!
-                        </span>
+                        No PIREPs found for your search.
                       </TableCell>
                     </TableRow>
-                  ) : (
-                    paginatedPireps.map((pirep) => (
-                      <TableRow key={pirep.id}>
-                        <TableCell>{pirep.flightnum}</TableCell>
-                        <TableCell>{pirep.date}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            <span>{pirep.departure}</span>
-                            <span>→</span>
-                            <span>{pirep.arrival}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell">
-                          {pirep.Aircraft?.name +
-                            " (" +
-                            pirep.Aircraft.liveryname +
-                            ")" || pirep.aircraftid}
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell">
-                          {formatFlightTime(pirep.flighttime)}
-                        </TableCell>
-                        <TableCell>{getStatusBadge(pirep.status)}</TableCell>
-                        <TableCell className="text-right">
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setSelectedPirep(pirep)}
-                              >
-                                <Eye className="h-4 w-4 mr-1" />
-                                <span className="hidden sm:inline">View</span>
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent className="max-w-5xl w-full bg-white">
-                              <DialogHeader>
-                                <DialogTitle className="flex items-center gap-2">
-                                  {getStatusIcon(
-                                    pirep.status === 1
-                                      ? "approved"
-                                      : pirep.status === 0
-                                      ? "pending"
-                                      : "rejected"
-                                  )}
-                                  <span>PIREP Details: {pirep.id}</span>
-                                </DialogTitle>
-                                <DialogDescription>
-                                  Flight {pirep.flightnum} from{" "}
-                                  {pirep.departure} to {pirep.arrival}
-                                </DialogDescription>
-                              </DialogHeader>
-
-                              <div className="grid gap-4">
-                                <div className="flex flex-col gap-3">
-                                  <Card>
-                                    <CardHeader className="">
-                                      <CardTitle className="text-sm font-medium">
-                                        Flight Information
-                                      </CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="pt-0">
-                                      <dl className="space-y-2 text-sm">
-                                        <div className="flex justify-between">
-                                          <dt className="text-muted-foreground">
-                                            Flight Number:
-                                          </dt>
-                                          <dd>{pirep.flightnum}</dd>
-                                        </div>
-                                        <div className="flex justify-between">
-                                          <dt className="text-muted-foreground">
-                                            Date:
-                                          </dt>
-                                          <dd>{pirep.date}</dd>
-                                        </div>
-                                        <div className="flex justify-between">
-                                          <dt className="text-muted-foreground">
-                                            Route:
-                                          </dt>
-                                          <dd>
-                                            {pirep.departure} → {pirep.arrival}
-                                          </dd>
-                                        </div>
-                                        <div className="flex justify-between">
-                                          <dt className="text-muted-foreground">
-                                            Duration:
-                                          </dt>
-                                          <dd>
-                                            {formatFlightTime(pirep.flighttime)}
-                                          </dd>
-                                        </div>
-
-                                        <div className="flex justify-between">
-                                          <dt className="text-muted-foreground">
-                                            Aircraft Type:
-                                          </dt>
-                                          <dd>
-                                            {pirep.Aircraft.name +
-                                              " (" +
-                                              pirep.Aircraft.liveryname +
-                                              ")"}
-                                          </dd>
-                                        </div>
-                                        <div className="flex justify-between">
-                                          <dt className="text-muted-foreground">
-                                            Fuel Used:
-                                          </dt>
-                                          <dd>{pirep.fuelused} kg</dd>
-                                        </div>
-
-                                        <div className="flex justify-between">
-                                          <dt className="text-muted-foreground">
-                                            Status:
-                                          </dt>
-                                          <dd>
-                                            {getStatusBadge(pirep.status)}
-                                          </dd>
-                                        </div>
-                                        <div className="flex justify-between">
-                                          <dt className="text-muted-foreground">
-                                            Multiplier:
-                                          </dt>
-                                          <dd>{pirep.multi}</dd>
-                                        </div>
-                                      </dl>
-                                    </CardContent>
-                                  </Card>
-                                </div>
-                              </div>
-                            </DialogContent>
-                          </Dialog>
-                        </TableCell>
-                      </TableRow>
-                    ))
                   )}
+                  {paginatedPireps.map((pirep) => (
+                    <TableRow key={pirep.id}>
+                      <TableCell>{pirep.flightnum}</TableCell>
+                      <TableCell>{pirep.date}</TableCell>
+                      <TableCell>
+                        {pirep.departure} → {pirep.arrival}
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        {pirep.Aircraft?.name +
+                          " (" +
+                          pirep.Aircraft?.liveryname +
+                          ")"}
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        {formatFlightTime(pirep.flighttime)}
+                      </TableCell>
+                      <TableCell>{getStatusBadge(pirep.status)}</TableCell>
+                      <TableCell className="text-right">
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setSelectedPirep(pirep)}
+                            >
+                              <Eye className="h-4 w-4 mr-1" />
+                              <span className="hidden sm:inline">View</span>
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-5xl w-full bg-white">
+                            <DialogHeader>
+                              <DialogTitle className="flex items-center gap-2">
+                                {getStatusIcon(
+                                  pirep.status === 1
+                                    ? "approved"
+                                    : pirep.status === 0
+                                    ? "pending"
+                                    : "rejected"
+                                )}
+                                <span>PIREP Details: {pirep.id}</span>
+                              </DialogTitle>
+                              <DialogDescription>
+                                Flight {pirep.flightnum} from {pirep.departure}{" "}
+                                to {pirep.arrival}
+                              </DialogDescription>
+                            </DialogHeader>
+
+                            <div className="grid gap-4">
+                              <Card>
+                                <CardHeader>
+                                  <CardTitle className="text-sm font-medium">
+                                    Flight Information
+                                  </CardTitle>
+                                </CardHeader>
+                                <CardContent className="pt-0">
+                                  <dl className="space-y-2 text-sm">
+                                    <div className="flex justify-between">
+                                      <dt className="text-muted-foreground">
+                                        Flight Number:
+                                      </dt>
+                                      <dd>{pirep.flightnum}</dd>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <dt className="text-muted-foreground">
+                                        Date:
+                                      </dt>
+                                      <dd>{pirep.date}</dd>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <dt className="text-muted-foreground">
+                                        Route:
+                                      </dt>
+                                      <dd>
+                                        {pirep.departure} → {pirep.arrival}
+                                      </dd>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <dt className="text-muted-foreground">
+                                        Duration:
+                                      </dt>
+                                      <dd>
+                                        {formatFlightTime(pirep.flighttime)}
+                                      </dd>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <dt className="text-muted-foreground">
+                                        Aircraft Type:
+                                      </dt>
+                                      <dd>
+                                        {pirep.Aircraft.name} (
+                                        {pirep.Aircraft.liveryname})
+                                      </dd>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <dt className="text-muted-foreground">
+                                        Fuel Used:
+                                      </dt>
+                                      <dd>{pirep.fuelused} kg</dd>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <dt className="text-muted-foreground">
+                                        Status:
+                                      </dt>
+                                      <dd>{getStatusBadge(pirep.status)}</dd>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <dt className="text-muted-foreground">
+                                        Multiplier:
+                                      </dt>
+                                      <dd>{pirep.multi}</dd>
+                                    </div>
+                                  </dl>
+                                </CardContent>
+                              </Card>
+                            </div>
+                          </DialogContent>
+                        </Dialog>
+                      </TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
             </CardContent>
+
             <CardFooter className="flex items-center justify-between p-4">
               <div className="text-sm text-muted-foreground">
-                Showing {paginatedPireps.length} of {pirepsData.length} PIREPs
+                Showing {paginatedPireps.length} of {filteredPireps.length}{" "}
+                filtered PIREPs
               </div>
 
               {totalPages > 1 && (
@@ -375,7 +395,7 @@ export default function ViewPireps() {
                         href="#"
                         onClick={(e) => {
                           e.preventDefault();
-                          setCurrentPage((prev) => Math.max(prev - 1, 1));
+                          setCurrentPage((p) => Math.max(p - 1, 1));
                         }}
                         aria-disabled={currentPage === 1}
                         className={
@@ -388,7 +408,6 @@ export default function ViewPireps() {
 
                     {Array.from({ length: totalPages }).map((_, i) => {
                       const page = i + 1;
-                      // Show first page, last page, and pages around current page
                       if (
                         page === 1 ||
                         page === totalPages ||
@@ -409,8 +428,6 @@ export default function ViewPireps() {
                           </PaginationItem>
                         );
                       }
-
-                      // Show ellipsis for gaps
                       if (
                         (page === 2 && currentPage > 3) ||
                         (page === totalPages - 1 &&
@@ -422,7 +439,6 @@ export default function ViewPireps() {
                           </PaginationItem>
                         );
                       }
-
                       return null;
                     })}
 
@@ -431,9 +447,7 @@ export default function ViewPireps() {
                         href="#"
                         onClick={(e) => {
                           e.preventDefault();
-                          setCurrentPage((prev) =>
-                            Math.min(prev + 1, totalPages)
-                          );
+                          setCurrentPage((p) => Math.min(p + 1, totalPages));
                         }}
                         aria-disabled={currentPage === totalPages}
                         className={

@@ -113,7 +113,7 @@ export function Footer() {
               Operations
             </Link>
             <Link
-              href="/crew"
+              href="/crew?type=signup"
               className="text-sm text-gray-600 hover:text-blue-700"
             >
               Join Us

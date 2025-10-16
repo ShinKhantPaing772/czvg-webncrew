@@ -309,6 +309,27 @@ export default function AdminDashboard() {
                 </CardContent>
               </Card>
             </div>
+            {/* Live Flight Map */}
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle className="text-sm font-medium">
+                  Live Flight Map
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="w-full h-[600px] rounded-lg overflow-hidden border">
+                  <iframe
+                    src="https://ifvarb.com/liveflightmap.php?callsign=CZVG&color=CornflowerBlue&apikey=90e208-368a57-f94a2f-dcfe97-c3b72e"
+                    title="IFVARB Live Flight Map - CZVG"
+                    width="100%"
+                    height="100%"
+                    style={{ border: 0 }}
+                    loading="lazy"
+                    allowFullScreen
+                  ></iframe>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </main>
       )}

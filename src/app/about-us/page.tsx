@@ -124,7 +124,7 @@ export default function AboutPage() {
               </p>
               <div className="flex justify-center space-x-4">
                 <Link
-                  href="/crew"
+                  href="/crew?type=signup"
                   className="bg-blue-700 text-white px-6 py-3 rounded hover:bg-blue-800 transition-colors"
                 >
                   Apply Now
