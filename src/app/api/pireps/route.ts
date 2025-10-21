@@ -3,7 +3,6 @@ import { models } from "@/lib/models";
 
 export async function POST(request: NextRequest) {
   try {
-    // Parse request body
     const body = await request.json();
     const {
       flightnum,
@@ -33,13 +32,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // --- Parse date safely ---
     let parsedDate;
     try {
-      // Handle date with timezone preservation to prevent day offset issues
       if (date instanceof Date) {
         parsedDate = new Date(date.getTime());
       } else {
-        // Parse the date and adjust for timezone to preserve the selected date
         const dateObj = new Date(date);
         parsedDate = new Date(
           dateObj.getFullYear(),
@@ -58,6 +56,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // --- Validate flight time ---
     if (
       !flightTime ||
       typeof flightTime !== "string" ||
@@ -69,6 +68,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // --- Parse fuel used ---
     let parsedFuel;
     try {
       parsedFuel = parseFloat(fuelUsed);
@@ -80,16 +80,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const multiplier = await models.Multiplier.findOne({
-      where: {
-        code: multi,
-      },
-    });
+    // --- Fetch multiplier only if a code is provided ---
+    let multiplier = null;
+    if (multi && typeof multi === "string" && multi.trim() !== "") {
+      multiplier = await models.Multiplier.findOne({
+        where: { code: multi },
+      });
+    }
 
     const [hours, minutes] = flightTime.split(":").map(Number);
     const totalSeconds = hours * 3600 + minutes * 60;
 
-    // Create PIREP
+    // Apply multiplier if available
+    const adjustedSeconds = multiplier
+      ? totalSeconds * multiplier.multiplier
+      : totalSeconds;
+
+    // Convert adjusted seconds back to HH:MM format for display
+    const adjustedHours = Math.floor(adjustedSeconds / 3600);
+    const adjustedMinutes = Math.floor((adjustedSeconds % 3600) / 60);
+    const adjustedFlightTime = `${adjustedHours
+      .toString()
+      .padStart(2, "0")}:${adjustedMinutes.toString().padStart(2, "0")}`;
+
+    // --- Create PIREP ---
     const pirep = await models.Pirep.create({
       flightnum,
       departure,
@@ -105,7 +119,7 @@ export async function POST(request: NextRequest) {
       status: 0,
     });
 
-    // --- Send Discord Webhook ---
+    // --- Discord Webhook ---
     const webhookUrl = process.env.DISCORD_WEBHOOK;
     if (webhookUrl) {
       const discordPayload = {
@@ -130,7 +144,7 @@ export async function POST(request: NextRequest) {
                 value: `${parsedFuel} KG`,
                 inline: false,
               },
-              { name: "Flight Time", value: flightTime, inline: false },
+              { name: "Flight Time", value: adjustedFlightTime, inline: false },
             ],
             footer: {
               text: `China Southern Virtual Group • ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString(

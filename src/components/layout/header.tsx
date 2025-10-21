@@ -118,16 +118,6 @@ export function Header() {
             </DropdownMenuTrigger>
             {user && (
               <DropdownMenuContent align="end" className="bg-white">
-                {/* <DropdownMenuItem>
-                  <Link href="/profile" className="w-full">
-                    Profile
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Link href="/settings" className="w-full">
-                    Settings
-                  </Link>
-                </DropdownMenuItem> */}
                 <DropdownMenuItem
                   onClick={handleLogout}
                   disabled={isLoggingOut}

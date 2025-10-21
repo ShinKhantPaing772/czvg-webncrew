@@ -18,7 +18,7 @@ export async function GET(request: Request) {
         {
           model: models.Aircraft,
           as: "Aircraft",
-          attributes: ["id", "name"],
+          attributes: ["id", "name", "liveryname"],
         },
       ],
       order: [["id", "DESC"]],
