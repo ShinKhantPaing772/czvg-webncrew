@@ -38,7 +38,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CrewHeader } from "@/components/crew-header";
-
+import { useSearchParams } from "next/navigation";
 interface aircraft {
   id: string;
   name: string;
@@ -89,6 +89,20 @@ export default function FilePirep() {
     []
   );
   const [isLoadingAircraft, setIsLoadingAircraft] = useState(false);
+  const searchParams = useSearchParams();
+
+  const initialValues = {
+    flightnum: searchParams.get("flightnum") || "",
+    departure: searchParams.get("departure") || "",
+    arrival: searchParams.get("arrival") || "",
+    flightTime: searchParams.get("flightTime") || "",
+    date: searchParams.get("date")
+      ? new Date(searchParams.get("date")!)
+      : undefined,
+    aircraftId: searchParams.get("aircraftId") || "",
+    fuelUsed: searchParams.get("fuelUsed") || "",
+    multi: searchParams.get("multi") || "",
+  };
 
   // Fetch aircraft data from API
   useEffect(() => {
@@ -116,6 +130,7 @@ export default function FilePirep() {
   // Initialize form with default values
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
+    defaultValues: initialValues,
   });
 
   // Handle form submission

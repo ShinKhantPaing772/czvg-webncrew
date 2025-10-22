@@ -123,10 +123,10 @@ export function Footer() {
         <div className="mt-6 text-center text-xs text-gray-500">
           China Southern Virtual Group is a virtual airline exclusively for the
           Infinite Flight platform operating under IFVARB. We have no connection
-          or affiliation with China Southern Group and its subsidaries, Infinite
-          Flight or any other real-world airlines/organizations and
+          or affiliation with China Southern Group and its subsidiaries,
+          Infinite Flight, or any other real-world airlines/organizations and
           subsidiaries. All logos and trademarks remain the property of China
-          Southern Group and its subsidaries.
+          Southern Group and its subsidiaries.
         </div>
       </div>
     </footer>

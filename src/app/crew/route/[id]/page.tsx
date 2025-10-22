@@ -112,13 +112,22 @@ export default function ViewRoute() {
   return (
     <CrewHeader>
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center justify-between gap-4">
           <Button variant="outline" size="icon" asChild>
             <Link href="/crew/find-routes">
               <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>
-          <h1 className="text-2xl font-bold">Route {route.fltnum}</h1>
+          <h1 className="text-2xl font-bold">Flight {route.fltnum}</h1>
+          <div className="flex items-end">
+            <Button variant="link" className="px-4 py-2">
+              <Link
+                href={`/crew/file-pirep?flightnum=${route.fltnum}&departure=${route.dep}&arrival=${route.arr}`}
+              >
+                File Pirep
+              </Link>
+            </Button>
+          </div>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
