@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Edit, Trash, ArrowRight } from "lucide-react";
+import { Plus, Edit, Trash, ArrowRight, Loader2, Search } from "lucide-react";
 import {
   Table,
   TableHeader,
@@ -40,23 +40,82 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { formatFlightTime } from "@/lib/utils/format-flight-time";
+import { useRouter } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+
+const routeSchema = z.object({
+  fltnum: z.string().min(1, "Flight number is required."),
+  dep: z
+    .string()
+    .min(4, "Departure airport is required.")
+    .max(4, "ICAO code must be 4 letters.")
+    .regex(/^[A-Z]{4}$/, "Must be a 4-letter ICAO code."),
+  arr: z
+    .string()
+    .min(4, "Arrival airport is required.")
+    .max(4, "ICAO code must be 4 letters.")
+    .regex(/^[A-Z]{4}$/, "Must be a 4-letter ICAO code."),
+  duration: z
+    .string()
+    .regex(/^\d{1,2}:\d{2}$/, "Duration must be in HH:MM format."),
+  notes: z.string().optional(),
+});
+type RouteFormData = z.infer<typeof routeSchema>;
+
+interface Route {
+  id: number;
+  fltnum: string;
+  dep: string;
+  arr: string;
+  duration: number;
+  notes: string;
+  aircraft: Aircraft[];
+}
+
+interface newRoute {
+  fltnum: string;
+  dep: string;
+  arr: string;
+  duration: string;
+  notes: string;
+  aircraft: Aircraft[];
+}
+interface Aircraft {
+  id: number;
+  name: string;
+  ifaircraftid: string;
+  liveryname: string;
+  ifliveryid: string;
+  notes: string;
+}
 
 export default function RoutesPage() {
+  const router = useRouter();
   const [routes, setRoutes] = useState<Route[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadingAircraft, setLoadingAircraft] = useState(true);
   const [error, setError] = useState("");
   const [aircraftOptions, setAircraftOptions] = useState<Aircraft[]>([]);
+  const [selectedRoute, setSelectedRoute] = useState<Route | null>(null);
 
+  const [durationRange, setDurationRange] = useState<string | undefined>();
+  const [departureFilter, setDepartureFilter] = useState("");
+  const [arrivalFilter, setArrivalFilter] = useState("");
   const [aircraftFilter, setAircraftFilter] = useState("all");
   const [isAddingRoute, setIsAddingRoute] = useState(false);
-  const [isEditingRoute, setIsEditingRoute] = useState(false);
-  const [selectedRoute, setSelectedRoute] = useState(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [filteredAircraft, setFilteredAircraft] = useState<Aircraft[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   const itemsPerPage = 10;
 
-  const [newRoute, setNewRoute] = useState({
+  useEffect(() => {
+    setFilteredAircraft(aircraftOptions);
+  }, [aircraftOptions]);
+  const [newRoute, setNewRoute] = useState<newRoute>({
     fltnum: "",
     dep: "",
     arr: "",
@@ -65,34 +124,25 @@ export default function RoutesPage() {
     aircraft: [],
   });
 
-  interface Route {
-    id: number;
-    fltnum: string;
-    dep: string;
-    arr: string;
-    duration: number;
-    notes: string;
-    aircraft: Aircraft[];
-  }
-
-  interface Aircraft {
-    id: number;
-    name: string;
-    ifaircraftid: string;
-    liveryname: string;
-    ifliveryid: string;
-    notes: string;
-  }
-
   // Fetch routes from API
   const fetchRoutes = async () => {
     try {
       setLoading(true);
-      const response = await fetch(
-        `/api/admin/routes?fltnum=${searchQuery}&aircraftId=${
-          aircraftFilter === "all" ? "" : aircraftFilter
-        }`
-      );
+      const url = new URL("/api/admin/routes", window.location.origin);
+      if (searchQuery) url.searchParams.set("fltnum", searchQuery);
+      if (departureFilter) url.searchParams.set("dep", departureFilter);
+      if (arrivalFilter) url.searchParams.set("arr", arrivalFilter);
+      if (aircraftFilter && aircraftFilter !== "all")
+        url.searchParams.set("aircraftId", aircraftFilter);
+      if (durationRange) {
+        const [min, max] = durationRange.split("-").map(Number);
+        if (min !== undefined) url.searchParams.set("minDuration", "" + min);
+        if (max !== undefined && max !== 0)
+          url.searchParams.set("maxDuration", "" + max);
+        if (max === 0) url.searchParams.delete("maxDuration");
+      }
+
+      const response = await fetch(url.toString());
 
       if (!response.ok) {
         throw new Error("Failed to fetch routes");
@@ -128,6 +178,8 @@ export default function RoutesPage() {
       );
     } catch (err) {
       console.error("Error fetching aircraft:", err);
+    } finally {
+      setLoadingAircraft(false);
     }
   };
 
@@ -137,11 +189,6 @@ export default function RoutesPage() {
     fetchAircraft();
   }, []);
 
-  // Reload when search or filter changes
-  useEffect(() => {
-    fetchRoutes();
-  }, [searchQuery, aircraftFilter]);
-
   const filteredRoutes = routes;
   const sortedRoutes = [...filteredRoutes];
 
@@ -150,79 +197,6 @@ export default function RoutesPage() {
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
-
-  const handleAddRoute = async () => {
-    if (
-      !newRoute.fltnum ||
-      !newRoute.dep ||
-      !newRoute.arr ||
-      !newRoute.duration
-    ) {
-      return;
-    }
-
-    try {
-      const response = await fetch("/api/admin/routes", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(newRoute),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to add route");
-      }
-
-      setNewRoute({
-        fltnum: "",
-        dep: "",
-        arr: "",
-        duration: "",
-        notes: "",
-        aircraft: [],
-      });
-
-      setIsAddingRoute(false);
-      alert("Route added successfully.");
-      fetchRoutes();
-    } catch (err) {
-      console.error("Error adding route:", err);
-    }
-  };
-
-  const handleEditRoute = async () => {
-    if (!selectedRoute) return;
-
-    try {
-      const response = await fetch("/api/admin/routes", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          id: (selectedRoute as Route).id,
-          fltnum: (selectedRoute as Route).fltnum,
-          dep: (selectedRoute as Route).dep,
-          arr: (selectedRoute as Route).arr,
-          duration: (selectedRoute as Route).duration,
-          notes: (selectedRoute as Route).notes,
-          aircraft: (selectedRoute as any).aircraft.map((a: any) => a.id), // ✅ only IDs
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to update route");
-      }
-
-      setIsEditingRoute(false);
-      alert("Route updated successfully.");
-      fetchRoutes();
-    } catch (err) {
-      console.error("Error updating route:", err);
-      alert("Failed to update route. Please try again.");
-    }
-  };
 
   const handleDeleteRoute = async () => {
     if (!selectedRoute) return;
@@ -248,27 +222,26 @@ export default function RoutesPage() {
     }
   };
 
-  const initEditForm = async (route: any) => {
-    try {
-      // Fetch the full route details including aircraft
-      const response = await fetch(`/api/admin/routes/${route.id}`);
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch route details");
-      }
-
-      const data = await response.json();
-      setSelectedRoute(data.data);
-      setIsEditingRoute(true);
-    } catch (err) {
-      console.error("Error fetching route details:", err);
-      alert("Failed to load route details. Please try again.");
-    }
-  };
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    reset,
+    formState: { errors },
+  } = useForm<RouteFormData>({
+    resolver: zodResolver(routeSchema),
+    defaultValues: {
+      fltnum: "",
+      dep: "",
+      arr: "",
+      duration: "",
+      notes: "",
+    },
+  });
 
   return (
     <CrewHeader>
-      <div>
+      <div className="flex flex-1 flex-col gap-4 ">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-2xl font-bold">Routes</h1>
           <Button onClick={() => setIsAddingRoute(true)}>
@@ -277,27 +250,95 @@ export default function RoutesPage() {
           </Button>
         </div>
 
-        <div className="grid gap-4 grid-cols-1 md:grid-cols-3 mb-4">
-          <Input
-            type="text"
-            placeholder="Search routes..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-
-          <Select value={aircraftFilter} onValueChange={setAircraftFilter}>
-            <SelectTrigger>
-              <SelectValue placeholder="Filter by aircraft" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Aircraft</SelectItem>
-              {aircraftOptions.map((aircraft) => (
-                <SelectItem key={aircraft.id} value={aircraft.id + ""}>
-                  {aircraft.name} - {aircraft.liveryname}
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+          <div className="space-y-2">
+            <Label>Departure</Label>
+            <Input
+              placeholder="ICAO code"
+              value={departureFilter}
+              onChange={(e) => setDepartureFilter(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Arrival</Label>
+            <Input
+              placeholder="ICAO code"
+              value={arrivalFilter}
+              onChange={(e) => setArrivalFilter(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2 w-full">
+            <Label>Aircraft</Label>
+            <Select value={aircraftFilter} onValueChange={setAircraftFilter}>
+              <SelectTrigger className="w-full">
+                {loadingAircraft ? (
+                  <div className="flex items-center gap-2">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                    Loading...
+                  </div>
+                ) : (
+                  <SelectValue placeholder="Select aircraft" />
+                )}
+              </SelectTrigger>
+              <SelectContent className="bg-white max-h-[200px] overflow-y-auto w-full">
+                {loadingAircraft && (
+                  <div className="flex items-center justify-center h-10">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  </div>
+                )}
+                <SelectItem key="all" value="all">
+                  All aircraft
                 </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+                {aircraftOptions.map((aircraft) => (
+                  <SelectItem key={aircraft.id} value={"" + aircraft.id}>
+                    {aircraft.name}
+                    {aircraft.liveryname && `(${aircraft.liveryname})`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2 w-full">
+            <Label>Duration</Label>
+            <Select onValueChange={(val) => setDurationRange(val)}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select duration range" />
+              </SelectTrigger>
+              <SelectContent className="bg-white w-full ">
+                <SelectItem value="0">All durations</SelectItem>
+                <SelectItem value="0-3600">&lt;1 hour</SelectItem>
+                <SelectItem value="3600-7200">1-2 hours</SelectItem>
+                <SelectItem value="7200-10800">2-3 hours</SelectItem>
+                <SelectItem value="10800-14400">3-4 hours</SelectItem>
+                <SelectItem value="14400-18000">4-5 hours</SelectItem>
+                <SelectItem value="18000-21600">5-6 hours</SelectItem>
+                <SelectItem value="21600-25200">6-7 hours</SelectItem>
+                <SelectItem value="25200-28800">7-8 hours</SelectItem>
+                <SelectItem value="28800-32400">8-9 hours</SelectItem>
+                <SelectItem value="32400-36000">9-10 hours</SelectItem>
+                <SelectItem value="36000-">10+ hours</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-4 md:flex-row md:items-end">
+          <div className="flex-1 space-y-2">
+            <Label htmlFor="search">Search by Flight Number</Label>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                id="search"
+                placeholder="Search by flight number"
+                className="pl-8"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+          </div>
+          <Button onClick={fetchRoutes} variant="default" size="sm">
+            Search
+          </Button>
         </div>
 
         <div className="relative overflow-x-auto">
@@ -389,10 +430,9 @@ export default function RoutesPage() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => {
-                                setSelectedRoute(route as any);
-                                initEditForm(route as any);
-                              }}
+                              onClick={() =>
+                                router.push(`/crew/admin/routes/${route.id}`)
+                              }
                             >
                               <Edit className="h-4 w-4" />
                               <span className="sr-only">Edit</span>
@@ -444,9 +484,7 @@ export default function RoutesPage() {
 
         {/* Add Route Dialog */}
         <Dialog open={isAddingRoute} onOpenChange={setIsAddingRoute}>
-          <DialogTrigger asChild>
-            {/* This trigger is not needed as the dialog is opened programmatically */}
-          </DialogTrigger>
+          <DialogTrigger asChild>{/* Opened programmatically */}</DialogTrigger>
           <DialogContent className="max-w-3xl bg-white">
             <DialogHeader>
               <DialogTitle>Add New Route</DialogTitle>
@@ -456,344 +494,216 @@ export default function RoutesPage() {
               </DialogDescription>
             </DialogHeader>
 
-            <div className="grid gap-4 py-4">
+            {/* ✅ Form Starts */}
+            <form
+              onSubmit={handleSubmit(async (data) => {
+                // Merge aircraft selections with form data
+                const payload = { ...data, aircraft: newRoute.aircraft };
+
+                try {
+                  const response = await fetch("/api/admin/routes", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                  });
+
+                  if (!response.ok) throw new Error("Failed to add route");
+
+                  setIsAddingRoute(false);
+                  reset();
+                  setNewRoute({
+                    fltnum: "",
+                    dep: "",
+                    arr: "",
+                    duration: "",
+                    notes: "",
+                    aircraft: [],
+                  });
+
+                  alert("Route added successfully.");
+                  fetchRoutes();
+                } catch (err) {
+                  console.error("Error adding route:", err);
+                  alert("Failed to add route.");
+                }
+              })}
+              className="grid gap-4 py-4"
+            >
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                {/* Flight Number */}
                 <div className="space-y-2 col-span-2">
                   <Label htmlFor="fltnum">Flight Number *</Label>
                   <Input
                     id="fltnum"
-                    value={newRoute.fltnum}
-                    onChange={(e) =>
-                      setNewRoute({
-                        ...newRoute,
-                        fltnum: e.target.value,
-                      })
-                    }
                     placeholder="VA101"
+                    {...register("fltnum")}
                   />
+                  {errors.fltnum && (
+                    <p className="text-sm text-red-500">
+                      {errors.fltnum.message}
+                    </p>
+                  )}
                 </div>
 
+                {/* Departure */}
                 <div className="space-y-2">
                   <Label htmlFor="dep">Departure Airport *</Label>
                   <Input
                     id="dep"
-                    value={newRoute.dep}
-                    onChange={(e) =>
-                      setNewRoute({
-                        ...newRoute,
-                        dep: e.target.value.toUpperCase(),
-                      })
-                    }
                     placeholder="Enter departure ICAO code"
                     maxLength={4}
+                    {...register("dep")}
+                    onChange={(e) =>
+                      setValue("dep", e.target.value.toUpperCase())
+                    }
                   />
+                  {errors.dep && (
+                    <p className="text-sm text-red-500">{errors.dep.message}</p>
+                  )}
                 </div>
 
+                {/* Arrival */}
                 <div className="space-y-2">
                   <Label htmlFor="arr">Arrival Airport *</Label>
                   <Input
                     id="arr"
-                    value={newRoute.arr}
-                    onChange={(e) =>
-                      setNewRoute({
-                        ...newRoute,
-                        arr: e.target.value.toUpperCase(),
-                      })
-                    }
                     placeholder="Enter arrival ICAO code"
                     maxLength={4}
+                    {...register("arr")}
+                    onChange={(e) =>
+                      setValue("arr", e.target.value.toUpperCase())
+                    }
                   />
+                  {errors.arr && (
+                    <p className="text-sm text-red-500">{errors.arr.message}</p>
+                  )}
                 </div>
 
+                {/* Duration */}
                 <div className="space-y-2">
                   <Label htmlFor="duration">Duration (HH:MM) *</Label>
                   <Input
                     id="duration"
-                    value={newRoute.duration}
-                    onChange={(e) =>
-                      setNewRoute({
-                        ...newRoute,
-                        duration: e.target.value,
-                      })
-                    }
                     placeholder="1:15"
+                    {...register("duration")}
                   />
+                  {errors.duration && (
+                    <p className="text-sm text-red-500">
+                      {errors.duration.message}
+                    </p>
+                  )}
                 </div>
 
+                {/* Aircraft Selector */}
                 <div className="space-y-2 col-span-2">
                   <Label htmlFor="aircraft">Aircraft</Label>
-                  <Select
-                    onValueChange={(value) => {
-                      const selectedAircraft = aircraftOptions.find(
-                        (ac: any) => ac.id.toString() === value
-                      );
-                      if (selectedAircraft) {
-                        setNewRoute({
-                          ...newRoute,
-                          aircraft: [...(newRoute.aircraft || [])],
-                        });
-                      }
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select aircraft" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {aircraftOptions.map((aircraft: any) => (
-                        <SelectItem
-                          key={aircraft.id}
-                          value={aircraft.id.toString()}
-                        >
-                          {" "}
-                          {aircraft.name} - {aircraft.liveryname}
-                          {aircraft.notes ? ` - ${aircraft.notes}` : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {newRoute.aircraft &&
-                      newRoute.aircraft.map((aircraftId: number) => {
-                        const aircraft = aircraftOptions.find(
-                          (ac: any) => ac.id === aircraftId
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 w-full">
+                    <Select
+                      onValueChange={(value) => {
+                        const ac = aircraftOptions.find(
+                          (a) => a.id.toString() === value
                         );
-                        return aircraft ? (
-                          <Badge
-                            key={aircraftId}
-                            variant="secondary"
-                            className="mr-1"
-                          >
-                            <button
-                              className="ml-1 text-xs"
-                              onClick={() => {
-                                setNewRoute({
-                                  ...newRoute,
-                                  aircraft: newRoute.aircraft.filter(
-                                    (id: number) => id !== aircraftId
-                                  ),
-                                });
-                              }}
-                            >
-                              ×
-                            </button>
-                          </Badge>
-                        ) : null;
-                      })}
+                        if (
+                          ac &&
+                          !newRoute.aircraft.some((a) => a.id === ac.id)
+                        ) {
+                          setNewRoute({
+                            ...newRoute,
+                            aircraft: [...newRoute.aircraft, ac],
+                          });
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select aircraft..." />
+                      </SelectTrigger>
+
+                      <SelectContent className="bg-white max-h-[200px] overflow-y-auto">
+                        {isSearching ? (
+                          <div className="flex items-center justify-center h-10">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          </div>
+                        ) : (
+                          filteredAircraft.map((ac) => (
+                            <SelectItem key={ac.id} value={ac.id.toString()}>
+                              {ac.name} - {ac.liveryname}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+
+                    <Input
+                      placeholder="Search aircraft..."
+                      className="w-full"
+                      onChange={(e) => {
+                        const term = e.target.value.toLowerCase();
+                        setIsSearching(true);
+                        setTimeout(() => {
+                          const filtered = aircraftOptions.filter(
+                            (a) =>
+                              a.name.toLowerCase().includes(term) ||
+                              a.liveryname.toLowerCase().includes(term)
+                          );
+                          setFilteredAircraft(filtered);
+                          setIsSearching(false);
+                        }, 150);
+                      }}
+                    />
+                  </div>
+
+                  {/* Selected aircraft badges */}
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {newRoute.aircraft.map((a) => (
+                      <Badge
+                        key={a.id}
+                        variant="secondary"
+                        className="flex items-center space-x-1"
+                      >
+                        <span>
+                          {a.name} - {a.liveryname}
+                        </span>
+                        <button
+                          className="text-xs font-bold hover:text-red-500"
+                          onClick={() =>
+                            setNewRoute({
+                              ...newRoute,
+                              aircraft: newRoute.aircraft.filter(
+                                (x) => x.id !== a.id
+                              ),
+                            })
+                          }
+                        >
+                          ×
+                        </button>
+                      </Badge>
+                    ))}
                   </div>
                 </div>
               </div>
 
+              {/* Notes */}
               <div className="space-y-2">
                 <Label htmlFor="notes">Notes</Label>
                 <Textarea
                   id="notes"
-                  value={newRoute.notes}
-                  onChange={(e) =>
-                    setNewRoute({ ...newRoute, notes: e.target.value })
-                  }
-                  placeholder="Enter any additional information about this route..."
+                  placeholder="Enter any additional info..."
                   rows={3}
+                  {...register("notes")}
                 />
               </div>
-            </div>
 
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsAddingRoute(false)}>
-                Cancel
-              </Button>
-              <Button
-                onClick={handleAddRoute}
-                disabled={
-                  !newRoute.fltnum ||
-                  !newRoute.dep ||
-                  !newRoute.arr ||
-                  !newRoute.duration
-                }
-              >
-                Add Route
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Edit Route Dialog */}
-        <Dialog open={isEditingRoute} onOpenChange={setIsEditingRoute}>
-          <DialogTrigger asChild>
-            {/* This trigger is not needed as the dialog is opened programmatically */}
-          </DialogTrigger>
-          <DialogContent className="max-w-xl bg-white">
-            <DialogHeader>
-              <DialogTitle>Edit Route</DialogTitle>
-              <DialogDescription>
-                Update the details for route {(selectedRoute as any)?.id}.
-              </DialogDescription>
-            </DialogHeader>
-
-            {selectedRoute && (
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-id">ID</Label>
-                    <Input
-                      id="edit-id"
-                      value={(selectedRoute as any).id}
-                      disabled
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-fltnum">Flight Number</Label>
-                    <Input
-                      id="edit-fltnum"
-                      value={(selectedRoute as any).fltnum}
-                      onChange={(e) =>
-                        setSelectedRoute({
-                          ...(selectedRoute as any),
-                          fltnum: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-dep">Departure Airport</Label>
-                    <Input
-                      id="edit-dep"
-                      value={(selectedRoute as any).dep}
-                      onChange={(e) =>
-                        setSelectedRoute({
-                          ...(selectedRoute as any),
-                          dep: e.target.value.toUpperCase(),
-                        })
-                      }
-                      placeholder="Enter departure airport code"
-                      maxLength={4}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-arr">Arrival Airport</Label>
-                    <Input
-                      id="edit-arr"
-                      value={(selectedRoute as any).arr}
-                      onChange={(e) =>
-                        setSelectedRoute({
-                          ...(selectedRoute as any),
-                          arr: e.target.value.toUpperCase(),
-                        })
-                      }
-                      placeholder="Enter arrival airport code"
-                      maxLength={4}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-duration">Duration (HH:MM)</Label>
-                    <Input
-                      id="edit-duration"
-                      value={(selectedRoute as any).duration}
-                      onChange={(e) =>
-                        setSelectedRoute({
-                          ...(selectedRoute as any),
-                          duration: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-aircraft">Aircraft</Label>
-                    <Select
-                      onValueChange={(value) => {
-                        const selectedAircraft = aircraftOptions.find(
-                          (ac: any) => ac.id.toString() === value
-                        );
-                        if (selectedAircraft) {
-                          const currentAircraftIds = (
-                            selectedRoute as any
-                          ).aircraft.map((a: any) => a.id);
-                          if (!currentAircraftIds.includes(parseInt(value))) {
-                            setSelectedRoute({
-                              ...(selectedRoute as any),
-                              aircraft: [
-                                ...(selectedRoute as any).aircraft,
-                                selectedAircraft,
-                              ],
-                            });
-                          }
-                        }
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Add aircraft" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {aircraftOptions.map((aircraft: any) => (
-                          <SelectItem
-                            key={aircraft.id}
-                            value={aircraft.id.toString()}
-                          >
-                            {aircraft.name} - {aircraft.liveryname}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {(selectedRoute as any).aircraft &&
-                        (selectedRoute as any).aircraft.map((aircraft: any) => (
-                          <Badge
-                            key={aircraft.id}
-                            variant="secondary"
-                            className="mr-1"
-                          >
-                            {aircraft.name} - {aircraft.liveryname}
-                            <button
-                              className="ml-1 text-xs"
-                              onClick={() => {
-                                setSelectedRoute({
-                                  ...(selectedRoute as any),
-                                  aircraft: (
-                                    selectedRoute as any
-                                  ).aircraft.filter(
-                                    (a: any) => a.id !== aircraft.id
-                                  ),
-                                });
-                              }}
-                            >
-                              ×
-                            </button>
-                          </Badge>
-                        ))}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="edit-notes">Notes</Label>
-                  <Textarea
-                    id="edit-notes"
-                    value={(selectedRoute as any).notes}
-                    onChange={(e) =>
-                      setSelectedRoute({
-                        ...(selectedRoute as any),
-                        notes: e.target.value,
-                      })
-                    }
-                    rows={3}
-                  />
-                </div>
-              </div>
-            )}
-
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setIsEditingRoute(false)}
-              >
-                Cancel
-              </Button>
-              <Button onClick={handleEditRoute}>Save Changes</Button>
-            </DialogFooter>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsAddingRoute(false)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit">Add Route</Button>
+              </DialogFooter>
+            </form>
+            {/* ✅ Form Ends */}
           </DialogContent>
         </Dialog>
 
@@ -826,7 +736,7 @@ export default function RoutesPage() {
           </DialogContent>
         </Dialog>
         <div>
-          <span>Total Routes : {routes.length}</span>
+          <span>Routes Found: {routes.length}</span>
         </div>
       </div>
     </CrewHeader>

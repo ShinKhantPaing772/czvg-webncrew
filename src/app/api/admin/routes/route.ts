@@ -15,7 +15,10 @@ export async function GET(request: Request) {
     const fltnum = searchParams.get("fltnum");
     const dep = searchParams.get("dep");
     const arr = searchParams.get("arr");
+    const aircraft = searchParams.get("aircraft"); // For backward compatibility
     const aircraftId = searchParams.get("aircraftId");
+    const minDuration = searchParams.get("minDuration");
+    const maxDuration = searchParams.get("maxDuration");
 
     // Build the SQL query with filters
     let query = `
@@ -29,16 +32,14 @@ export async function GET(request: Request) {
         COALESCE(
           JSON_ARRAYAGG(
             JSON_OBJECT(
-              'id', a.id,
-              'name', a.name, 
-              'ifaircraftid', a.ifaircraftid,
-              'liveryname', a.liveryname,
-              'ifliveryid', a.ifliveryid,
+              'aircraft_id', a.id,
+              'aircraft_name', a.name, 
+              'livery_name', a.liveryname,
               'notes', a.notes
             )
           ), 
           '[]'
-        ) AS aircraft
+        ) AS aircrafts
       FROM routes r
       LEFT JOIN route_aircraft ra ON r.id = ra.routeid
       LEFT JOIN aircraft a ON ra.aircraftid = a.id
@@ -46,25 +47,45 @@ export async function GET(request: Request) {
       ${fltnum ? `AND r.fltnum LIKE '%${fltnum}%'` : ""}
       ${dep ? `AND r.dep = '${dep}'` : ""}
       ${arr ? `AND r.arr = '${arr}'` : ""}
+      ${minDuration ? `AND r.duration >= ${minDuration}` : ""}
+      ${maxDuration ? `AND r.duration <= ${maxDuration}` : ""}
       ${aircraftId ? `AND a.id = '${aircraftId}'` : ""}
-      GROUP BY r.id
-      ORDER BY r.fltnum ASC
+      ${
+        !aircraftId && aircraft ? `AND a.name LIKE '%${aircraft}%'` : ""
+      } /* For backward compatibility */
     `;
 
-    // Execute the query
-    const [routesResult] = await sequelize.query(query);
+    // Add group by and order by
+    query += " GROUP BY r.id ORDER BY r.fltnum";
 
+    // Execute the query
+    const [routes] = await sequelize.query(query);
     // Format the routes data
-    const formattedRoutes = Array.isArray(routesResult)
-      ? routesResult.map((route: any) => ({
-          id: route.id,
-          fltnum: route.fltnum,
-          dep: route.dep,
-          arr: route.arr,
-          duration: formatFlightTime(parseInt(route.duration)),
-          notes: route.notes,
-          aircraft: JSON.parse(route.aircraft || "[]"),
-        }))
+    let formattedRoutes = Array.isArray(routes)
+      ? routes.map((route: any) => {
+          // Parse the JSON string to an array of aircraft objects
+          const aircraftArray = JSON.parse(route.aircrafts || "[]");
+
+          return {
+            id: route.id,
+            fltnum: route.fltnum,
+            dep: route.dep,
+            arr: route.arr,
+            duration: formatFlightTime(parseInt(route.duration)),
+            notes: route.notes,
+            aircraft: aircraftArray
+              .filter(
+                (ac: any) =>
+                  ac.aircraft_id && ac.aircraft_name && ac.livery_name
+              )
+              .map((ac: any) => ({
+                id: ac.aircraft_id,
+                name: ac.aircraft_name,
+                liveryname: ac.livery_name,
+                notes: ac.notes || null,
+              })),
+          };
+        })
       : [];
 
     // Get total count

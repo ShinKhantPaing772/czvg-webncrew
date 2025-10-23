@@ -33,7 +33,6 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
-import { useSession } from "@/hooks/use-session";
 
 interface Aircraft {
   id: string;
@@ -56,7 +55,6 @@ interface Route {
 }
 
 export default function FindRoutes() {
-  const { user } = useSession();
   const [searchQuery, setSearchQuery] = useState("");
   const [departureFilter, setDepartureFilter] = useState("");
   const [arrivalFilter, setArrivalFilter] = useState("");
