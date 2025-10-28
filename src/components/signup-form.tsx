@@ -12,6 +12,7 @@ export function SignupForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingIFC, setLoadingIFC] = useState(false);
   const [validIFC, setValidIFC] = useState(false);
+  const [ifUserId, setIfUserId] = useState("");
   const [message, setMessage] = useState({ type: "", text: "" });
   const [formData, setFormData] = useState({
     email: "",
@@ -28,15 +29,22 @@ export function SignupForm() {
   };
 
   useEffect(() => {
-    const checkIFC = async () => {
+    if (!formData.ifc) return;
+
+    const timeout = setTimeout(async () => {
       try {
         setLoadingIFC(true);
+        setMessage({ type: "", text: "" });
+
         const response = await fetch(`/api/auth/ifc/${formData.ifc}`);
         if (!response.ok) throw new Error("IFC check failed");
 
         const data = await response.json();
-        setValidIFC(data.result.length !== 0);
+        const isValid = data.result && data.result.length > 0;
+        setValidIFC(isValid);
+        setIfUserId(isValid ? data.result[0].userId : "");
       } catch (error) {
+        setValidIFC(false);
         setMessage({
           type: "error",
           text: error instanceof Error ? error.message : "IFC check failed",
@@ -44,9 +52,9 @@ export function SignupForm() {
       } finally {
         setLoadingIFC(false);
       }
-    };
+    }, 600); // debounce delay in ms
 
-    if (formData.ifc) checkIFC();
+    return () => clearTimeout(timeout);
   }, [formData.ifc]);
 
   function validatePassword() {
@@ -95,9 +103,11 @@ export function SignupForm() {
           password: formData.password,
           name: formData.name,
           ifc: formData.ifc,
+          ifUserId: ifUserId,
         }),
       });
 
+      console.log(ifUserId);
       const data = await response.json();
 
       if (!response.ok) {
@@ -164,7 +174,7 @@ export function SignupForm() {
         </Label>
         <div className="flex items-center">
           <span className="inline-flex h-10 items-center rounded-l-md border border-r-0 border-blue-200 bg-blue-50 px-3 text-sm text-gray-600">
-            https://community.infinitefllight.com/u/
+            https://community.infiniteflight.com/u/
           </span>
           <div className="relative w-full">
             <Input
@@ -191,7 +201,7 @@ export function SignupForm() {
         <p className="text-xs text-gray-600">
           All pilots are required to have an active{" "}
           <Link
-            href="https://community.infinitefllight.com"
+            href="https://community.infiniteflight.com"
             className="font-medium text-blue-600 hover:underline"
           >
             Infinite Flight Community

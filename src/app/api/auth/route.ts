@@ -174,11 +174,13 @@ async function handleSignup({
   password,
   name,
   ifc,
+  ifUserId,
 }: {
   email: string;
   password: string;
   name: string;
   ifc: string;
+  ifUserId: string;
 }) {
   const normalizedEmail = email.trim().toLowerCase();
   const existingPilot = await models.Pilot.findOne({
@@ -200,7 +202,8 @@ async function handleSignup({
     password: hashedPassword,
     name: name.trim(),
     callsign,
-    ifc: "https://community.infinitefllight.com/u/" + ifc.trim(),
+    ifc: "https://community.infiniteflight.com/u/" + ifc.trim(),
+    ifuserid: ifUserId,
     status: 0, // Pending approval
   });
 
@@ -220,6 +223,11 @@ async function handleSignup({
             {
               name: "IFC Username",
               value: `${ifc.trim()}`,
+              inline: false,
+            },
+            {
+              name: "IFC UserId",
+              value: `${ifUserId}`,
               inline: false,
             },
             {

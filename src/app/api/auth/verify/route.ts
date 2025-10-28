@@ -1,10 +1,19 @@
 import { NextResponse } from "next/server";
+import { Op } from "sequelize";
 import jwt from "jsonwebtoken";
 import { models } from "@/lib/models";
 
 export async function POST(request: Request) {
   try {
     let token: string | null = null;
+
+    // --- CLEANUP STEP: Delete all expired tokens ---
+
+    await models.Token.destroy({
+      where: {
+        expiresAt: { [Op.lt]: new Date() },
+      },
+    });
 
     // Try to get token from request body
     try {
