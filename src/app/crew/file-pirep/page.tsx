@@ -254,9 +254,15 @@ export default function FilePirep() {
                             }
                             onSelect={(date) => {
                               if (date) {
-                                const formatted = date
-                                  .toISOString()
-                                  .split("T")[0]; // e.g. "2025-10-29"
+                                const year = date.getFullYear();
+                                const month = String(
+                                  date.getMonth() + 1
+                                ).padStart(2, "0");
+                                const day = String(date.getDate()).padStart(
+                                  2,
+                                  "0"
+                                );
+                                const formatted = `${year}-${month}-${day}`; // ✅ stays local
                                 field.onChange(formatted);
                               }
                             }}
