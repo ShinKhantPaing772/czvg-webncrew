@@ -63,7 +63,7 @@ const formSchema = z.object({
   flightTime: z.string().regex(/^\d+:\d{2}$/, {
     message: "Flight time must be in format HH:MM.",
   }),
-  date: z.date({
+  date: z.string({
     required_error: "Please select a date.",
   }),
   aircraftId: z.string({
@@ -97,8 +97,8 @@ export default function FilePirep() {
     arrival: searchParams.get("arrival") || "",
     flightTime: searchParams.get("flightTime") || "",
     date: searchParams.get("date")
-      ? new Date(searchParams.get("date")!)
-      : undefined,
+      ? format(new Date(searchParams.get("date")!), "yyyy-MM-dd")
+      : format(new Date(), "yyyy-MM-dd"),
     aircraftId: searchParams.get("aircraftId") || "",
     fuelUsed: searchParams.get("fuelUsed") || "",
     multi: searchParams.get("multi") || "",
@@ -150,7 +150,7 @@ export default function FilePirep() {
           pilotcallsign: user?.callsign,
         }),
       });
-
+      console.log(data);
       if (!response.ok) {
         throw new Error("Failed to submit PIREP");
       }
@@ -175,7 +175,7 @@ export default function FilePirep() {
         departure: "",
         arrival: "",
         flightTime: "",
-        date: new Date(),
+        date: format(new Date(), "yyyy-MM-dd"),
         aircraftId: "",
         fuelUsed: "",
         multi: "",
@@ -238,24 +238,31 @@ export default function FilePirep() {
                     <FormItem>
                       <FormLabel>Flight Date</FormLabel>
                       <Popover>
-                        <PopoverTrigger className="text-left">
-                          <Input
-                            placeholder={
-                              field.value
-                                ? format(field.value, "PPP")
-                                : "Pick a date"
-                            }
-                          />
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className="w-full text-left"
+                          >
+                            {field.value ? field.value : "Pick a date"}
+                          </Button>
                         </PopoverTrigger>
                         <PopoverContent className="bg-white">
                           <Calendar
                             mode="single"
-                            selected={field.value}
-                            onSelect={field.onChange}
+                            selected={
+                              field.value ? new Date(field.value) : undefined
+                            }
+                            onSelect={(date) => {
+                              if (date) {
+                                const formatted = date
+                                  .toISOString()
+                                  .split("T")[0]; // e.g. "2025-10-29"
+                                field.onChange(formatted);
+                              }
+                            }}
                             disabled={(date) =>
                               date > new Date() || date < new Date("1900-01-01")
                             }
-                            initialFocus
                           />
                         </PopoverContent>
                       </Popover>

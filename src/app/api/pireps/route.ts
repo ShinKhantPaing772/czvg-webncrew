@@ -32,30 +32,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // --- Parse date safely ---
-    let parsedDate;
-    try {
-      if (date instanceof Date) {
-        parsedDate = new Date(date.getTime());
-      } else {
-        const dateObj = new Date(date);
-        parsedDate = new Date(
-          dateObj.getFullYear(),
-          dateObj.getMonth(),
-          dateObj.getDate(),
-          12,
-          0,
-          0
-        );
-      }
-      if (isNaN(parsedDate.getTime())) throw new Error("Invalid date");
-    } catch {
-      return NextResponse.json(
-        { error: "Invalid date format" },
-        { status: 400 }
-      );
-    }
-
     // --- Validate flight time ---
     if (
       !flightTime ||
@@ -112,7 +88,7 @@ export async function POST(request: NextRequest) {
         ? totalSeconds * multiplier.multiplier
         : totalSeconds,
       pilotid,
-      date: parsedDate,
+      date: date || new Date(),
       aircraftid: aircraftId,
       fuelused: parsedFuel,
       multi: multiplier ? multiplier.name : "None",
