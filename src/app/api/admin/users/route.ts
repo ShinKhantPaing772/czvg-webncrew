@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { models } from "@/lib/models";
 
+// Mark this route as dynamic to prevent static optimization
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
 export async function GET(request: Request) {
   try {
     const users = await models.Pilot.findAll();
@@ -35,7 +39,7 @@ export async function PUT(request: Request) {
 
     await pilot.update({
       status: status,
-      notes: notes,
+      notes: notes || "",
     });
     return NextResponse.json({
       success: true,
