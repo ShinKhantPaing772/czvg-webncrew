@@ -241,7 +241,7 @@ export default function FilePirep() {
                         <PopoverTrigger asChild>
                           <Button
                             variant="outline"
-                            className="w-full text-left"
+                            className="w-full text-left border border-black"
                           >
                             {field.value ? field.value : "Pick a date"}
                           </Button>

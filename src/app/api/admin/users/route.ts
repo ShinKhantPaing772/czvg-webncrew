@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { models } from "@/lib/models";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const users = await models.Pilot.findAll();
     return NextResponse.json(users);

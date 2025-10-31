@@ -212,7 +212,7 @@ async function handleSignup({
     const discordPayload = {
       embeds: [
         {
-          title: "New Pilot Applicaation!",
+          title: "New Pilot Application!",
           color: 3447003,
           fields: [
             {
