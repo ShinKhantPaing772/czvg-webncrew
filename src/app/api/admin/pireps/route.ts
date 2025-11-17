@@ -13,7 +13,7 @@ export async function GET(request: Request) {
         {
           model: models.Pilot,
           as: "Pilot",
-          attributes: ["id", "callsign", "name"],
+          attributes: ["id", "callsign", "name", "ifc"],
         },
         {
           model: models.Aircraft,

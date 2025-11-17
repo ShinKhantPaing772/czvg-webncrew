@@ -8,29 +8,14 @@ type AuthGuardProps = {
   children: React.ReactNode;
 };
 
-type User = {
-  callsign: string;
-  id: string;
-  name: string;
-  email: string;
-  rank: string;
-  flightTime: string;
-  pirepsFiled: number;
-  joined: string;
-  status: number;
-  Permissions: Array<{
-    userid: string;
-    name: string;
-  }>;
-};
-
 export function AuthGuard({ children }: AuthGuardProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+
+  const [permissions, setPermissions] = useState<string[]>([]);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
 
-  const token = getToken(); // from localStorage or cookie
+  const token = getToken();
 
   async function checkSession() {
     try {
@@ -41,20 +26,16 @@ export function AuthGuard({ children }: AuthGuardProps) {
 
       const res = await fetch("/api/auth/verify", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ token: token }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
       });
+
       const user = await res.json();
-      setIsAdmin(
-        Boolean(
-          user?.Permissions?.some(
-            (permission: { name: string }) => permission.name === "admin"
-          )
-        )
-      );
+
       if (res.ok) {
+        setPermissions(
+          user?.Permissions?.map((p: { name: string }) => p.name) || []
+        );
         setIsAuthenticated(true);
       } else {
         setIsAuthenticated(false);
@@ -69,34 +50,45 @@ export function AuthGuard({ children }: AuthGuardProps) {
   }, []);
 
   useEffect(() => {
-    if (isAuthenticated === null) return; // wait for check
+    if (isAuthenticated === null) return;
 
-    const isLoginorForgetPasswordPage =
+    const isLoginPage =
       pathname === "/crew" || pathname === "/crew/forgot-password";
-    const isAdminPage = pathname?.startsWith("/crew/admin");
 
-    if (
-      !isAuthenticated &&
-      pathname?.startsWith("/crew") &&
-      !isLoginorForgetPasswordPage
-    ) {
-      router.push("/crew"); // force to login
+    const isAdminPage = pathname.startsWith("/crew/admin");
+
+    // Not authenticated → must login
+    if (!isAuthenticated && pathname.startsWith("/crew") && !isLoginPage) {
+      router.push("/crew");
+      return;
     }
 
-    if (isAuthenticated && isLoginorForgetPasswordPage) {
-      router.push("/crew/home"); // logged-in users skip login
-    }
-
-    if (isAuthenticated && isAdminPage && !isAdmin) {
+    // Authenticated user visiting login page
+    if (isAuthenticated && isLoginPage) {
       router.push("/crew/home");
+      return;
     }
-  }, [isAuthenticated, pathname, router, isAdmin]);
 
-  // ⬇️ Show loading screen while checking auth
+    // Admin pages
+    if (isAuthenticated && isAdminPage) {
+      // 1. If user has admin → full access
+      if (permissions.includes("admin")) return;
+
+      // 2. Extract admin folder (first segment after /crew/admin/)
+      const parts = pathname.split("/").filter(Boolean);
+      // ["crew", "admin", "pireps", "edit"] → target = "pireps"
+      const adminSection = parts[2];
+
+      // 3. Check if user has permission matching the folder name
+      if (!permissions.includes(adminSection)) {
+        router.push("/crew/home");
+      }
+    }
+  }, [isAuthenticated, pathname, permissions, router]);
+
   if (isAuthenticated === null) {
     return (
       <div className="flex h-screen w-full items-center justify-center">
-        {/* Replace with spinner/skeleton if you like */}
         <p className="text-gray-500">Loading...</p>
       </div>
     );

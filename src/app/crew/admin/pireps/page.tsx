@@ -63,6 +63,7 @@ import {
 interface Pilot {
   id: number;
   callsign: string;
+  ifc: string;
   name: string;
 }
 
@@ -370,6 +371,9 @@ export default function AdminPireps() {
                         <TableHead>Date</TableHead>
                         <TableHead>Pilot</TableHead>
                         <TableHead className="hidden md:table-cell">
+                          IFC
+                        </TableHead>
+                        <TableHead className="hidden md:table-cell">
                           Route
                         </TableHead>
                         <TableHead className="hidden md:table-cell">
@@ -420,6 +424,16 @@ export default function AdminPireps() {
                                     : pirep.pilotid}
                                 </span>
                               </div>
+                            </TableCell>
+                            <TableCell className="hidden md:table-cell">
+                              <a
+                                href={`${pirep.Pilot?.ifc}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:underline"
+                              >
+                                {"IFC"}
+                              </a>
                             </TableCell>
                             <TableCell className="hidden md:table-cell">
                               <div className="flex items-center gap-1">

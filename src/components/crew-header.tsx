@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { usePathname } from "next/navigation";
 import {
   Menu,
@@ -22,92 +22,66 @@ interface CrewHeaderProps {
 
 export function CrewHeader({ children }: CrewHeaderProps) {
   const pathname = usePathname();
-  const [isAdmin, setIsAdmin] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   const { user } = useSession();
-  useEffect(() => {
-    setIsAdmin(
-      Boolean(
-        user?.Permissions?.some(
-          (permission: { name: string }) => permission.name === "admin"
-        )
-      )
-    );
-  }, [user]);
 
+  // Base navigation items (always visible)
   const baseNavItems = [
-    {
-      title: "Dashboard",
-      href: "/crew/home",
-      icon: Home,
-    },
-    {
-      title: "File PIREP",
-      href: "/crew/file-pirep",
-      icon: FileText,
-    },
-    {
-      title: "PIREPs",
-      href: "/crew/view-pireps",
-      icon: FileStack,
-    },
-    {
-      title: "Find Routes",
-      href: "/crew/find-routes",
-      icon: Search,
-    },
+    { title: "Dashboard", href: "/crew/home", icon: Home },
+    { title: "File PIREP", href: "/crew/file-pirep", icon: FileText },
+    { title: "PIREPs", href: "/crew/view-pireps", icon: FileStack },
+    { title: "Find Routes", href: "/crew/find-routes", icon: Search },
   ];
 
-  const adminNavItems = [
-    {
-      title: "Dashboard",
-      href: "/crew/home",
-      icon: Home,
-    },
-    {
-      title: "File PIREP",
-      href: "/crew/file-pirep",
-      icon: FileText,
-    },
-    {
-      title: "PIREPs",
-      href: "/crew/view-pireps",
-      icon: FileText,
-    },
-    {
-      title: "Find Routes",
-      href: "/crew/find-routes",
-      icon: Search,
-    },
-    {
-      title: "Admin Dashboard",
-      href: "/crew/admin",
-      icon: Home,
-    },
-    {
-      title: "Manage PIREPs",
-      href: "/crew/admin/pireps",
-      icon: FileText,
-    },
-    {
-      title: "Manage Routes",
-      href: "/crew/admin/routes",
-      icon: PlaneTakeoff,
-    },
-    {
-      title: "Manage Users",
-      href: "/crew/admin/users",
-      icon: Search,
-    },
-    {
-      title: "Manage Permissions",
-      href: "/crew/admin/permissions",
-      icon: Shield,
-    },
-  ];
+  // Admin permissions mapped to menu items
+  const adminMenuMap: Record<string, any[]> = {
+    admin: [{ title: "Admin Dashboard", href: "/crew/admin", icon: Home }],
+    pireps: [
+      { title: "Manage PIREPs", href: "/crew/admin/pireps", icon: FileText },
+    ],
+    routes: [
+      {
+        title: "Manage Routes",
+        href: "/crew/admin/routes",
+        icon: PlaneTakeoff,
+      },
+    ],
+    users: [{ title: "Manage Users", href: "/crew/admin/users", icon: Search }],
+    permissions: [
+      {
+        title: "Manage Permissions",
+        href: "/crew/admin/permissions",
+        icon: Shield,
+      },
+    ],
+  };
 
-  const navItems = isAdmin ? adminNavItems : baseNavItems;
+  // Build admin navigation dynamically based on user permissions
+  function getAdminNavItems() {
+    if (!user?.Permissions) return [];
+
+    const userPermissions = user.Permissions.map((p: any) => p.name);
+
+    // Full admin access
+    if (userPermissions.includes("admin")) {
+      return Object.values(adminMenuMap).flat();
+    }
+
+    // Partial admin access based on permissions
+    const allowed: any[] = [];
+
+    userPermissions.forEach((perm: string) => {
+      if (adminMenuMap[perm]) {
+        allowed.push(...adminMenuMap[perm]);
+      }
+    });
+
+    return allowed;
+  }
+
+  // Final navigation list: base + admin (when allowed)
+  const navItems = [...baseNavItems, ...getAdminNavItems()];
 
   return (
     <div className="flex min-h-screen bg-muted/40">
@@ -150,7 +124,7 @@ export function CrewHeader({ children }: CrewHeaderProps) {
               return (
                 <li
                   key={item.href}
-                  className={` ${isSidebarOpen ? "" : "items-center"}`}
+                  className={`${isSidebarOpen ? "" : "items-center"}`}
                 >
                   <a
                     href={item.href}
