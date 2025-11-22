@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { models } from "@/lib/models";
 
+// Mark this route as dynamic to prevent static optimization
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
 export async function GET() {
   try {
     // Fetch all aircraft from database
