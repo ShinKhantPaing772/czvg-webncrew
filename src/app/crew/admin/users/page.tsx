@@ -444,7 +444,7 @@ export default function Users() {
                         <TableHead>User Name</TableHead>
                         <TableHead>Joined</TableHead>
                         <TableHead className="hidden md:table-cell">
-                          IFC URL
+                          IFC
                         </TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
@@ -475,7 +475,11 @@ export default function Users() {
                               {new Date(user.joined).toLocaleDateString()}
                             </TableCell>
                             <TableCell className="hidden md:table-cell">
-                              <Link href={user.ifc}>{user.ifc || "N/A"}</Link>
+                              <Link
+                                href={`https://community.infiniteflight.com/u/${user.ifc}/summary`}
+                              >
+                                {user.ifc || "N/A"}
+                              </Link>
                             </TableCell>
                             <TableCell>
                               {getStatusBadge("" + user.status)}
@@ -566,7 +570,21 @@ export default function Users() {
                                               <dt className="text-muted-foreground">
                                                 IFC:
                                               </dt>
-                                              <dd>{user.ifc || "N/A"}</dd>
+                                              <Link
+                                                href={`https://community.infiniteflight.com/u/${user.ifc}/summary`}
+                                              >
+                                                {user.ifc || "N/A"}
+                                              </Link>
+                                            </div>
+                                            <div className="flex justify-between">
+                                              <dt className="text-muted-foreground">
+                                                View Stats:
+                                              </dt>
+                                              <Link
+                                                href={`https://www.iflytics.app/user/${user.ifc}`}
+                                              >
+                                                {user.ifc || "N/A"}
+                                              </Link>
                                             </div>
                                             <div className="flex justify-between">
                                               <dt className="text-muted-foreground">

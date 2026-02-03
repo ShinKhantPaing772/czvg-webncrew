@@ -202,7 +202,7 @@ async function handleSignup({
     password: hashedPassword,
     name: name.trim(),
     callsign,
-    ifc: "https://community.infiniteflight.com/u/" + ifc.trim(),
+    ifc: ifc.trim(),
     ifuserid: ifUserId,
     status: 0, // Pending approval
   });
@@ -254,7 +254,7 @@ async function handleSignup({
   }
   return NextResponse.json(
     {
-      message: `Registration successful. Your callsign is assigned to ${pilot.callsign}. Our staff will contact you on the IFC soon.`,
+      message: `Your application is sent. Your callsign is assigned to ${pilot.callsign}. Our staff will contact you on the IFC soon, so make sure you keep an eye on it. `,
     },
     { status: 201 }
   );

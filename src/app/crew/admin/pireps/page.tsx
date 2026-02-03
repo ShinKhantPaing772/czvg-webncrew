@@ -371,7 +371,7 @@ export default function AdminPireps() {
                         <TableHead>Date</TableHead>
                         <TableHead>Pilot</TableHead>
                         <TableHead className="hidden md:table-cell">
-                          IFC
+                          Check Flight Log
                         </TableHead>
                         <TableHead className="hidden md:table-cell">
                           Route
@@ -427,12 +427,12 @@ export default function AdminPireps() {
                             </TableCell>
                             <TableCell className="hidden md:table-cell">
                               <a
-                                href={`${pirep.Pilot?.ifc}`}
+                                href={`https://www.iflytics.app/user/${pirep.Pilot?.ifc}/flights`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-blue-600 hover:underline"
                               >
-                                {"IFC"}
+                                {pirep.Pilot?.ifc}
                               </a>
                             </TableCell>
                             <TableCell className="hidden md:table-cell">
