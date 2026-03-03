@@ -80,7 +80,7 @@ export function Footer() {
               Infinite Flight Community
             </Link>
             <Link
-              href="https://community.infiniteflight.com/t/china-southern-virtual-group-fly-into-your-dreams-official-thread-2021/609110?u=gds111006"
+              href="https://community.infiniteflight.com/t/china-southern-virtual-group-fly-into-your-dreams-official-thread-2026/1141730?u=gds111006"
               className="text-sm text-gray-600 hover:text-blue-700"
             >
               CZVG IFC Thread

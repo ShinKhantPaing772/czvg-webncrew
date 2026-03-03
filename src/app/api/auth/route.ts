@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
       console.error("[Auth] Error: Database connection not established");
       return NextResponse.json(
         { error: "Database connection error" },
-        { status: 500 }
+        { status: 500 },
       );
     }
     let body;
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
       console.error("[Auth] Error parsing request body:", error);
       return NextResponse.json(
         { error: "Invalid request format" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -39,13 +39,13 @@ export async function POST(request: NextRequest) {
     console.error("[Auth] Unhandled error:", error);
     console.error(
       "[Auth] Error stack:",
-      error instanceof Error ? error.stack : "No stack trace"
+      error instanceof Error ? error.stack : "No stack trace",
     );
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : "Internal server error",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -72,7 +72,7 @@ async function handleLogin({
     console.error("[Login] Database query error:", error);
     return NextResponse.json(
       { error: "Authentication error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 
@@ -82,7 +82,7 @@ async function handleLogin({
         error:
           "Login Failed. Your application may still be pending or it may have been denied. Please contact us for more details if you believe this is an error.",
       },
-      { status: 401 }
+      { status: 401 },
     );
   }
 
@@ -91,7 +91,7 @@ async function handleLogin({
     if (!password || !pilot.password) {
       return NextResponse.json(
         { error: "Invalid Credentials" },
-        { status: 401 }
+        { status: 401 },
       );
     }
     // bcrypt.compare already handles hash validation internally
@@ -100,7 +100,7 @@ async function handleLogin({
     console.error("[Login] Error comparing passwords:", error);
     return NextResponse.json(
       { error: "Authentication error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 
@@ -115,7 +115,7 @@ async function handleLogin({
       JWT_SECRET as string,
       {
         expiresIn: "7d",
-      }
+      },
     );
 
     // Calculate expiration date (7 days from now)
@@ -141,7 +141,7 @@ async function handleLogin({
           callsign: pilot.callsign,
         },
       },
-      { status: 200 }
+      { status: 200 },
     );
 
     return response;
@@ -149,7 +149,7 @@ async function handleLogin({
     console.error("[Login] Error creating token:", error);
     return NextResponse.json(
       { error: "Authentication error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -183,14 +183,31 @@ async function handleSignup({
   ifUserId: string;
 }) {
   const normalizedEmail = email.trim().toLowerCase();
-  const existingPilot = await models.Pilot.findOne({
+  const existingPilotMail = await models.Pilot.findOne({
     where: { email: normalizedEmail },
   });
 
-  if (existingPilot) {
+  if (existingPilotMail) {
     return NextResponse.json(
-      { error: "An account is already registered with this Email" },
-      { status: 400 }
+      {
+        error:
+          "An account is already registered with this Email. If you just applied, rest assured your application is recorded. If you think this is an error please contact us on the IFC.",
+      },
+      { status: 400 },
+    );
+  }
+
+  const existingPilotIFC = await models.Pilot.findOne({
+    where: { ifc: ifc },
+  });
+
+  if (existingPilotIFC) {
+    return NextResponse.json(
+      {
+        error:
+          "An account is already registered with this IFC username. If you just applied, rest assured your application is recorded. If you think this is an error please contact us on the IFC.",
+      },
+      { status: 400 },
     );
   }
 
@@ -239,7 +256,7 @@ async function handleSignup({
           footer: {
             text: `China Southern Virtual Group • ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString(
               [],
-              { hour: "2-digit", minute: "2-digit" }
+              { hour: "2-digit", minute: "2-digit" },
             )}`,
           },
         },
@@ -256,6 +273,6 @@ async function handleSignup({
     {
       message: `Your application is sent. Your callsign is assigned to ${pilot.callsign}. Our staff will contact you on the IFC soon, so make sure you keep an eye on it. `,
     },
-    { status: 201 }
+    { status: 201 },
   );
 }
