@@ -152,7 +152,7 @@ export default function Users() {
   const totalPages = Math.ceil(sortedUsers.length / itemsPerPage);
   const paginatedUsers = sortedUsers.slice(
     (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
+    currentPage * itemsPerPage,
   );
 
   // Get status badge variant
@@ -287,7 +287,7 @@ export default function Users() {
   const pendingCount = users.filter((user) => user.status === 0).length;
   const approvedCount = users.filter((user) => user.status === 1).length;
   const rejectedCount = users.filter(
-    (user) => user.status === 2 || user.status === 3
+    (user) => user.status === 2 || user.status === 3,
   ).length;
 
   return (
@@ -506,8 +506,8 @@ export default function Users() {
                                         {user.status.toString() === "0"
                                           ? "Applicant "
                                           : user.status.toString() === "2"
-                                          ? "User "
-                                          : "Pilot "}
+                                            ? "User "
+                                            : "Pilot "}
                                         Details: {user.name}
                                       </span>
                                     </DialogTitle>
@@ -592,7 +592,7 @@ export default function Users() {
                                               </dt>
                                               <dd>
                                                 {new Date(
-                                                  user.joined
+                                                  user.joined,
                                                 ).toLocaleString()}
                                               </dd>
                                             </div>
@@ -766,7 +766,7 @@ export default function Users() {
                             onClick={(e) => {
                               e.preventDefault();
                               setCurrentPage((prev) =>
-                                Math.min(prev + 1, totalPages)
+                                Math.min(prev + 1, totalPages),
                               );
                             }}
                             aria-disabled={currentPage === totalPages}

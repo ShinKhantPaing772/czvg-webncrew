@@ -20,6 +20,8 @@ export async function GET() {
         "ifliveryid",
         "status",
         "notes",
+        "rankreq",
+        "awardreq",
       ],
       order: [["name", "ASC"]],
       raw: true,
@@ -29,7 +31,49 @@ export async function GET() {
     console.error("[Aircraft] Error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
+    );
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const {
+      notes,
+      rankReq,
+      awardReq,
+      ifAircraftId,
+      ifAircraftName,
+      ifLiveryId,
+      ifLiveryName,
+    } = body;
+
+    // Validate required fields
+    if (!ifAircraftId || !ifAircraftName || !ifLiveryId || !ifLiveryName) {
+      return NextResponse.json(
+        { success: false, message: "Missing required fields" },
+        { status: 400 },
+      );
+    }
+
+    const aircraft = await models.Aircraft.create({
+      name: ifAircraftName,
+      ifaircraftid: ifAircraftId,
+      ifliveryid: ifLiveryId,
+      liveryname: ifLiveryName,
+      notes: notes || null,
+      rankreq: rankReq || 3,
+      awardreq: awardReq || null,
+      status: 1,
+    });
+
+    return NextResponse.json({ success: true, data: aircraft });
+  } catch (error) {
+    console.error("Error posting route:", error);
+    return NextResponse.json(
+      { success: false, message: "Failed to post route" },
+      { status: 500 },
     );
   }
 }

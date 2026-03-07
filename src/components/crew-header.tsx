@@ -10,6 +10,7 @@ import {
   PlaneTakeoff,
   Shield,
   FileStack,
+  PlaneIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -36,7 +37,7 @@ export function CrewHeader({ children }: CrewHeaderProps) {
 
   // Admin permissions mapped to menu items
   const adminMenuMap: Record<string, any[]> = {
-    admin: [{ title: "Admin Dashboard", href: "/crew/admin", icon: Home }],
+    home: [{ title: "Admin Dashboard", href: "/crew/admin", icon: Home }],
     pireps: [
       { title: "Manage PIREPs", href: "/crew/admin/pireps", icon: FileText },
     ],
@@ -48,6 +49,13 @@ export function CrewHeader({ children }: CrewHeaderProps) {
       },
     ],
     users: [{ title: "Manage Users", href: "/crew/admin/users", icon: Search }],
+    aircrafts: [
+      {
+        title: "Manage Aircrafts",
+        href: "/crew/admin/aircrafts",
+        icon: PlaneIcon,
+      },
+    ],
     permissions: [
       {
         title: "Manage Permissions",

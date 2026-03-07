@@ -34,7 +34,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
 
       if (res.ok) {
         setPermissions(
-          user?.Permissions?.map((p: { name: string }) => p.name) || []
+          user?.Permissions?.map((p: { name: string }) => p.name) || [],
         );
         setIsAuthenticated(true);
       } else {
@@ -74,12 +74,20 @@ export function AuthGuard({ children }: AuthGuardProps) {
       // 1. If user has admin → full access
       if (permissions.includes("admin")) return;
 
-      // 2. Extract admin folder (first segment after /crew/admin/)
       const parts = pathname.split("/").filter(Boolean);
-      // ["crew", "admin", "pireps", "edit"] → target = "pireps"
+
+      // If visiting /crew/admin
+      if (parts.length === 2) {
+        // Require "home" permission for admin landing page
+        if (!permissions.includes("home")) {
+          router.push("/crew/home");
+        }
+        return;
+      }
+
+      // Visiting /crew/admin/{section}
       const adminSection = parts[2];
 
-      // 3. Check if user has permission matching the folder name
       if (!permissions.includes(adminSection)) {
         router.push("/crew/home");
       }

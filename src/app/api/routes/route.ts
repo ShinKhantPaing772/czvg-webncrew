@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import sequelize from "@/lib/database";
 import { formatFlightTime } from "@/lib/utils/time";
+import { models } from "@/lib/models";
 
 // Mark this route as dynamic to prevent static optimization
 export const dynamic = "force-dynamic";
@@ -75,7 +76,7 @@ export async function GET(request: Request) {
             aircraft: aircraftArray
               .filter(
                 (ac: any) =>
-                  ac.aircraft_id && ac.aircraft_name && ac.livery_name
+                  ac.aircraft_id && ac.aircraft_name && ac.livery_name,
               )
               .map((ac: any) => ({
                 id: ac.aircraft_id,
@@ -92,7 +93,7 @@ export async function GET(request: Request) {
     console.error("Error fetching routes:", error);
     return NextResponse.json(
       { success: false, message: "Failed to fetch routes" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
