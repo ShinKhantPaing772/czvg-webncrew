@@ -58,6 +58,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { formatFlightTime } from "@/lib/utils/format-flight-time";
 
 // Define types for API responses
 interface Pilot {
@@ -141,7 +142,7 @@ export default function AdminPireps() {
       setCounts(data.data.counts);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "An unknown error occurred"
+        err instanceof Error ? err.message : "An unknown error occurred",
       );
       console.error("Error fetching PIREPs:", err);
     } finally {
@@ -234,7 +235,7 @@ export default function AdminPireps() {
       console.error("Error approving PIREP:", error);
       // Show error message to user
       setError(
-        error instanceof Error ? error.message : "Failed to approve PIREP"
+        error instanceof Error ? error.message : "Failed to approve PIREP",
       );
     }
   };
@@ -270,7 +271,7 @@ export default function AdminPireps() {
       console.error("Error rejecting PIREP:", error);
       // Show error message to user
       setError(
-        error instanceof Error ? error.message : "Failed to reject PIREP"
+        error instanceof Error ? error.message : "Failed to reject PIREP",
       );
     }
   };
@@ -532,7 +533,11 @@ export default function AdminPireps() {
                                                 <dt className="text-muted-foreground">
                                                   Duration:
                                                 </dt>
-                                                <dd>{pirep.flighttime}</dd>
+                                                <dd>
+                                                  {formatFlightTime(
+                                                    pirep.flighttime,
+                                                  )}
+                                                </dd>
                                               </div>
                                             </dl>
                                           </CardContent>

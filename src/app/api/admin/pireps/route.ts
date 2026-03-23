@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { models } from "@/lib/models";
+import { formatFlightTime } from "@/lib/utils/time";
 
 // Mark this route as dynamic to prevent static optimization
 export const dynamic = "force-dynamic";
@@ -37,7 +38,10 @@ export async function GET(request: Request) {
     return NextResponse.json({
       success: true,
       data: {
-        pireps,
+        pireps: pireps.map((pirep) => ({
+          ...pirep.toJSON(),
+          flighttime: formatFlightTime(pirep.flighttime),
+        })),
         pagination: {
           total: count,
           totalPages,
@@ -56,7 +60,7 @@ export async function GET(request: Request) {
     console.error("Error fetching PIREPs:", error);
     return NextResponse.json(
       { success: false, error: "Failed to fetch PIREPs" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -70,7 +74,7 @@ export async function PUT(request: Request) {
     if (!id || status === undefined) {
       return NextResponse.json(
         { success: false, error: "Missing required fields" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -80,7 +84,7 @@ export async function PUT(request: Request) {
     if (!pirep) {
       return NextResponse.json(
         { success: false, error: "PIREP not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -98,7 +102,7 @@ export async function PUT(request: Request) {
     console.error("Error updating PIREP:", error);
     return NextResponse.json(
       { success: false, error: "Failed to update PIREP" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
