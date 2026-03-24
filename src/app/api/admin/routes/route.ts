@@ -1,121 +1,93 @@
 import { NextResponse } from "next/server";
-import sequelize from "@/lib/database";
 import { models } from "@/lib/models";
 import { formatFlightTime } from "@/lib/utils/time";
+import { Op } from "sequelize";
 
 // Mark this route as dynamic to prevent static optimization
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+// Helper function to convert duration format
+function convertDurationToSeconds(duration: string | number): number {
+  if (typeof duration === "number") return duration;
+  if (typeof duration === "string" && duration.includes(":")) {
+    const [hours, minutes] = duration.split(":").map(Number);
+    return hours * 60 * 60 + minutes * 60;
+  }
+  return Number(duration);
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
 
-    // Get query parameters
-    const fltnum = searchParams.get("fltnum");
-    const dep = searchParams.get("dep");
-    const arr = searchParams.get("arr");
-    const aircraft = searchParams.get("aircraft"); // For backward compatibility
-    const aircraftId = searchParams.get("aircraftId");
-    const minDuration = searchParams.get("minDuration");
-    const maxDuration = searchParams.get("maxDuration");
+    // Build filter conditions using Sequelize operators
+    const where: any = {};
+    const aircraftWhere: any = {};
 
-    // Build the SQL query with filters
-    let query = `
-      SELECT 
-        r.id AS id, 
-        r.fltnum, 
-        r.dep, 
-        r.arr, 
-        r.duration, 
-        r.notes,
-        COALESCE(
-          JSON_ARRAYAGG(
-            JSON_OBJECT(
-              'aircraft_id', a.id,
-              'aircraft_name', a.name, 
-              'livery_name', a.liveryname,
-              'notes', a.notes
-            )
-          ), 
-          '[]'
-        ) AS aircrafts
-      FROM routes r
-      LEFT JOIN route_aircraft ra ON r.id = ra.routeid
-      LEFT JOIN aircraft a ON ra.aircraftid = a.id
-      WHERE 1=1
-      ${fltnum ? `AND r.fltnum LIKE '%${fltnum}%'` : ""}
-      ${dep ? `AND r.dep = '${dep}'` : ""}
-      ${arr ? `AND r.arr = '${arr}'` : ""}
-      ${minDuration ? `AND r.duration >= ${minDuration}` : ""}
-      ${maxDuration ? `AND r.duration <= ${maxDuration}` : ""}
-      ${aircraftId ? `AND a.id = '${aircraftId}'` : ""}
-      ${
-        !aircraftId && aircraft ? `AND a.name LIKE '%${aircraft}%'` : ""
-      } /* For backward compatibility */
-    `;
+    if (searchParams.get("fltnum")) {
+      where.fltnum = { [Op.like]: `%${searchParams.get("fltnum")}%` };
+    }
+    if (searchParams.get("dep")) {
+      where.dep = searchParams.get("dep");
+    }
+    if (searchParams.get("arr")) {
+      where.arr = searchParams.get("arr");
+    }
+    if (searchParams.get("minDuration")) {
+      where.duration = { [Op.gte]: parseInt(searchParams.get("minDuration")!) };
+    }
+    if (searchParams.get("maxDuration")) {
+      where.duration = where.duration
+        ? {
+            ...where.duration,
+            [Op.lte]: parseInt(searchParams.get("maxDuration")!),
+          }
+        : { [Op.lte]: parseInt(searchParams.get("maxDuration")!) };
+    }
+    if (searchParams.get("aircraftId")) {
+      aircraftWhere.id = searchParams.get("aircraftId");
+    }
 
-    // Add group by and order by
-    query += " GROUP BY r.id ORDER BY r.fltnum";
+    // Fetch routes with associations
+    const routes = await models.Route.findAll({
+      where,
+      include: [
+        {
+          model: models.Aircraft,
+          attributes: ["id", "name", "liveryname", "notes"],
+          where:
+            Object.keys(aircraftWhere).length > 0 ? aircraftWhere : undefined,
+          through: { attributes: [] }, // Don't include junction table attributes
+        },
+      ],
+      order: [["fltnum", "ASC"]],
+      subQuery: false, // Avoid subquery issues with limit/offset
+    });
 
-    // Execute the query
-    const [routes] = await sequelize.query(query);
-    // Format the routes data
-    let formattedRoutes = Array.isArray(routes)
-      ? routes.map((route: any) => {
-          // Parse the JSON string to an array of aircraft objects
-          const aircraftArray = JSON.parse(route.aircrafts || "[]");
-
-          return {
-            id: route.id,
-            fltnum: route.fltnum,
-            dep: route.dep,
-            arr: route.arr,
-            duration: formatFlightTime(parseInt(route.duration)),
-            notes: route.notes,
-            aircraft: aircraftArray
-              .filter(
-                (ac: any) =>
-                  ac.aircraft_id && ac.aircraft_name && ac.livery_name
-              )
-              .map((ac: any) => ({
-                id: ac.aircraft_id,
-                name: ac.aircraft_name,
-                liveryname: ac.livery_name,
-                notes: ac.notes || null,
-              })),
-          };
-        })
-      : [];
-
-    // Get total count
-    const countQuery = `
-      SELECT COUNT(DISTINCT r.id) as total
-      FROM routes r
-      LEFT JOIN route_aircraft ra ON r.id = ra.routeid
-      LEFT JOIN aircraft a ON ra.aircraftid = a.id
-      WHERE 1=1
-      ${fltnum ? `AND r.fltnum LIKE '%${fltnum}%'` : ""}
-      ${dep ? `AND r.dep = '${dep}'` : ""}
-      ${arr ? `AND r.arr = '${arr}'` : ""}
-      ${aircraftId ? `AND a.id = '${aircraftId}'` : ""}
-    `;
-
-    const [countResult] = await sequelize.query(countQuery);
-    const total = (countResult[0] as { total: number }).total;
+    // Format the response
+    const formattedRoutes = routes.map((route: any) => ({
+      id: route.id,
+      fltnum: route.fltnum,
+      dep: route.dep,
+      arr: route.arr,
+      duration: formatFlightTime(route.duration),
+      notes: route.notes,
+      aircraft: route.Aircraft || [],
+    }));
 
     return NextResponse.json({
       success: true,
       data: {
         routes: formattedRoutes,
-        total,
+        total: formattedRoutes.length,
       },
     });
   } catch (error) {
     console.error("Error fetching routes:", error);
     return NextResponse.json(
       { success: false, message: "Failed to fetch routes" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -130,16 +102,12 @@ export async function POST(request: Request) {
     if (!fltnum || !dep || !arr || !duration) {
       return NextResponse.json(
         { success: false, message: "Missing required fields" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    // Convert duration from HH:MM format to seconds if needed
-    let durationInSeconds = duration;
-    if (typeof duration === "string" && duration.includes(":")) {
-      const [hours, minutes] = duration.split(":").map(Number);
-      durationInSeconds = hours * 60 * 60 + minutes * 60;
-    }
+    // Convert duration to seconds
+    const durationInSeconds = convertDurationToSeconds(duration);
 
     // Create the route
     const route = await models.Route.create({
@@ -152,9 +120,9 @@ export async function POST(request: Request) {
 
     // Add aircraft associations if provided
     if (Array.isArray(aircraft) && aircraft.length > 0) {
-      const routeAircraftEntries = aircraft.map((aircraft) => ({
+      const routeAircraftEntries = aircraft.map((ac) => ({
         routeid: route.id,
-        aircraftid: aircraft.id,
+        aircraftid: ac.id || ac,
       }));
 
       await models.RouteAircraft.bulkCreate(routeAircraftEntries);
@@ -169,7 +137,7 @@ export async function POST(request: Request) {
     console.error("Error creating route:", error);
     return NextResponse.json(
       { success: false, message: "Failed to create route" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -184,7 +152,7 @@ export async function PUT(request: Request) {
     if (!id || !fltnum || !dep || !arr || !duration) {
       return NextResponse.json(
         { success: false, message: "Missing required fields" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -193,16 +161,12 @@ export async function PUT(request: Request) {
     if (!route) {
       return NextResponse.json(
         { success: false, message: "Route not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
-    // Convert duration from HH:MM format to seconds if needed
-    let durationInSeconds = duration;
-    if (typeof duration === "string" && duration.includes(":")) {
-      const [hours, minutes] = duration.split(":").map(Number);
-      durationInSeconds = hours * 60 * 60 + minutes * 60;
-    }
+    // Convert duration to seconds
+    const durationInSeconds = convertDurationToSeconds(duration);
 
     // Update the route
     await route.update({
@@ -213,7 +177,7 @@ export async function PUT(request: Request) {
       notes: notes || "",
     });
 
-    // Update aircraft associations if provided
+    // Only update aircraft associations if provided
     if (Array.isArray(aircraft)) {
       // Remove existing associations
       await models.RouteAircraft.destroy({
@@ -240,7 +204,7 @@ export async function PUT(request: Request) {
     console.error("Error updating route:", error);
     return NextResponse.json(
       { success: false, message: "Failed to update route" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -254,7 +218,7 @@ export async function DELETE(request: Request) {
     if (!id) {
       return NextResponse.json(
         { success: false, message: "Route ID is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -263,7 +227,7 @@ export async function DELETE(request: Request) {
     if (!route) {
       return NextResponse.json(
         { success: false, message: "Route not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -283,7 +247,7 @@ export async function DELETE(request: Request) {
     console.error("Error deleting route:", error);
     return NextResponse.json(
       { success: false, message: "Failed to delete route" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

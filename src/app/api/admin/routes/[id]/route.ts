@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import sequelize from "@/lib/database";
 import { formatFlightTime } from "@/lib/utils/time";
+import { formatFlightTimewithcolon } from "@/lib/utils/format-flight-time";
 
 export async function GET(
   _request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } },
 ) {
   try {
     const routeId = params.id;
@@ -49,7 +50,7 @@ export async function GET(
     if (!route) {
       return NextResponse.json(
         { success: false, message: "Route not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -59,7 +60,9 @@ export async function GET(
       fltnum: (route as any).fltnum,
       dep: (route as any).dep,
       arr: (route as any).arr,
-      duration: formatFlightTime(parseInt((route as any).duration)),
+      duration: formatFlightTimewithcolon(
+        parseFloat(formatFlightTime(parseInt((route as any).duration))),
+      ),
       rawDuration: parseInt((route as any).duration),
       notes: (route as any).notes,
       aircraft: JSON.parse((route as any).aircraft || "[]"),
@@ -70,7 +73,7 @@ export async function GET(
     console.error("Error fetching route details:", error);
     return NextResponse.json(
       { success: false, message: "Failed to fetch route details" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

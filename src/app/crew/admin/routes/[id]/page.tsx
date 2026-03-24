@@ -194,7 +194,7 @@ export default function EditRoutePage() {
                   <Select
                     onValueChange={(value) => {
                       const ac = aircraftOptions.find(
-                        (a) => a.id.toString() === value
+                        (a) => a.id.toString() === value,
                       );
                       if (
                         ac &&
@@ -241,7 +241,7 @@ export default function EditRoutePage() {
                         const filtered = aircraftOptions.filter(
                           (a) =>
                             a.name.toLowerCase().includes(term) ||
-                            a.liveryname.toLowerCase().includes(term)
+                            a.liveryname.toLowerCase().includes(term),
                         );
                         setFilteredAircraft(filtered);
                         setIsSearching(false);
@@ -267,7 +267,7 @@ export default function EditRoutePage() {
                           setRouteData({
                             ...routeData,
                             aircraft: routeData.aircraft.filter(
-                              (x) => x.id !== a.id
+                              (x) => x.id !== a.id,
                             ),
                           })
                         }
