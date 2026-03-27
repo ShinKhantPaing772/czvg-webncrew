@@ -1,7 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Plus, Edit, Trash, ArrowRight, Loader2, Search } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import {
+  Plus,
+  Edit,
+  Trash,
+  ArrowRight,
+  Loader2,
+  Search,
+  Upload,
+} from "lucide-react";
 import {
   Table,
   TableHeader,
@@ -31,6 +39,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { CrewHeader } from "@/components/crew-header";
 import {
   Card,
@@ -110,11 +128,125 @@ export default function RoutesPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [filteredAircraft, setFilteredAircraft] = useState<Aircraft[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [isImportingBulk, setIsImportingBulk] = useState(false);
+  const [importLoading, setImportLoading] = useState(false);
+  const [importResult, setImportResult] = useState<any>(null);
+  const [showImportResult, setShowImportResult] = useState(false);
+  const [importStep, setImportStep] = useState<"upload" | "mapping" | "result">(
+    "upload",
+  );
+  const [csvPreview, setCsvPreview] = useState<any>(null);
+  const [aircraftMappings, setAircraftMappings] = useState<
+    Record<string, number>
+  >({});
+  const [availableAircraft, setAvailableAircraft] = useState<any[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const itemsPerPage = 10;
 
   useEffect(() => {
     setFilteredAircraft(aircraftOptions);
   }, [aircraftOptions]);
+
+  const handleBulkImport = async (file: File) => {
+    try {
+      setImportLoading(true);
+
+      // Step 1: Parse and preview CSV
+      const csvContent = await file.text();
+
+      const response = await fetch("/api/admin/routes/bulk-import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "preview",
+          csvContent,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        setImportResult({
+          success: false,
+          message: data.message,
+          errors: data.errors,
+        });
+        setShowImportResult(true);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+        setCsvPreview(null);
+        setAvailableAircraft([]);
+        setAircraftMappings({});
+        setImportStep("upload");
+        return;
+      }
+
+      // Show mapping step
+      setCsvPreview(data.preview);
+      setAvailableAircraft(data.availableAircraft);
+      setImportStep("mapping");
+
+      // Initialize mappings (empty by default)
+      const defaultMappings: Record<string, number> = {};
+      setAircraftMappings(defaultMappings);
+    } catch (error) {
+      console.error("Error parsing CSV:", error);
+      setImportResult({
+        success: false,
+        message: `Failed to parse CSV: ${(error as Error).message}`,
+      });
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      setCsvPreview(null);
+      setAvailableAircraft([]);
+      setAircraftMappings({});
+      setImportStep("upload");
+      setShowImportResult(true);
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
+  const handleConfirmImport = async () => {
+    try {
+      setImportLoading(true);
+
+      // Step 2: Import with aircraft mappings
+      const response = await fetch("/api/admin/routes/bulk-import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "import",
+          routes: csvPreview,
+          mappings: aircraftMappings,
+        }),
+      });
+
+      const data = await response.json();
+      setImportResult(data);
+      setImportStep("result");
+      setShowImportResult(true);
+
+      if (data.success || data.createdCount > 0) {
+        // Refresh routes after successful import
+        setTimeout(() => {
+          fetchRoutes();
+        }, 1000);
+      }
+    } catch (error) {
+      console.error("Error importing routes:", error);
+      setImportResult({
+        success: false,
+        message: `Failed to import routes: ${(error as Error).message}`,
+      });
+      setImportStep("result");
+      setShowImportResult(true);
+    } finally {
+      setImportLoading(false);
+    }
+  };
   const [newRoute, setNewRoute] = useState<newRoute>({
     fltnum: "",
     dep: "",
@@ -174,7 +306,7 @@ export default function RoutesPage() {
           id: aircraft.id,
           name: aircraft.name,
           liveryname: aircraft.liveryname,
-        }))
+        })),
       );
     } catch (err) {
       console.error("Error fetching aircraft:", err);
@@ -195,7 +327,7 @@ export default function RoutesPage() {
   const pageCount = Math.ceil(sortedRoutes.length / itemsPerPage);
   const paginatedRoutes = sortedRoutes.slice(
     (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
+    currentPage * itemsPerPage,
   );
 
   const handleDeleteRoute = async () => {
@@ -206,7 +338,7 @@ export default function RoutesPage() {
         `/api/admin/routes?id=${(selectedRoute as any).id}`,
         {
           method: "DELETE",
-        }
+        },
       );
 
       if (!response.ok) {
@@ -244,10 +376,27 @@ export default function RoutesPage() {
       <div className="flex flex-1 flex-col gap-4 ">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-2xl font-bold">Routes</h1>
-          <Button onClick={() => setIsAddingRoute(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Route
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => {
+                setIsImportingBulk(true);
+                setImportStep("upload");
+                setCsvPreview(null);
+                setAvailableAircraft([]);
+                setAircraftMappings({});
+                setImportResult(null);
+                setShowImportResult(false);
+              }}
+              variant="outline"
+            >
+              <Upload className="mr-2 h-4 w-4" />
+              Bulk Import CSV
+            </Button>
+            <Button onClick={() => setIsAddingRoute(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Route
+            </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
@@ -601,7 +750,7 @@ export default function RoutesPage() {
                     <Select
                       onValueChange={(value) => {
                         const ac = aircraftOptions.find(
-                          (a) => a.id.toString() === value
+                          (a) => a.id.toString() === value,
                         );
                         if (
                           ac &&
@@ -643,7 +792,7 @@ export default function RoutesPage() {
                           const filtered = aircraftOptions.filter(
                             (a) =>
                               a.name.toLowerCase().includes(term) ||
-                              a.liveryname.toLowerCase().includes(term)
+                              a.liveryname.toLowerCase().includes(term),
                           );
                           setFilteredAircraft(filtered);
                           setIsSearching(false);
@@ -669,7 +818,7 @@ export default function RoutesPage() {
                             setNewRoute({
                               ...newRoute,
                               aircraft: newRoute.aircraft.filter(
-                                (x) => x.id !== a.id
+                                (x) => x.id !== a.id,
                               ),
                             })
                           }
@@ -738,6 +887,306 @@ export default function RoutesPage() {
         <div>
           <span>Routes Found: {routes.length}</span>
         </div>
+
+        {/* Bulk Import Dialog - Upload Step */}
+        <Dialog
+          open={isImportingBulk && importStep === "upload"}
+          onOpenChange={(open) => {
+            if (!open) {
+              setIsImportingBulk(false);
+              setImportStep("upload");
+              if (fileInputRef.current) {
+                fileInputRef.current.value = "";
+              }
+            }
+          }}
+        >
+          <DialogContent className="max-w-2xl bg-white">
+            <DialogHeader>
+              <DialogTitle>Bulk Import Routes from CSV</DialogTitle>
+              <DialogDescription>
+                Upload a CSV file to import multiple routes at once.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-4">
+              <div className="bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv"
+                  onChange={(e) => {
+                    if (e.target.files?.[0]) {
+                      handleBulkImport(e.target.files[0]);
+                    }
+                  }}
+                  disabled={importLoading}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={importLoading}
+                  className="flex flex-col items-center gap-2 w-full"
+                >
+                  {importLoading ? (
+                    <>
+                      <Loader2 className="h-8 w-8 text-gray-400 animate-spin" />
+                      <span className="text-sm text-gray-600">
+                        Parsing CSV...
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-8 w-8 text-gray-400" />
+                      <span className="text-sm font-medium text-gray-600">
+                        Click to upload CSV or drag and drop
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        CSV files only
+                      </span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="font-semibold text-sm text-blue-900 mb-2">
+                  CSV Format
+                </h4>
+                <p className="text-xs text-blue-800 mb-2">
+                  Your CSV file should have the following columns (in any
+                  order):
+                </p>
+                <code className="text-xs bg-white border border-blue-200 rounded px-2 py-1 block text-blue-900 font-mono">
+                  fltnum, dep, arr, duration, notes, aircraft
+                </code>
+                <p className="text-xs text-blue-800 mt-2">Example:</p>
+                <pre className="text-xs bg-white border border-blue-200 rounded px-2 py-1 block text-blue-900 font-mono overflow-x-auto">
+                  {`VA101,KJFK,KLAX,5:30,NY to LA,Boeing 787; Airbus A350
+VA102,KLAX,KJFK,5:45,LA to NY,Boeing 787`}
+                </pre>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsImportingBulk(false);
+                  setImportStep("upload");
+                }}
+                disabled={importLoading}
+              >
+                Cancel
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Bulk Import Dialog - Aircraft Mapping Step */}
+        <Dialog
+          open={isImportingBulk && importStep === "mapping"}
+          onOpenChange={(open) => {
+            if (!open) {
+              setIsImportingBulk(false);
+              setImportStep("upload");
+              setCsvPreview(null);
+            }
+          }}
+        >
+          <DialogContent className="max-w-3xl bg-white max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Map Aircraft to Database Records</DialogTitle>
+              <DialogDescription>
+                Match aircraft names from your CSV with aircraft in the
+                database.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-6 py-4">
+              {/* Aircraft Mapping */}
+              {csvPreview &&
+                csvPreview.some((r: any) => r.aircraftNames?.length > 0) && (
+                  <div className="space-y-3">
+                    <h3 className="font-semibold text-sm">Aircraft Mappings</h3>
+                    <div className="space-y-3 bg-gray-50 p-4 rounded-lg">
+                      {Array.from(
+                        new Set(
+                          csvPreview.flatMap((r: any) => r.aircraftNames || []),
+                        ),
+                      ).map((aircraftName: any) => (
+                        <div
+                          key={aircraftName}
+                          className="grid grid-cols-3 gap-2 items-end"
+                        >
+                          <div>
+                            <Label className="text-xs text-gray-600">
+                              CSV Aircraft
+                            </Label>
+                            <div className="text-sm font-medium p-2 bg-white border rounded">
+                              {aircraftName}
+                            </div>
+                          </div>
+                          <div className="flex justify-center">→</div>
+                          <div>
+                            <Label className="text-xs text-gray-600">
+                              Database Aircraft
+                            </Label>
+                            <Select
+                              value={
+                                aircraftMappings[aircraftName] !== undefined
+                                  ? aircraftMappings[aircraftName].toString()
+                                  : "none"
+                              }
+                              onValueChange={(value) => {
+                                if (value !== "none") {
+                                  setAircraftMappings({
+                                    ...aircraftMappings,
+                                    [aircraftName]: parseInt(value, 10),
+                                  });
+                                } else {
+                                  const newMappings = { ...aircraftMappings };
+                                  delete newMappings[aircraftName];
+                                  setAircraftMappings(newMappings);
+                                }
+                              }}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select aircraft" />
+                              </SelectTrigger>
+                              <SelectContent className="bg-white max-h-[150px]">
+                                <SelectItem value="none">
+                                  <span className="text-gray-500">
+                                    None (skip)
+                                  </span>
+                                </SelectItem>
+                                {availableAircraft.map((ac: any) => (
+                                  <SelectItem
+                                    key={ac.id}
+                                    value={ac.id.toString()}
+                                  >
+                                    {ac.name}
+                                    {ac.liveryname && ` (${ac.liveryname})`}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+              {/* Routes Preview */}
+              <div className="space-y-2">
+                <h3 className="font-semibold text-sm">Routes to Import</h3>
+                <div className="bg-gray-50 p-4 rounded-lg space-y-2 max-h-[300px] overflow-y-auto">
+                  {csvPreview?.map((route: any, idx: number) => (
+                    <div
+                      key={idx}
+                      className="text-sm p-2 bg-white border rounded"
+                    >
+                      <div className="font-medium">{route.fltnum}</div>
+                      <div className="text-gray-600">
+                        {route.dep} → {route.arr} ({route.duration})
+                      </div>
+                      {route.aircraftNames?.length > 0 && (
+                        <div className="text-xs text-blue-600 mt-1">
+                          Aircraft: {route.aircraftNames.join(", ")}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsImportingBulk(false);
+                  setImportStep("upload");
+                  setCsvPreview(null);
+                }}
+                disabled={importLoading}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleConfirmImport} disabled={importLoading}>
+                {importLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Importing...
+                  </>
+                ) : (
+                  "Import Routes"
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Import Result Dialog */}
+        <AlertDialog open={showImportResult} onOpenChange={setShowImportResult}>
+          <AlertDialogContent className="bg-white">
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {importResult?.success
+                  ? "Import Successful"
+                  : importResult?.createdCount > 0
+                    ? "Import Completed with Errors"
+                    : "Import Failed"}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {importResult?.message}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+
+            {importResult?.createdCount !== undefined && (
+              <div className="space-y-2 py-4 text-sm">
+                <div className="flex justify-between">
+                  <span>Routes Created:</span>
+                  <span className="font-semibold text-green-600">
+                    {importResult.createdCount}
+                  </span>
+                </div>
+                {importResult?.errorCount > 0 && (
+                  <div className="flex justify-between">
+                    <span>Errors:</span>
+                    <span className="font-semibold text-red-600">
+                      {importResult.errorCount}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {importResult?.errors && importResult.errors.length > 0 && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 max-h-48 overflow-y-auto">
+                <p className="text-xs font-semibold text-red-900 mb-2">
+                  Errors:
+                </p>
+                <ul className="space-y-1 text-xs text-red-800">
+                  {importResult.errors.map((error: string, idx: number) => (
+                    <li key={idx}>• {error}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <AlertDialogFooter>
+              <AlertDialogAction
+                onClick={() => setShowImportResult(false)}
+                className="bg-blue-600 text-white hover:bg-blue-700"
+              >
+                Close
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </CrewHeader>
   );

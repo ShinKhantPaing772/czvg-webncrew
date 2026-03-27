@@ -1,0 +1,11 @@
+fltnum,dep,arr,duration,notes,aircraft
+VA101,KJFK,KLAX,5:30,New York to Los Angeles,Boeing 787 Dreamliner; Airbus A350
+VA102,KLAX,KJFK,5:45,Los Angeles to New York,Boeing 787 Dreamliner; ATR
+VA103,EGLL,EDDF,1:45,London to Frankfurt,Airbus A320; Boeing 737
+VA104,EDDF,EGLL,1:50,Frankfurt to London,Airbus A320; ABC
+VA105,KSFO,KMIA,5:00,San Francisco to Miami,Boeing 777; Boeing 787 Dreamliner
+VA106,KMIA,KSFO,5:15,Miami to San Francisco,Boeing 777; Bombardier
+VA107,YSSY,YPPH,4:00,Sydney to Perth,Airbus A330; Boeing 787 Dreamliner
+VA108,YPPH,YSSY,4:10,Perth to Sydney,Airbus A330; CRJ
+VA109,OMDB,VIDP,3:30,Dubai to Delhi,Boeing 777; Airbus A350
+VA110,VIDP,OMDB,3:45,Delhi to Dubai,Boeing 777; E90

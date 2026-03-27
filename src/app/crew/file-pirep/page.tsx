@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { Loader2, PlaneIcon, RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -83,10 +83,10 @@ export default function FilePirep() {
   const [isFetchingAcars, setIsFetchingAcars] = useState(false);
   // State for aircraft data
   const [originalAircraftData, setOriginalAircraftData] = useState<aircraft[]>(
-    []
+    [],
   );
   const [filteredAircraftData, setFilteredAircraftData] = useState<aircraft[]>(
-    []
+    [],
   );
   const [isLoadingAircraft, setIsLoadingAircraft] = useState(false);
   const searchParams = useSearchParams();
@@ -136,6 +136,11 @@ export default function FilePirep() {
   // Handle form submission
   async function onSubmit(data: FormValues) {
     setIsLoading(true);
+
+    if (!user?.id) {
+      setIsLoading(false);
+      throw new Error("User not authenticated");
+    }
 
     try {
       const response = await fetch("/api/pireps", {
@@ -250,20 +255,11 @@ export default function FilePirep() {
                           <Calendar
                             mode="single"
                             selected={
-                              field.value ? new Date(field.value) : undefined
+                              field.value ? parseISO(field.value) : undefined
                             }
                             onSelect={(date) => {
                               if (date) {
-                                const year = date.getFullYear();
-                                const month = String(
-                                  date.getMonth() + 1
-                                ).padStart(2, "0");
-                                const day = String(date.getDate()).padStart(
-                                  2,
-                                  "0"
-                                );
-                                const formatted = `${year}-${month}-${day}`; // ✅ stays local
-                                field.onChange(formatted);
+                                field.onChange(format(date, "yyyy-MM-dd"));
                               }
                             }}
                             disabled={(date) =>
@@ -336,7 +332,7 @@ export default function FilePirep() {
                                 placeholder={
                                   originalAircraftData.find(
                                     (aircraft: { id: string }) =>
-                                      aircraft.id === field.value
+                                      aircraft.id === field.value,
                                   )?.name || "Select aircraft.."
                                 }
                               />
@@ -354,7 +350,7 @@ export default function FilePirep() {
                                       .includes(searchTerm) ||
                                     aircraft.liveryname
                                       .toLowerCase()
-                                      .includes(searchTerm)
+                                      .includes(searchTerm),
                                 );
                                 setFilteredAircraftData(filtered);
                               }}
