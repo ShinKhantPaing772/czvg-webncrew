@@ -43,6 +43,7 @@ export default function EditRoutePage() {
   const [loading, setLoading] = useState(true);
   const [filteredAircraft, setFilteredAircraft] = useState<Aircraft[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setFilteredAircraft(aircraftOptions);
@@ -76,6 +77,7 @@ export default function EditRoutePage() {
   const handleSave = async () => {
     if (!routeData) return;
 
+    setSaving(true);
     try {
       const res = await fetch("/api/admin/routes", {
         method: "PUT",
@@ -98,6 +100,8 @@ export default function EditRoutePage() {
     } catch (err) {
       console.error(err);
       alert("Error updating route.");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -295,10 +299,13 @@ export default function EditRoutePage() {
               <Button
                 variant="outline"
                 onClick={() => router.push("/crew/admin/routes")}
+                disabled={saving}
               >
                 Cancel
               </Button>
-              <Button onClick={handleSave}>Save Changes</Button>
+              <Button onClick={handleSave} disabled={saving}>
+                {saving ? "Saving..." : "Save Changes"}
+              </Button>
             </div>
           </CardContent>
         </Card>

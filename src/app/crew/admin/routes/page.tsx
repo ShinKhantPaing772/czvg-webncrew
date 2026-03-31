@@ -966,6 +966,16 @@ export default function RoutesPage() {
                   {`VA101,KJFK,KLAX,5:30,NY to LA,Boeing 787; Airbus A350
 VA102,KLAX,KJFK,5:45,LA to NY,Boeing 787`}
                 </pre>
+                <p className="text-xs text-blue-800 mt-2">
+                  Download a sample CSV template{" "}
+                  <a
+                    href="/routes-template.csv"
+                    download
+                    className="text-blue-500 hover:underline"
+                  >
+                    here.
+                  </a>
+                </p>
               </div>
             </div>
 
