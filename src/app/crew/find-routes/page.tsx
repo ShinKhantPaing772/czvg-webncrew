@@ -16,7 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { formatFlightTime } from "@/lib/utils/format-flight-time";
+import { formatFlightTimeHM } from "@/lib/utils/format-flight-time";
 import {
   Select,
   SelectTrigger,
@@ -130,7 +130,7 @@ export default function FindRoutes() {
           fltnum: route.fltnum,
           dep: route.dep,
           arr: route.arr,
-          duration: formatFlightTime(parseFloat(route.duration)),
+          duration: formatFlightTimeHM(parseFloat(route.duration)),
           notes: route.notes,
           aircraft: route.aircraft,
         }));
@@ -207,7 +207,7 @@ export default function FindRoutes() {
 
   // Handle sort request
   const requestSort = (
-    key: "fltnum" | "dep" | "arr" | "duration" | "aircraft"
+    key: "fltnum" | "dep" | "arr" | "duration" | "aircraft",
   ) => {
     let direction: "ascending" | "descending" = "ascending";
     if (
@@ -224,7 +224,7 @@ export default function FindRoutes() {
   const totalPages = Math.ceil(filteredRoutes.length / itemsPerPage);
   const paginatedRoutes = filteredRoutes.slice(
     (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
+    currentPage * itemsPerPage,
   );
 
   return (
@@ -509,7 +509,7 @@ export default function FindRoutes() {
                       onClick={(e) => {
                         e.preventDefault();
                         setCurrentPage((prev) =>
-                          Math.min(prev + 1, totalPages)
+                          Math.min(prev + 1, totalPages),
                         );
                       }}
                       aria-disabled={currentPage === totalPages}

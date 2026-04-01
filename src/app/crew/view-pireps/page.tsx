@@ -30,6 +30,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { formatFlightTimeHM } from "@/lib/utils/format-flight-time";
 import {
   Dialog,
   DialogContent,
@@ -49,7 +50,6 @@ import {
 } from "@/components/ui/pagination";
 import { Input } from "@/components/ui/input"; // 🔍 new import
 import { useSession } from "@/hooks/use-session";
-import { formatFlightTime } from "@/lib/utils/format-flight-time";
 
 interface Pirep {
   id: number;
@@ -128,7 +128,7 @@ export default function ViewPireps() {
   const totalPages = Math.ceil(filteredPireps.length / itemsPerPage);
   const paginatedPireps = filteredPireps.slice(
     (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
+    currentPage * itemsPerPage,
   );
 
   const getStatusBadge = (status: number) => {
@@ -271,7 +271,7 @@ export default function ViewPireps() {
                           ")"}
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
-                        {formatFlightTime(pirep.flighttime)}
+                        {formatFlightTimeHM(pirep.flighttime)}
                       </TableCell>
                       <TableCell>{getStatusBadge(pirep.status)}</TableCell>
                       <TableCell className="text-right">
@@ -293,8 +293,8 @@ export default function ViewPireps() {
                                   pirep.status === 1
                                     ? "approved"
                                     : pirep.status === 0
-                                    ? "pending"
-                                    : "rejected"
+                                      ? "pending"
+                                      : "rejected",
                                 )}
                                 <span>PIREP Details: {pirep.id}</span>
                               </DialogTitle>
@@ -338,7 +338,7 @@ export default function ViewPireps() {
                                         Duration:
                                       </dt>
                                       <dd>
-                                        {formatFlightTime(pirep.flighttime)}
+                                        {formatFlightTimeHM(pirep.flighttime)}
                                       </dd>
                                     </div>
                                     <div className="flex justify-between">

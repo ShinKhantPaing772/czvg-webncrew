@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import Link from "next/link";
 import { useSession } from "@/hooks/use-session";
-import { formatFlightTime } from "@/lib/utils/format-flight-time";
+import { formatFlightTimeHM } from "@/lib/utils/format-flight-time";
 
 interface Route {
   id: number;
@@ -50,7 +50,7 @@ export default function ViewRoute() {
         const data = await response.json();
         const formattedRoute = {
           ...data.data,
-          duration: formatFlightTime(data.data.duration),
+          duration: formatFlightTimeHM(data.data.duration),
         };
         if (data.success) {
           setRoute(formattedRoute);
@@ -231,7 +231,7 @@ export default function ViewRoute() {
                           </Badge>
                           <div className="flex gap-3">
                             <Badge variant="outline">
-                              {formatFlightTime(flight.flightTime)}
+                              {formatFlightTimeHM(flight.flightTime)}
                             </Badge>
                             <Badge variant="outline">
                               {new Date(flight.date).toLocaleDateString()}

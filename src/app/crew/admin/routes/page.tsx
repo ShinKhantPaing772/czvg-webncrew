@@ -57,7 +57,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatFlightTime } from "@/lib/utils/format-flight-time";
+import { formatFlightTimeHM } from "@/lib/utils/format-flight-time";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -555,7 +555,7 @@ export default function RoutesPage() {
                           </div>
                         </TableCell>
                         <TableCell className="hidden md:table-cell">
-                          {formatFlightTime(route.duration)}
+                          {formatFlightTimeHM(route.duration)}
                         </TableCell>
                         <TableCell className="hidden md:table-cell">
                           {route.notes}

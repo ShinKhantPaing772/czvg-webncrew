@@ -3,8 +3,18 @@ import { Op } from "sequelize";
 import jwt from "jsonwebtoken";
 import { models } from "@/lib/models";
 
+const JWT_SECRET = process.env.JWT_SECRET;
+
 export async function POST(request: Request) {
   try {
+    if (!JWT_SECRET) {
+      console.error("[Verify] JWT_SECRET is not configured");
+      return NextResponse.json(
+        { error: "Authentication configuration error" },
+        { status: 500 },
+      );
+    }
+
     let token: string | null = null;
 
     // --- CLEANUP STEP: Delete all expired tokens ---
@@ -35,6 +45,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Token is required" }, { status: 400 });
     }
 
+    const decoded = jwt.verify(token, JWT_SECRET) as {
+      id?: number;
+      email?: string;
+      iat?: number;
+      exp?: number;
+    };
+
+    if (!decoded || !decoded.id) {
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+    }
+
     // Find token in database
     const tokenRecord = await models.Token.findOne({
       where: { token },
@@ -42,6 +63,10 @@ export async function POST(request: Request) {
 
     // Check if token exists
     if (!tokenRecord) {
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+    }
+
+    if (tokenRecord.pilotId !== decoded.id) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
 
@@ -88,7 +113,7 @@ export async function POST(request: Request) {
     console.error("[Verify] Error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

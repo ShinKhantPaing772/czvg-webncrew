@@ -20,7 +20,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { CrewHeader } from "@/components/crew-header";
 
-import { formatFlightTime } from "@/lib/utils/format-flight-time";
+import { formatFlightTimeHM } from "@/lib/utils/format-flight-time";
 import { useSession } from "@/hooks/use-session";
 import { useEffect, useState } from "react";
 
@@ -69,9 +69,9 @@ export default function UserDashboard() {
                 pirep.Aircraft?.name + " (" + pirep.Aircraft.liveryname + ")" ||
                 pirep.aircraftid ||
                 "N/A",
-              duration: formatFlightTime(pirep.flighttime),
+              duration: formatFlightTimeHM(pirep.flighttime),
               status: pirep.status,
-            })
+            }),
           );
 
         setPireps(recentPireps);
@@ -130,7 +130,7 @@ export default function UserDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {formatFlightTime(Number(user.flightTime))}
+                  {formatFlightTimeHM(Number(user.flightTime))}
                 </div>
               </CardContent>
             </Card>
@@ -206,15 +206,15 @@ export default function UserDashboard() {
                             parseInt(flight.status) === 0
                               ? "bg-yellow-50 text-yellow-700 border-yellow-200"
                               : parseInt(flight.status) === 1
-                              ? "bg-green-50 text-green-700 border-green-200"
-                              : "bg-red-50 text-red-700 border-red-200"
+                                ? "bg-green-50 text-green-700 border-green-200"
+                                : "bg-red-50 text-red-700 border-red-200"
                           }
                         >
                           {parseInt(flight.status) === 0
                             ? "Pending"
                             : parseInt(flight.status) === 1
-                            ? "Accepted"
-                            : "Rejected"}
+                              ? "Accepted"
+                              : "Rejected"}
                         </Badge>
                       </TableCell>
                     </TableRow>

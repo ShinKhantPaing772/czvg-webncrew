@@ -58,7 +58,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { formatFlightTime } from "@/lib/utils/format-flight-time";
+import { formatFlightTimeHM } from "@/lib/utils/format-flight-time";
 
 // Define types for API responses
 interface Pilot {
@@ -534,7 +534,7 @@ export default function AdminPireps() {
                                                   Duration:
                                                 </dt>
                                                 <dd>
-                                                  {formatFlightTime(
+                                                  {formatFlightTimeHM(
                                                     pirep.flighttime,
                                                   )}
                                                 </dd>
