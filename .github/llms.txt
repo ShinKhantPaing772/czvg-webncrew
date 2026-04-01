@@ -1,0 +1,962 @@
+# Infinite Flight Live API — Full Reference
+
+> Simulated flight data only. Not for real-world aviation use.
+
+---
+
+## Base URL
+
+    https://api.infiniteflight.com/public/v2
+
+## Authentication
+
+Every request requires an API key. Pass it one of two ways:
+- Query parameter: `?apikey=YOUR_KEY`
+- Header: `Authorization: Bearer YOUR_KEY`
+
+Request a key: hello@infiniteflight.com
+
+## Rate Limits
+
+- Default: 30 requests/min per key.
+- Pro subscription linked to key: 100 requests/min.
+- Manual per-key overrides may be applied by Infinite Flight staff.
+- If a Pro subscription lapses, the key returns to the free-tier default.
+- Exceeding returns HTTP 429.
+
+## IMPORTANT — Usage Rules
+
+These rules are strictly enforced. Violating them will result in your API key and associated accounts being permanently banned.
+
+### Mandatory Polling Intervals
+
+Do NOT treat the Live API as a streaming feed. These are hard minimums that your code MUST enforce.
+
+| Data | Minimum Interval | Notes |
+|------|-----------------|-------|
+| `GET /sessions`, `GET /sessions/{id}` | 10 min | Server-cached for 10 min. Faster polling returns identical data. |
+| `GET .../flights`, `GET .../atc`, `GET .../airport/.../status` | 15 sec | Reuse list responses. Do not fetch individual items if the list already has the data. |
+| `GET .../flights/{id}/route`, `GET .../flights/{id}/flightplan` | 15 sec | Only fetch when a user specifically requests a flight's details. |
+| User endpoints (`/users/...`) | 5 min | Historical data. Cache aggressively. |
+| `GET /aircraft`, `GET /aircraft/liveries`, `GET /airports` | 60 min+ | Reference data that rarely changes. Cache for the duration of your app session or longer. |
+
+You MUST stop all polling after 15 minutes of user inactivity and resume only when the user explicitly interacts again.
+
+### Mandatory Caching
+
+All responses MUST be cached locally for at least the minimum interval before making a new request. If you have a cached response within the interval, you MUST return it — do not call the API again.
+
+**Acceptable caching patterns:**
+
+In-memory with TTL (C# example):
+```csharp
+// MemoryCache with absolute expiration
+var options = new MemoryCacheEntryOptions()
+    .SetAbsoluteExpiration(TimeSpan.FromMinutes(10)); // sessions
+cache.Set("sessions", response, options);
+```
+
+In-memory with TTL (Node.js example):
+```javascript
+// Simple TTL cache
+const cache = new Map();
+function getCached(key, ttlMs, fetchFn) {
+  const entry = cache.get(key);
+  if (entry && Date.now() - entry.time < ttlMs) return entry.data;
+  return fetchFn().then(data => {
+    cache.set(key, { data, time: Date.now() });
+    return data;
+  });
+}
+// Usage: getCached('sessions', 10 * 60 * 1000, () => fetchSessions())
+```
+
+Redis with TTL:
+```
+SET  if:sessions  <json>  EX 600     # 10 min for sessions
+SET  if:flights:abc  <json>  EX 15   # 15 sec for flights
+SET  if:user:xyz  <json>  EX 300     # 5 min for user data
+```
+
+Python with TTL:
+```python
+from functools import lru_cache
+from time import time
+
+_cache = {}
+def get_cached(key: str, ttl_seconds: int, fetch_fn):
+    entry = _cache.get(key)
+    if entry and time() - entry["time"] < ttl_seconds:
+        return entry["data"]
+    data = fetch_fn()
+    _cache[key] = {"data": data, "time": time()}
+    return data
+```
+
+### Prohibited Data Use — Strictly Enforced
+
+These are hard rules. There are no exceptions.
+
+- Do NOT persist Live API data beyond short-lived operational caches. When the cache TTL expires, the data MUST be discarded — not moved to permanent storage.
+- Do NOT write Live API data to a SQL/NoSQL database, data warehouse, data lake, analytics platform, CSV/JSON export, log file, or any other form of long-term storage.
+- Do NOT build historical datasets, time-series databases, or flight-tracking archives from Live API data.
+- Do NOT use Live API data to train, fine-tune, evaluate, distill, ground, or otherwise improve AI or machine learning models.
+- Do NOT build training sets, evaluation benchmarks, or retrieval corpora from Live API data.
+- Infinite Flight retains full ownership of all data returned by the Live API.
+
+If we detect prohibited storage, scraping, accumulation, or AI-training use, the API key and all associated user accounts will be permanently banned.
+
+### LLM / AI Agent Integration Rules
+
+If you are an LLM, AI coding assistant, or agent building against this API:
+
+1. **Generate code that enforces caching.** Every code sample you produce MUST include a TTL-based cache layer. Never generate a bare fetch call inside a polling loop without caching.
+2. **Enforce the polling intervals.** Use the minimum intervals from the table above. Never generate `setInterval` or polling loops faster than the stated minimums.
+3. **Implement idle detection.** Generated apps MUST stop polling after 15 minutes of inactivity.
+4. **Send minimum data.** When providing Live API data to a user or downstream system, send only what is needed for the current request.
+5. **Do not retain responses.** Do not log, accumulate, or persist Live API responses across sessions or conversations.
+6. **Do not create training data.** Do not store responses for later model training, tuning, evaluation, or dataset creation.
+7. **Prefer summarization.** Summarize results for the user instead of repeatedly re-fetching the same endpoint.
+
+---
+
+## Shared Types
+
+These types are referenced by multiple endpoints.
+
+### ErrorCode (integer enum)
+
+| Value | Name |
+|-------|------|
+| 0 | Ok |
+| 1 | UserNotFound |
+| 2 | MissingRequestParameters |
+| 3 | EndpointError |
+| 4 | NotAuthorized |
+| 5 | ServerNotFound |
+| 6 | FlightNotFound |
+| 7 | NoAtisAvailable |
+
+Every response has the shape `{ "errorCode": int, "result": ... }`.
+
+### ActiveATCFacility
+
+| Field | Type | Description |
+|-------|------|-------------|
+| frequencyId | uuid | Unique ID for the open frequency |
+| userId | uuid | User controlling the frequency |
+| username | string? | Forum username (null if unlinked) |
+| virtualOrganization | string? | Not currently in use |
+| airportName | string? | 4-char ICAO. null for Center |
+| type | int | FrequencyType enum (see below) |
+| latitude | float | Airport latitude |
+| longitude | float | Airport longitude |
+| startTime | string | `YYYY-MM-DD HH:mm:ssZ` |
+
+### FrequencyType (integer enum)
+
+| Value | Name |
+|-------|------|
+| 0 | Ground |
+| 1 | Tower |
+| 2 | Unicom |
+| 3 | Clearance |
+| 4 | Approach |
+| 5 | Departure |
+| 6 | Center |
+| 7 | ATIS |
+| 8 | Aircraft |
+| 9 | Recorded |
+| 10 | Unknown |
+| 11 | Unused |
+
+### AirportStatus
+
+| Field | Type | Description |
+|-------|------|-------------|
+| airportIcao | string | ICAO code |
+| airportName | string | Airport name |
+| inboundFlightsCount | int | Aircraft inbound (flight plan ends here) |
+| inboundFlights | [uuid] | Flight IDs |
+| outboundFlightsCount | int | Aircraft departing (flight plan starts here) |
+| outboundFlights | [uuid] | Flight IDs |
+| atcFacilities | [ActiveATCFacility] | Active ATC |
+
+### AirportInfo
+
+| Field | Type | Description |
+|-------|------|-------------|
+| icao | string | ICAO code |
+| iata | string | IATA code |
+| name | string | Official name |
+| city | string | City |
+| state | string | State |
+| country | Country | Country object |
+| class | int | Classification |
+| frequenciesCount | int | Number of frequencies |
+| elevation | int | Elevation in feet |
+| latitude | float | Latitude |
+| longitude | float | Longitude |
+| timezone | string | Timezone |
+| has3dBuildings | bool | Has 3D buildings |
+| hasJetbridges | bool | Has jet bridges |
+| hasSafedockUnits | bool | Has Safedock units |
+| hasTaxiwayRouting | bool | Has taxiway routing |
+
+### Country
+
+| Field | Type | Description |
+|-------|------|-------------|
+| name | string | Country name |
+| isoCode | string | ISO code |
+
+### WorldType (integer enum)
+
+| Value | Name |
+|-------|------|
+| 0 | Solo |
+| 1 | Casual |
+| 2 | Training |
+| 3 | Expert |
+| 4 | Private |
+
+### PilotState (integer enum)
+
+Requires Infinite Flight 25.1+.
+
+| Value | Name |
+|-------|------|
+| 0 | Active |
+| 1 | AwayInFlight |
+| 2 | AwayParked |
+| 3 | InBackground |
+
+### Roles (integer IDs)
+
+| ID | Name |
+|----|------|
+| 1 | Infinite Flight Staff |
+| 2 | Moderators |
+| 64 | IFATC Members |
+
+### ATC Ranks (integer IDs)
+
+| ID | Name |
+|----|------|
+| 0 | Observer |
+| 1 | ATC Trainee |
+| 2 | ATC Apprentice |
+| 3 | ATC Specialist |
+| 4 | ATC Officer |
+| 5 | ATC Supervisor |
+| 6 | ATC Recruiter |
+| 7 | ATC Manager |
+
+### PaginatedList
+
+| Field | Type | Description |
+|-------|------|-------------|
+| pageIndex | int | Current page index |
+| totalPages | int | Total pages |
+| totalCount | int | Total entries |
+| hasPreviousPage | bool | Has previous page |
+| hasNextPage | bool | Has next page |
+| data | [T] | Entries for the page |
+
+### Coordinate
+
+| Field | Type | Description |
+|-------|------|-------------|
+| latitude | double | Decimal latitude |
+| longitude | double | Decimal longitude |
+| altitude | double | Decimal altitude |
+
+---
+
+## Endpoints
+
+---
+
+### GET /sessions
+
+List active servers.
+
+**Response** → `[SessionInfo]`
+
+#### SessionInfo
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | uuid | Server ID — use for all per-session endpoints |
+| name | string | Server name |
+| maxUsers | int | Max capacity |
+| userCount | int | Current connected users |
+| type | int | 0 = Unrestricted, 1 = Restricted |
+| worldType | int | WorldType enum |
+| minimumGradeLevel | int | Min grade index (add 1 for grade name) |
+| minimumAppVersion | string | Min app version |
+| maximumAppVersion | string? | Max app version |
+
+```json
+{
+  "errorCode": 0,
+  "result": [{
+    "id": "89573c7f-d398-4281-bcc0-3e9b7f6b8492",
+    "name": "Sample Server",
+    "maxUsers": 1000,
+    "userCount": 187,
+    "type": 0,
+    "worldType": 0,
+    "minimumGradeLevel": 2,
+    "minimumAppVersion": "24.3",
+    "maximumAppVersion": null
+  }]
+}
+```
+
+---
+
+### GET /sessions/{sessionId}/flights
+
+List all flights on a server.
+
+**Parameters:** `sessionId` (path, uuid, required)
+
+**Response** → `[FlightEntry]`
+
+#### FlightEntry
+
+| Field | Type | Description |
+|-------|------|-------------|
+| flightId | uuid | Flight ID |
+| userId | uuid | User ID |
+| aircraftId | uuid | Aircraft type ID |
+| liveryId | uuid | Livery + aircraft combo ID |
+| username | string? | Forum username (null if unlinked) |
+| virtualOrganization | string? | VO from forum account |
+| callsign | string | Flight callsign |
+| latitude | double | Current latitude |
+| longitude | double | Current longitude |
+| altitude | double | Altitude in feet |
+| speed | double | Ground speed in knots |
+| verticalSpeed | double | Vertical speed in ft/min |
+| track | double | Track in degrees |
+| heading | float | Heading in degrees |
+| lastReport | string | `YYYY-MM-DD HH:mm:ssZ` |
+| pilotState | int | PilotState enum (25.1+) |
+| isConnected | bool | Currently connected (25.1+) |
+
+```json
+{
+  "errorCode": 0,
+  "result": [{
+    "flightId": "348d1ba8-1e60-48ca-8278-42f019147de8",
+    "userId": "3f8b28bf-bbb1-4024-80ae-2a0ea9b30685",
+    "aircraftId": "de510d3d-04f8-46e0-8d65-55b888f33129",
+    "liveryId": "c875c0e9-19c2-420d-8fb4-32c151bd797c",
+    "username": "Cameron",
+    "callsign": "EC-CAM",
+    "latitude": 30.123,
+    "longitude": 31.413,
+    "altitude": 597.8,
+    "speed": 185.38,
+    "verticalSpeed": 2167.3,
+    "track": 162.14,
+    "heading": 159.34,
+    "lastReport": "2020-10-02 00:46:19Z",
+    "virtualOrganization": "IFATC [IFATC]",
+    "pilotState": 0,
+    "isConnected": true
+  }]
+}
+```
+
+---
+
+### GET /sessions/{sessionId}/flights/{flightId}/route
+
+Get the flown route of a flight. Only supported on Expert and Training servers.
+
+**Parameters:** `sessionId` (path, uuid), `flightId` (path, uuid) — both required.
+
+**Response** → `[PositionReport]`
+
+#### PositionReport
+
+| Field | Type | Description |
+|-------|------|-------------|
+| latitude | double | Decimal latitude |
+| longitude | double | Decimal longitude |
+| altitude | double | Altitude in feet |
+| track | double | Course in degrees |
+| groundSpeed | double | Ground speed in knots |
+| date | string | `YYYY-MM-DDTHH:mm:ssZ` |
+
+```json
+{
+  "errorCode": 0,
+  "result": [{
+    "latitude": 25.5299,
+    "longitude": -80.337,
+    "altitude": 18429.9,
+    "track": 75.0,
+    "groundSpeed": 194.67,
+    "date": "2021-01-06T16:20:27.3275657Z"
+  }]
+}
+```
+
+---
+
+### GET /sessions/{sessionId}/flights/{flightId}/flightplan
+
+Get the flight plan for an active flight.
+
+**Parameters:** `sessionId` (path, uuid), `flightId` (path, uuid) — both required. Flight must have a filed plan.
+
+**Response** → `FlightPlanInfo`
+
+#### FlightPlanInfo
+
+| Field | Type | Description |
+|-------|------|-------------|
+| flightPlanId | uuid | Plan ID |
+| flightId | uuid | Associated flight ID |
+| waypoints | [string] | **Deprecated.** Array of waypoint names |
+| lastUpdate | string | `YYYY-MM-DD HH:mm:ssZ` |
+| flightPlanItems | [FlightPlanItem] | Waypoints and procedures |
+| flightPlanType | int | 0 = VFR, 1 = IFR |
+
+#### FlightPlanItem
+
+| Field | Type | Description |
+|-------|------|-------------|
+| name | string | Waypoint or procedure name |
+| type | int | Procedure type (only when children is populated): 0=SID, 1=STAR, 2=Approach, 3=Track, 5=Unknown |
+| children | [FlightPlanItem]? | Waypoints inside a procedure. null if this item is a fix/VOR/user waypoint |
+| identifier | string | Identifier (not unique) |
+| altitude | int | User-set altitude in feet. -1 if not set |
+| location | Coordinate | Position |
+
+```json
+{
+  "errorCode": 0,
+  "result": {
+    "flightPlanId": "4a57de08-a3b1-48ba-a081-adeff0a5b503",
+    "flightId": "0b8cc273-d97d-4223-afac-907d09d8ca8b",
+    "waypoints": ["AMAHE", "L12R"],
+    "lastUpdate": "2021-01-06 15:35:04Z",
+    "flightPlanType": 1,
+    "flightPlanItems": [
+      {
+        "name": "AMAHE",
+        "type": 0,
+        "children": null,
+        "identifier": null,
+        "altitude": -1,
+        "location": { "latitude": 26.927, "longitude": -77.471, "altitude": 0 }
+      },
+      {
+        "name": "L12R",
+        "type": 2,
+        "children": [
+          {
+            "name": "ZESTY",
+            "type": 0,
+            "children": null,
+            "identifier": "ZESTY",
+            "altitude": 4000,
+            "location": { "latitude": 44.972, "longitude": -93.43, "altitude": 0 }
+          }
+        ],
+        "identifier": "L12R",
+        "altitude": 0,
+        "location": { "latitude": 0, "longitude": 0, "altitude": 0 }
+      }
+    ]
+  }
+}
+```
+
+---
+
+### GET /sessions/{sessionId}/atc
+
+List active ATC frequencies on a server.
+
+**Parameters:** `sessionId` (path, uuid, required)
+
+**Response** → `[ActiveATCFacility]` (see Shared Types)
+
+```json
+{
+  "errorCode": 0,
+  "result": [{
+    "frequencyId": "c2d7decc-2803-c905-5d88-81bc07626b1f",
+    "userId": "3f8b28bf-bbb1-4024-80ae-2a0ea9b30685",
+    "username": "Cameron",
+    "virtualOrganization": null,
+    "airportName": "LEPA",
+    "type": 1,
+    "latitude": 39.5516,
+    "longitude": 2.7368,
+    "startTime": "2020-10-02 15:47:25Z"
+  }]
+}
+```
+
+---
+
+### GET /sessions/{sessionId}/airport/{airportIcao}/atis
+
+Get ATIS for an airport on a server.
+
+**Parameters:** `sessionId` (path, uuid), `airportIcao` (path, string) — both required.
+
+**Response** → `string` (the ATIS text, or null if unavailable)
+
+```json
+{
+  "errorCode": 0,
+  "result": "Manchester Airport, ATIS information DELTA, time 2355 ZULU, ..."
+}
+```
+
+---
+
+### GET /sessions/{sessionId}/airport/{airportIcao}/status
+
+Get ATC status and traffic counts for an airport.
+
+**Parameters:** `sessionId` (path, uuid), `airportIcao` (path, string) — both required.
+
+**Response** → `AirportStatus` (see Shared Types)
+
+```json
+{
+  "errorCode": 0,
+  "result": {
+    "airportIcao": "VTBS",
+    "airportName": "Suvarnabhumi Airport",
+    "inboundFlightsCount": 40,
+    "inboundFlights": ["4f559855-fecc-4a8a-a95e-1d097eed9b72"],
+    "outboundFlightsCount": 19,
+    "outboundFlights": ["59e9509b-214a-4f8c-9d45-29c4f7ea01d7"],
+    "atcFacilities": [{
+      "frequencyId": "23bea566-20a0-2858-a40e-179d0699afc1",
+      "userId": "05328fc4-b651-45e9-8e1f-328095329484",
+      "username": "Rhys_V",
+      "airportName": "VTBS",
+      "type": 4,
+      "latitude": 13.6808,
+      "longitude": 100.7477,
+      "startTime": "2021-02-08 09:59:58Z"
+    }]
+  }
+}
+```
+
+---
+
+### GET /sessions/{sessionId}/world
+
+Get status of all airports with activity on a server.
+
+**Parameters:** `sessionId` (path, uuid, required)
+
+**Response** → `[AirportStatus]` (see Shared Types)
+
+---
+
+### GET /sessions/{sessionId}/notams
+
+List NOTAMs for a server.
+
+**Parameters:** `sessionId` (path, uuid, required)
+
+**Response** → `[NotamResult]`
+
+#### NotamResult
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | uuid | NOTAM ID |
+| title | string | Short title |
+| author | string | Author name |
+| type | int | 0 = NOTAM, 1 = TFR |
+| sessionId | uuid? | Session ID. null = all sessions |
+| radius | float | Radius in NM |
+| message | string | Full NOTAM text |
+| latitude | double | Center latitude |
+| longitude | double | Center longitude |
+| icao | string | Nearest airport ICAO |
+| floor | int | Low altitude in feet |
+| ceiling | int | High altitude in feet |
+| startTime | datetime | Effective from |
+| endTime | datetime | Expires at |
+
+```json
+{
+  "errorCode": 0,
+  "result": [{
+    "id": "53671e16-f937-47ca-a5db-c13b6a882851",
+    "title": "Special Airport Procedures",
+    "author": "Infinite Flight",
+    "type": 0,
+    "sessionId": "7e5dcd44-1fb5-49cc-bc2c-a9aab1f6a856",
+    "radius": 3,
+    "message": "Special Airport Procedures in Effect: ...",
+    "latitude": 22.3165,
+    "longitude": 114.2068,
+    "icao": "VHHX",
+    "floor": 0,
+    "ceiling": 10000,
+    "startTime": "2022-02-14T16:34:14.916",
+    "endTime": "2100-01-01T16:34:00"
+  }]
+}
+```
+
+---
+
+### GET /tracks
+
+List active oceanic tracks.
+
+**Parameters:** None.
+
+**Response** → `[OceanicTrack]`
+
+#### OceanicTrack
+
+| Field | Type | Description |
+|-------|------|-------------|
+| name | string | Track name (usually a letter) |
+| path | [string] | Waypoint names along the track |
+| eastLevels | [int]? | Eastbound flight levels |
+| westLevels | [int]? | Westbound flight levels |
+| type | string | e.g. "North Atlantic Tracks" |
+| lastSeen | string | `YYYY-MM-DDTHH:mm:ssZ` |
+
+```json
+{
+  "errorCode": 0,
+  "result": [{
+    "name": "A",
+    "path": ["DINIM", "51/20", "51/30", "50/40", "49/50", "JOOPY"],
+    "eastLevels": null,
+    "westLevels": [350, 370, 390],
+    "type": "North Atlantic Tracks",
+    "lastSeen": "2021-01-06T18:49:33.6300772Z"
+  }]
+}
+```
+
+---
+
+### POST /users
+
+Get stats for up to 25 users. At least one search parameter is required.
+
+**Content-Type:** `application/json`
+
+**Body:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| userIds | [uuid]? | User IDs |
+| discourseNames | [string]? | IFC usernames (case-insensitive) |
+| userHashes | [string]? | User hashes (uppercase) |
+
+**Response** → `[UserStats]`
+
+#### UserStats
+
+| Field | Type | Description |
+|-------|------|-------------|
+| userId | uuid | User ID |
+| discourseUsername | string? | Forum username |
+| virtualOrganization | string? | VO |
+| onlineFlights | int | Multiplayer flights |
+| violations | int | Total violations (L1+L2+L3) |
+| violationCountByLevel | dict | `{ "level1": int, "level2": int, "level3": int }` |
+| xp | double | Total XP |
+| landingCount | int | Total landings |
+| flightTime | double | Total flight time in minutes |
+| atcOperations | int | Total ATC ops |
+| atcRank | int? | ATC rank enum (null if not IFATC) |
+| grade | int | Grade 1–5 |
+| hash | string | Short-form user ID shown in-app |
+| roles | [int] | Role IDs |
+| groups | [uuid] | **Deprecated.** Group IDs |
+| errorCode | int | Per-user status (not currently used) |
+
+```json
+{
+  "errorCode": 0,
+  "result": [{
+    "userId": "2a11e620-1cc1-4ac6-90d1-18c4ed9cb913",
+    "discourseUsername": "Cameron",
+    "onlineFlights": 2449,
+    "violations": 102,
+    "violationCountByLevel": { "level1": 102, "level2": 0, "level3": 0 },
+    "xp": 572128,
+    "landingCount": 898,
+    "flightTime": 45983,
+    "atcOperations": 548,
+    "atcRank": 7,
+    "grade": 5,
+    "hash": "5F0973A9",
+    "roles": [1, 2, 64],
+    "groups": [],
+    "virtualOrganization": null,
+    "errorCode": 0
+  }]
+}
+```
+
+---
+
+### GET /users/{userId}
+
+Get full grade table and detailed stats for a user.
+
+**Parameters:** `userId` (path, uuid, required)
+
+**Response** → `GradeInfo`
+
+#### GradeInfo
+
+Extends UserStats fields and adds:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| totalXP | double | Total multiplayer XP |
+| total12MonthsViolations | int | Violations in last 12 months |
+| gradeDetails | GradeConfiguration | Full grade table |
+| lastLevel1ViolationDate | datetime | Default `0001-01-01T00:00:00` if none |
+| lastLevel2ViolationDate | datetime | Default `0001-01-01T00:00:00` if none |
+| lastLevel3ViolationDate | datetime | Default `0001-01-01T00:00:00` if none |
+| lastReportViolationDate | datetime | Last L2 or L3 violation date |
+
+#### GradeConfiguration
+
+| Field | Type | Description |
+|-------|------|-------------|
+| grades | [Grade] | All grade definitions |
+| gradeIndex | int | Index of user's current grade |
+| ruleDefinitions | [GradeRuleDefinition] | Rule definitions |
+
+#### Grade
+
+| Field | Type | Description |
+|-------|------|-------------|
+| rules | [GradeRule] | Rules to meet |
+| index | int | Grade index |
+| name | string | Grade name |
+| state | int | 0=Fail, 1=OK, 2=Warning |
+
+#### GradeRule
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ruleIndex | int | Rule index |
+| referenceValue | double | Required value |
+| userValue | double | User's value |
+| state | int | 0=Fail, 1=OK, 2=Warning |
+| userValueString | string | Formatted user value |
+| referenceValueString | string | Formatted required value |
+| definition | GradeRuleDefinition | Rule definition |
+
+#### GradeRuleDefinition
+
+| Field | Type | Description |
+|-------|------|-------------|
+| name | string | Rule name |
+| description | string | Rule description |
+| property | string | GradeInfo property this rule checks |
+| operator | int | 0=GreaterThan, 1=LesserThan, 2=GreaterThanOrEqual, 3=LesserThanOrEqual, 4=Equal, 5=DifferentThan |
+| period | double | Time period for the rule |
+| order | int | Display order |
+
+---
+
+### GET /users/{userId}/flights
+
+Get user flight logbook (paginated).
+
+**Parameters:** `userId` (path, uuid, required), `page` (query, int, default 1)
+
+**Response** → `PaginatedList` of `UserFlight`
+
+#### UserFlight
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | uuid | Flight ID |
+| created | datetime | Flight creation time |
+| userId | uuid | User ID |
+| aircraftId | uuid | Aircraft ID |
+| liveryId | uuid | Livery ID (Casual server only) |
+| callsign | string | Callsign |
+| server | string | Server name |
+| dayTime | float | Day flight time in minutes |
+| nightTime | float | Night flight time in minutes |
+| totalTime | float | Total flight time in minutes |
+| landingCount | int | Landings |
+| originAirport | string? | Departure ICAO |
+| destinationAirport | string? | Arrival ICAO |
+| xp | int | XP earned |
+| worldType | int | WorldType enum |
+| violations | [Violation] | Violations received |
+
+#### Violation
+
+| Field | Type | Description |
+|-------|------|-------------|
+| issuedBy | Issuer | Who issued it |
+| level | int | Severity level |
+| type | string | Violation type |
+| description | string | Description |
+| created | datetime | When recorded |
+
+#### Issuer
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | uuid | Issuer user ID |
+| username | string | Username |
+| callsign | string | Callsign |
+| discourseUser | DiscourseUser? | Forum account info |
+
+#### DiscourseUser
+
+| Field | Type | Description |
+|-------|------|-------------|
+| userId | int | Discourse user ID |
+| username | string | Discourse username |
+| virtualOrganization | string? | VO |
+| avatarTemplate | string | Avatar URL template |
+
+---
+
+### GET /users/{userId}/flights/{flightId}
+
+Get a single logbook flight.
+
+**Parameters:** `userId` (path, uuid), `flightId` (path, uuid) — both required.
+
+**Response** → `UserFlight` (same schema as above)
+
+---
+
+### GET /users/{userId}/atc
+
+Get user ATC session log (paginated).
+
+**Parameters:** `userId` (path, uuid, required), `page` (query, int, default 1)
+
+**Response** → `PaginatedList` of `UserAtcSession`
+
+#### UserAtcSession
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | uuid | Session ID |
+| atcSessionGroupId | uuid | Group ID (multiple freqs at same airport) |
+| facility | ATCFacility | Facility details |
+| created | datetime | Frequency opened |
+| updated | datetime | Last report received |
+| operations | int | Ops earned |
+| totalTime | double | Duration in minutes |
+| worldType | int | WorldType enum |
+| server | string | Server name |
+| violationsIssued | int | Violations issued while controlling |
+
+#### ATCFacility
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | uuid | Facility ID |
+| airportIcao | string | Airport ICAO |
+| latitude | double | Latitude |
+| longitude | double | Longitude |
+| frequencyType | int | FrequencyType enum |
+
+---
+
+### GET /users/{userId}/atc/{atcSessionId}
+
+Get a single ATC session.
+
+**Parameters:** `userId` (path, uuid), `atcSessionId` (path, uuid) — both required.
+
+**Response** → `UserAtcSession` (same schema as above)
+
+---
+
+### GET /aircraft
+
+List all aircraft models.
+
+**Response** → `[AircraftPackage]`
+
+#### AircraftPackage
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | uuid | Aircraft ID |
+| name | string | Aircraft name |
+
+---
+
+### GET /aircraft/{aircraftId}/liveries
+
+List liveries for an aircraft model.
+
+**Parameters:** `aircraftId` (path, uuid, required)
+
+**Response** → `[LiveryData]`
+
+#### LiveryData
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | uuid | Livery ID |
+| aircraftID | uuid | Aircraft model ID |
+| aircraftName | string | Aircraft name |
+| liveryName | string | Livery name |
+
+---
+
+### GET /aircraft/liveries
+
+List all liveries across all aircraft.
+
+**Response** → `[LiveryData]` (same schema as above)
+
+---
+
+### GET /airport/{airportIcao}
+
+Get information about an airport.
+
+**Parameters:** `airportIcao` (path, string, required)
+
+**Response** → `AirportInfo` (see Shared Types)
+
+---
+
+### GET /airports
+
+List all 3D airports.
+
+**Response** → `[AirportInfo]` (see Shared Types)
+
+---
+
+## Samples & Libraries
+
+Repository: https://github.com/Velocity23/infiniteflightlive-samples
+
+Available in: NodeJS, C#, Kotlin, PHP, Python, Swift, Go
