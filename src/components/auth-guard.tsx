@@ -47,7 +47,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
 
   useEffect(() => {
     checkSession();
-  }, []);
+  }, [token]);
 
   useEffect(() => {
     if (isAuthenticated === null) return;
