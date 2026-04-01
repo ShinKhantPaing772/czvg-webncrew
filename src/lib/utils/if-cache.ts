@@ -30,11 +30,37 @@ async function ensureCacheTable() {
   }
 }
 
+async function cleanupExpiredDbCache() {
+  if (!tableInitialized) {
+    return;
+  }
+
+  try {
+    await sequelize.query(`DELETE FROM ${TABLE_NAME} WHERE expires_at < ?`, {
+      replacements: [Date.now()],
+      type: QueryTypes.DELETE,
+    });
+  } catch (error) {
+    console.error("[IF Cache] DB cleanup error:", error);
+  }
+}
+
+function cleanupMemoryCache() {
+  const now = Date.now();
+  for (const [key, entry] of cacheStore.entries()) {
+    if (now > entry.expiresAt) {
+      cacheStore.delete(key);
+    }
+  }
+}
+
 export async function getCached<T>(key: string): Promise<T | null> {
   try {
     await ensureCacheTable();
 
     if (tableInitialized) {
+      await cleanupExpiredDbCache();
+
       const rows = await sequelize.query<{
         value: string;
         expires_at: string | number;
@@ -90,6 +116,8 @@ export async function setCached<T>(key: string, data: T, ttlSeconds: number) {
     await ensureCacheTable();
 
     if (tableInitialized) {
+      await cleanupExpiredDbCache();
+
       await sequelize.query(
         `INSERT INTO ${TABLE_NAME} (cache_key, value, expires_at)
          VALUES (?, ?, ?)
@@ -105,5 +133,6 @@ export async function setCached<T>(key: string, data: T, ttlSeconds: number) {
     console.error("[IF Cache] DB write error:", error);
   }
 
+  cleanupMemoryCache();
   cacheStore.set(key, entry);
 }
