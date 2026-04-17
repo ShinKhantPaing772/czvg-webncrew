@@ -87,6 +87,7 @@ interface Pilots {
   ifc: string;
   email: string;
   joined: Date;
+  lastActivity?: string | null;
   status: Number;
   notes: string | null;
   transhours: Number;
@@ -443,6 +444,9 @@ export default function Users() {
                       <TableRow>
                         <TableHead>User Name</TableHead>
                         <TableHead>Joined</TableHead>
+                        <TableHead className="hidden lg:table-cell">
+                          Last activity
+                        </TableHead>
                         <TableHead className="hidden md:table-cell">
                           IFC
                         </TableHead>
@@ -473,6 +477,13 @@ export default function Users() {
                             </TableCell>
                             <TableCell>
                               {new Date(user.joined).toLocaleDateString()}
+                            </TableCell>
+                            <TableCell className="hidden lg:table-cell">
+                              {user.lastActivity
+                                ? new Date(
+                                    user.lastActivity,
+                                  ).toLocaleDateString()
+                                : "N/A"}
                             </TableCell>
                             <TableCell className="hidden md:table-cell">
                               <Link
