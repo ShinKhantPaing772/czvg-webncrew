@@ -64,9 +64,8 @@ async function handleLogin({
     pilot = await models.Pilot.findOne({
       where: {
         email: normalizedEmail,
-        status: 1,
       },
-      attributes: ["id", "email", "password", "name", "callsign"],
+      attributes: ["id", "email", "password", "name", "callsign", "status"],
     });
   } catch (error) {
     console.error("[Login] Database query error:", error);
@@ -78,19 +77,34 @@ async function handleLogin({
 
   if (!pilot) {
     return NextResponse.json(
-      {
-        error:
-          "Login Failed. Your application may still be pending or it may have been denied. Please contact us for more details if you believe this is an error.",
-      },
+      { error: "Invalid credentials. Please check your email and password." },
       { status: 401 },
     );
+  }
+
+  if (pilot.status !== 1) {
+    let statusMessage =
+      "Login Failed. Your application may still be pending or it may have been denied. Please contact us for more details if you believe this is an error.";
+
+    if (pilot.status === 0) {
+      statusMessage =
+        "Your application is still pending approval. You will be contacted on the IFC to continue with your application. Please contact us for more details if you believe this is an error.";
+    } else if (pilot.status === 2) {
+      statusMessage =
+        "Your application has been rejected. If you believe this is a mistake, please contact us on the IFC.";
+    } else if (pilot.status === 3) {
+      statusMessage =
+        "Your account is marked as inactive. Please contact us on the IFC for assistance.";
+    }
+
+    return NextResponse.json({ error: statusMessage }, { status: 401 });
   }
 
   let isValidPassword = false;
   try {
     if (!password || !pilot.password) {
       return NextResponse.json(
-        { error: "Invalid Credentials" },
+        { error: "Invalid credentials. Please check your email and password." },
         { status: 401 },
       );
     }
@@ -105,7 +119,10 @@ async function handleLogin({
   }
 
   if (!isValidPassword) {
-    return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+    return NextResponse.json(
+      { error: "Invalid credentials. Please check your email and password." },
+      { status: 401 },
+    );
   }
 
   // Store token in database

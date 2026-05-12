@@ -25,7 +25,7 @@ export default function Home() {
     <div>
       <Header />
       <div className="flex space-between min-h-screen flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-        <div className="w-full max-w-md">
+        <div className=" max-w-5xl px-4 lg:px-0">
           <div className="overflow-hidden rounded-xl bg-white shadow-xl">
             <AnimatePresence mode="wait">
               {isLogin ? (
@@ -75,7 +75,33 @@ export default function Home() {
                       Fill in the application form to get started
                     </p>
                   </div>
-                  <SignupForm />
+                  <div className="grid gap-6 lg:grid-cols-[1.25fr_0.75fr]">
+                    <div className="order-2 lg:order-1 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                      <SignupForm />
+                    </div>
+                    <div className="order-1 lg:order-2 rounded-3xl border border-slate-200 bg-slate-50 p-6 text-sm text-slate-700 shadow-sm">
+                      <h3 className="mb-4 text-lg font-semibold text-slate-900">
+                        Application requirements
+                      </h3>
+                      <ul className="space-y-3 list-disc pl-5">
+                        <li>Must be 13 years of age or older</li>
+                        <li>Must be Grade 3 or above</li>
+                        <li>
+                          Must have an IFC account linked to the Infinite Flight
+                          App
+                        </li>
+                        <li>
+                          Must not be on the IFVARB’s user blacklist/watchlist
+                        </li>
+                        <li>
+                          Must have an active Infinite Flight Pro Subscription
+                        </li>
+                        <li>Be in good standing with the IFC</li>
+                        <li>Should be able to participate actively</li>
+                        <li>Must be able to use Discord</li>
+                      </ul>
+                    </div>
+                  </div>
                   <div className="mt-6 text-center">
                     <p className="text-gray-600">
                       Already have an account?{" "}
