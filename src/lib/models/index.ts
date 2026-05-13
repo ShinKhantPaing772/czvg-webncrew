@@ -24,7 +24,12 @@ Aircraft.init(
     awardreq: { type: DataTypes.INTEGER },
     status: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
   },
-  { sequelize, modelName: "Aircraft", tableName: "aircraft", timestamps: false }
+  {
+    sequelize,
+    modelName: "Aircraft",
+    tableName: "aircraft",
+    timestamps: false,
+  },
 );
 
 class Rank extends Model {
@@ -38,7 +43,7 @@ Rank.init(
     name: { type: DataTypes.STRING(120), allowNull: false },
     timereq: { type: DataTypes.INTEGER, allowNull: false },
   },
-  { sequelize, modelName: "Rank", tableName: "ranks", timestamps: false }
+  { sequelize, modelName: "Rank", tableName: "ranks", timestamps: false },
 );
 
 class Award extends Model {
@@ -54,7 +59,7 @@ Award.init(
     description: { type: DataTypes.TEXT },
     imageurl: { type: DataTypes.TEXT, allowNull: false },
   },
-  { sequelize, modelName: "Award", tableName: "awards", timestamps: false }
+  { sequelize, modelName: "Award", tableName: "awards", timestamps: false },
 );
 
 class Pilot extends Model {
@@ -94,7 +99,7 @@ Pilot.init(
       defaultValue: DataTypes.NOW,
     },
   },
-  { sequelize, modelName: "Pilot", tableName: "pilots", timestamps: false }
+  { sequelize, modelName: "Pilot", tableName: "pilots", timestamps: false },
 );
 
 class AwardGranted extends Model {
@@ -115,7 +120,7 @@ AwardGranted.init(
     modelName: "AwardGranted",
     tableName: "awards_granted",
     timestamps: false,
-  }
+  },
 );
 
 class Pirep extends Model {
@@ -145,7 +150,7 @@ Pirep.init(
     multi: { type: DataTypes.TEXT, allowNull: false },
     status: { type: DataTypes.INTEGER, defaultValue: 0 },
   },
-  { sequelize, modelName: "Pirep", tableName: "pireps", timestamps: false }
+  { sequelize, modelName: "Pirep", tableName: "pireps", timestamps: false },
 );
 
 class Multiplier extends Model {
@@ -168,7 +173,7 @@ Multiplier.init(
     modelName: "Multiplier",
     tableName: "multipliers",
     timestamps: false,
-  }
+  },
 );
 
 class Permission extends Model {
@@ -187,7 +192,7 @@ Permission.init(
     modelName: "Permission",
     tableName: "permissions",
     timestamps: false,
-  }
+  },
 );
 
 class Route extends Model {
@@ -208,7 +213,7 @@ Route.init(
     duration: { type: DataTypes.INTEGER, allowNull: false },
     notes: { type: DataTypes.TEXT },
   },
-  { sequelize, modelName: "Route", tableName: "routes", timestamps: false }
+  { sequelize, modelName: "Route", tableName: "routes", timestamps: false },
 );
 
 class RouteAircraft extends Model {
@@ -227,7 +232,7 @@ RouteAircraft.init(
     modelName: "RouteAircraft",
     tableName: "route_aircraft",
     timestamps: false,
-  }
+  },
 );
 
 class News extends Model {
@@ -247,7 +252,7 @@ News.init(
     dateposted: { type: DataTypes.DATE },
     status: { type: DataTypes.INTEGER },
   },
-  { sequelize, modelName: "News", tableName: "news", timestamps: false }
+  { sequelize, modelName: "News", tableName: "news", timestamps: false },
 );
 
 class Notification extends Model {
@@ -276,23 +281,23 @@ Notification.init(
     modelName: "Notification",
     tableName: "notifications",
     timestamps: false,
-  }
+  },
 );
 
 class PirepComment extends Model {
   declare id: number;
   declare pirepid: number;
   declare userid: number;
-  declare comment: string;
-  declare date: Date;
+  declare content: string;
+  declare dateposted: Date;
 }
 PirepComment.init(
   {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     pirepid: { type: DataTypes.INTEGER, allowNull: false },
     userid: { type: DataTypes.INTEGER, allowNull: false },
-    comment: { type: DataTypes.TEXT, allowNull: false },
-    date: {
+    content: { type: DataTypes.TEXT, allowNull: false },
+    dateposted: {
       type: DataTypes.DATE,
       allowNull: false,
       defaultValue: DataTypes.NOW,
@@ -301,9 +306,9 @@ PirepComment.init(
   {
     sequelize,
     modelName: "PirepComment",
-    tableName: "pirep_comments",
+    tableName: "pireps_comments",
     timestamps: false,
-  }
+  },
 );
 
 // Associations
@@ -313,6 +318,10 @@ Pilot.hasMany(Award, { foreignKey: "pilotid" });
 Award.belongsToMany(Pilot, { through: AwardGranted, foreignKey: "awardid" });
 Pirep.belongsTo(Pilot, { foreignKey: "pilotid" });
 Pirep.belongsTo(Aircraft, { foreignKey: "aircraftid" });
+Pirep.hasMany(PirepComment, { foreignKey: "pirepid", as: "Comments" });
+PirepComment.belongsTo(Pirep, { foreignKey: "pirepid", as: "Pirep" });
+PirepComment.belongsTo(Pilot, { foreignKey: "userid", as: "User" });
+Pilot.hasMany(PirepComment, { foreignKey: "userid", as: "Comments" });
 Route.belongsToMany(Aircraft, {
   through: RouteAircraft,
   foreignKey: "routeid",

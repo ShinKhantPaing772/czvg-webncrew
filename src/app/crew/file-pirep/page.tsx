@@ -227,7 +227,7 @@ export default function FilePirep() {
                   name="flightnum"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Flight Number</FormLabel>
+                      <FormLabel>Flight Number (Not Your Callsign)</FormLabel>
                       <FormControl>
                         <Input placeholder="VA123" {...field} />
                       </FormControl>

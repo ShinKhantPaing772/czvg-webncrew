@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
+import jwt from "jsonwebtoken";
 import { models } from "@/lib/models";
 import { formatFlightTime } from "@/lib/utils/time";
+
+const JWT_SECRET = process.env.JWT_SECRET;
 
 // Mark this route as dynamic to prevent static optimization
 export const dynamic = "force-dynamic";
@@ -20,6 +23,18 @@ export async function GET(request: Request) {
           model: models.Aircraft,
           as: "Aircraft",
           attributes: ["id", "name", "liveryname"],
+        },
+        {
+          model: models.PirepComment,
+          as: "Comments",
+          attributes: ["id", "userid", "content", "dateposted"],
+          include: [
+            {
+              model: models.Pilot,
+              as: "User",
+              attributes: ["id", "callsign", "name"],
+            },
+          ],
         },
       ],
       order: [["id", "DESC"]],
@@ -68,8 +83,16 @@ export async function GET(request: Request) {
 // Update PIREP status
 export async function PUT(request: Request) {
   try {
+    if (!JWT_SECRET) {
+      console.error("[admin/pireps] JWT_SECRET is not configured");
+      return NextResponse.json(
+        { success: false, error: "Authentication configuration error" },
+        { status: 500 },
+      );
+    }
+
     const body = await request.json();
-    const { id, status, adminRemarks } = body;
+    const { id, status, comment, token: bodyToken } = body;
 
     if (!id || status === undefined) {
       return NextResponse.json(
@@ -78,7 +101,50 @@ export async function PUT(request: Request) {
       );
     }
 
-    // Find the PIREP
+    let authToken = bodyToken;
+    if (!authToken) {
+      const authHeader = request.headers.get("Authorization");
+      if (authHeader?.startsWith("Bearer ")) {
+        authToken = authHeader.substring(7);
+      }
+    }
+
+    if (!authToken) {
+      return NextResponse.json(
+        { success: false, error: "Authentication token required" },
+        { status: 401 },
+      );
+    }
+
+    const decoded = jwt.verify(authToken, JWT_SECRET) as {
+      id?: number;
+      iat?: number;
+      exp?: number;
+    };
+
+    if (!decoded?.id) {
+      return NextResponse.json(
+        { success: false, error: "Invalid token" },
+        { status: 401 },
+      );
+    }
+
+    const tokenRecord = await models.Token.findOne({
+      where: { token: authToken },
+    });
+
+    if (
+      !tokenRecord ||
+      tokenRecord.pilotId !== decoded.id ||
+      new Date() > tokenRecord.expiresAt ||
+      tokenRecord.isRevoked
+    ) {
+      return NextResponse.json(
+        { success: false, error: "Invalid or expired token" },
+        { status: 401 },
+      );
+    }
+
     const pirep = await models.Pirep.findByPk(id);
 
     if (!pirep) {
@@ -88,11 +154,15 @@ export async function PUT(request: Request) {
       );
     }
 
-    // Update the PIREP
-    await pirep.update({
-      status,
-      adminRemarks: adminRemarks || "",
-    });
+    await pirep.update({ status });
+
+    if (comment?.trim()) {
+      await models.PirepComment.create({
+        pirepid: id,
+        userid: tokenRecord.pilotId,
+        content: comment.trim(),
+      });
+    }
 
     return NextResponse.json({
       success: true,

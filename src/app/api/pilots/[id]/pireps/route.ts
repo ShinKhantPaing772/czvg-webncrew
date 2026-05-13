@@ -4,7 +4,7 @@ import { formatFlightTime } from "@/lib/utils/time";
 
 export async function GET(
   _request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } },
 ) {
   try {
     const pilotId = params.id;
@@ -17,6 +17,18 @@ export async function GET(
           model: models.Aircraft,
           as: "Aircraft",
           attributes: ["id", "name", "liveryname"],
+        },
+        {
+          model: models.PirepComment,
+          as: "Comments",
+          attributes: ["id", "userid", "content", "dateposted"],
+          include: [
+            {
+              model: models.Pilot,
+              as: "User",
+              attributes: ["id", "callsign", "name"],
+            },
+          ],
         },
       ],
       attributes: [
@@ -46,7 +58,7 @@ export async function GET(
     // Calculate total flight time using only approved PIREPs
     const totalSeconds = approvedPireps.reduce(
       (total, pirep) => total + (pirep.flighttime || 0),
-      0
+      0,
     );
 
     // Fetch all ranks
@@ -69,7 +81,7 @@ export async function GET(
     let progressToNextRank = 100;
 
     const currentRankIndex = ranks.findIndex(
-      (rank) => rank.id === pilotRank.id
+      (rank) => rank.id === pilotRank.id,
     );
     if (currentRankIndex < ranks.length - 1) {
       nextRank = ranks[currentRankIndex + 1].get();
@@ -77,7 +89,7 @@ export async function GET(
       const totalRankTime = nextRank.timereq - pilotRank.timereq;
       progressToNextRank = Math.min(
         100,
-        Math.max(0, ((totalRankTime - remainingTime) / totalRankTime) * 100)
+        Math.max(0, ((totalRankTime - remainingTime) / totalRankTime) * 100),
       );
     }
 
@@ -98,7 +110,7 @@ export async function GET(
     console.error("[PIREPs] Error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

@@ -51,6 +51,18 @@ import {
 import { Input } from "@/components/ui/input"; // 🔍 new import
 import { useSession } from "@/hooks/use-session";
 
+interface PirepComment {
+  id: number;
+  userid: number;
+  content: string;
+  dateposted: string;
+  User?: {
+    id: number;
+    callsign: string;
+    name: string;
+  };
+}
+
 interface Pirep {
   id: number;
   flightnum: string;
@@ -67,6 +79,7 @@ interface Pirep {
   fuelused: number;
   multi: number;
   status: number;
+  Comments?: PirepComment[];
 }
 
 export default function ViewPireps() {
@@ -371,6 +384,42 @@ export default function ViewPireps() {
                                   </dl>
                                 </CardContent>
                               </Card>
+
+                              {pirep.Comments && pirep.Comments.length > 0 && (
+                                <Card>
+                                  <CardHeader>
+                                    <CardTitle className="text-sm font-medium">
+                                      Admin Comments
+                                    </CardTitle>
+                                  </CardHeader>
+                                  <CardContent className="pt-0">
+                                    <div className="space-y-3 text-sm">
+                                      {pirep.Comments.map((comment) => (
+                                        <div
+                                          key={comment.id}
+                                          className="rounded-lg border border-slate-200 bg-slate-50 p-3"
+                                        >
+                                          <div className="flex items-center justify-between gap-4 text-xs text-slate-500">
+                                            <span>
+                                              {comment.User
+                                                ? `${comment.User.name}`
+                                                : `User #${comment.userid}`}
+                                            </span>
+                                            <span>
+                                              {new Date(
+                                                comment.dateposted,
+                                              ).toLocaleString()}
+                                            </span>
+                                          </div>
+                                          <p className="mt-2 text-sm text-slate-700">
+                                            {comment.content}
+                                          </p>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                              )}
                             </div>
                           </DialogContent>
                         </Dialog>
