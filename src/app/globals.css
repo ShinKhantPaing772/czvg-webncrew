@@ -5,6 +5,47 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* Color palette (primary scale) */
+  --primary-50: #eaf3ff;
+  --primary-100: #d3e8ff;
+  --primary-200: #a9d0ff;
+  --primary-300: #7fb8ff;
+  --primary-400: #569fff;
+  --primary-500: #2c86ff;
+  --primary-600: #006de6;
+  --primary-700: #0052a5;
+  --primary-800: #003a74;
+  --primary-900: #002543;
+
+  --primary: var(--primary-700);
+  --primary-foreground: #ffffff;
+
+  /* Semantic tokens */
+  --background-muted: #f7f8fa;
+  --card: #ffffff;
+  --card-foreground: #111827;
+  --muted-foreground: #6b7280;
+
+  /* Typography scale */
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+
+  /* Spacing scale */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(16,24,40,0.04);
+  --shadow-md: 0 6px 18px rgba(16,24,40,0.08);
+  --shadow-lg: 0 20px 40px rgba(16,24,40,0.12);
+
 }
 
 @theme inline {
@@ -24,3 +65,13 @@ body {
   --background: #0a0a0a;
   --foreground: #ededed;
 }
+
+/* Convenience helper classes to map token names to visible styles
+   (used until Tailwind is wired to CSS variables) */
+.bg-card { background: var(--card); }
+.text-card-foreground { color: var(--card-foreground); }
+.bg-primary { background: var(--primary); }
+.text-primary-foreground { color: var(--primary-foreground); }
+.bg-muted { background: var(--background-muted); }
+.text-muted-foreground { color: var(--muted-foreground); }
+

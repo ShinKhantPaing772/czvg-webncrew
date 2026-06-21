@@ -4,9 +4,9 @@ import type React from "react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import ThemedButton from "@/components/system/ThemedButton";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import SimpleField from "@/components/system/SimpleField";
 import { setToken } from "@/lib/utils/auth";
 
 export function LoginForm() {
@@ -65,11 +65,8 @@ export function LoginForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="email" className="text-gray-700">
-          Email Address
-        </Label>
+    <form onSubmit={onSubmit} className="space-y-5">
+      <SimpleField id="email" label="Email Address">
         <Input
           id="email"
           type="email"
@@ -80,19 +77,22 @@ export function LoginForm() {
           value={formData.email}
           onChange={handleChange}
         />
-      </div>
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <Label htmlFor="password" className="text-gray-700">
-            Password
-          </Label>
-          <Link
-            href="/crew/forgot-password"
-            className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
-          >
-            Forgot password?
-          </Link>
-        </div>
+      </SimpleField>
+
+      <SimpleField
+        id="password"
+        label={
+          <div className="flex w-full items-center justify-between">
+            <span>Password</span>
+            <Link
+              href="/crew/forgot-password"
+              className="text-sm font-normal text-blue-600 hover:text-blue-800 hover:underline"
+            >
+              Forgot password?
+            </Link>
+          </div>
+        }
+      >
         <Input
           id="password"
           type="password"
@@ -102,22 +102,24 @@ export function LoginForm() {
           value={formData.password}
           onChange={handleChange}
         />
-      </div>
-      <Button
+      </SimpleField>
+
+      <ThemedButton
         type="submit"
         className="w-full bg-blue-600 hover:bg-blue-700 text-white"
         disabled={isLoading}
       >
         {isLoading ? "Logging in..." : "Sign In"}
-      </Button>
+      </ThemedButton>
+
       {message.text && (
-        <div
-          className={`mt-2 text-sm ${
+        <p
+          className={`text-sm ${
             message.type === "error" ? "text-red-600" : "text-green-600"
           }`}
         >
           {message.text}
-        </div>
+        </p>
       )}
     </form>
   );

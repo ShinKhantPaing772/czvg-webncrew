@@ -6,6 +6,8 @@ import { LoginForm } from "@/components/login-form";
 import { SignupForm } from "@/components/signup-form";
 import { motion, AnimatePresence } from "framer-motion";
 import { Header } from "@/components/layout/header";
+import ThemedCard from "@/components/system/ThemedCard";
+import { cn } from "@/lib/utils";
 
 export default function Home() {
   const searchParams = useSearchParams();
@@ -24,9 +26,9 @@ export default function Home() {
   return (
     <div>
       <Header />
-      <div className="flex space-between min-h-screen flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-        <div className=" max-w-5xl px-4 lg:px-0">
-          <div className="overflow-hidden rounded-xl bg-white shadow-xl">
+      <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 px-4 py-10 sm:px-6 lg:px-8">
+        <div className={cn("w-full", isLogin ? "max-w-md" : "max-w-5xl")}>
+          <ThemedCard className="overflow-hidden rounded-xl p-0">
             <AnimatePresence mode="wait">
               {isLogin ? (
                 <motion.div
@@ -35,7 +37,7 @@ export default function Home() {
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 20 }}
                   transition={{ duration: 0.3 }}
-                  className="p-6"
+                  className="w-full p-6 sm:p-8"
                 >
                   <div className="mb-6 space-y-2">
                     <h2 className="text-2xl font-semibold text-gray-900">
@@ -65,7 +67,7 @@ export default function Home() {
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
                   transition={{ duration: 0.3 }}
-                  className="p-6"
+                  className="p-6 sm:p-8"
                 >
                   <div className="mb-6 space-y-2">
                     <h2 className="text-2xl font-semibold text-gray-900">
@@ -75,11 +77,11 @@ export default function Home() {
                       Fill in the application form to get started
                     </p>
                   </div>
-                  <div className="grid gap-6 lg:grid-cols-[1.25fr_0.75fr]">
-                    <div className="order-2 lg:order-1 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                  <div className="grid gap-8 lg:grid-cols-[minmax(0,1.25fr)_minmax(280px,0.75fr)]">
+                    <div className="order-2 lg:order-1">
                       <SignupForm />
                     </div>
-                    <div className="order-1 lg:order-2 rounded-3xl border border-slate-200 bg-slate-50 p-6 text-sm text-slate-700 shadow-sm">
+                    <aside className="order-1 rounded-lg border border-slate-200 bg-slate-50 p-5 text-sm text-slate-700 lg:order-2">
                       <h3 className="mb-4 text-lg font-semibold text-slate-900">
                         Application requirements
                       </h3>
@@ -100,7 +102,7 @@ export default function Home() {
                         <li>Should be able to participate actively</li>
                         <li>Must be able to use Discord</li>
                       </ul>
-                    </div>
+                    </aside>
                   </div>
                   <div className="mt-6 text-center">
                     <p className="text-gray-600">
@@ -116,7 +118,7 @@ export default function Home() {
                 </motion.div>
               )}
             </AnimatePresence>
-          </div>
+          </ThemedCard>
         </div>
       </div>
     </div>

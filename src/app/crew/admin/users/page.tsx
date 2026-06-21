@@ -12,6 +12,8 @@ import {
   Eye,
   FileText,
   ArrowDown,
+  Save,
+  Pencil,
 } from "lucide-react";
 import { CrewHeader } from "@/components/crew-header";
 import { Button } from "@/components/ui/button";
@@ -88,11 +90,21 @@ interface Pilots {
   email: string;
   joined: Date;
   lastActivity?: string | null;
-  status: Number;
+  status: number;
   notes: string | null;
-  transhours: Number;
-  transflights: Number;
+  transhours: number;
+  transflights: number;
 }
+
+interface UserEditForm {
+  name: string;
+  email: string;
+  callsign: string;
+  status: string;
+}
+
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const callsignPattern = /^China Southern \d{3}VG$/;
 
 export default function Users() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -105,16 +117,28 @@ export default function Users() {
   const [activeTab, setActiveTab] = useState("all");
   const [selectedUser, setSelectedUser] = useState<Pilots | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isEditingUser, setIsEditingUser] = useState(false);
+  const [editForm, setEditForm] = useState<UserEditForm>({
+    name: "",
+    email: "",
+    callsign: "",
+    status: "0",
+  });
+  const [updateError, setUpdateError] = useState("");
   const itemsPerPage = 10;
+
+  const loadUsers = async () => {
+    const response = await fetch("/api/admin/users");
+    const data = await response.json();
+    // Make sure it’s an array
+    const usersArray = Array.isArray(data) ? data : data.users || [];
+    setUsers(usersArray);
+  };
 
   useEffect(() => {
     const fetchusers = async () => {
       try {
-        const response = await fetch("/api/admin/users");
-        const data = await response.json();
-        // Make sure it’s an array
-        const usersArray = Array.isArray(data) ? data : data.users || [];
-        setUsers(usersArray);
+        await loadUsers();
       } catch (error) {
         console.error("Error fetching users:", error);
       }
@@ -214,6 +238,90 @@ export default function Users() {
     }
   };
 
+  const handleViewUser = (user: Pilots) => {
+    setSelectedUser(user);
+    setAdminNotes(user.notes || "");
+    setEditForm({
+      name: user.name,
+      email: user.email,
+      callsign: user.callsign,
+      status: user.status.toString(),
+    });
+    setUpdateError("");
+    setIsEditingUser(false);
+  };
+
+  const handleEditFormChange = (field: keyof UserEditForm, value: string) => {
+    setEditForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+    setUpdateError("");
+  };
+
+  const handleUpdateUser = async (user: Pilots) => {
+    const name = editForm.name.trim();
+    const email = editForm.email.trim();
+    const callsign = editForm.callsign.trim();
+
+    if (!name || !email || !callsign) {
+      setUpdateError("Name, email, and assigned callsign are required.");
+      return;
+    }
+
+    if (!emailPattern.test(email)) {
+      setUpdateError("Enter a valid email address.");
+      return;
+    }
+
+    if (!callsignPattern.test(callsign)) {
+      setUpdateError("Callsign must match China Southern ###VG.");
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      const response = await fetch("/api/admin/users", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: user.id,
+          name,
+          email,
+          callsign,
+          status: Number(editForm.status),
+        }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        const updatedUser = {
+          ...user,
+          name,
+          email,
+          callsign,
+          status: Number(editForm.status),
+        };
+        setUsers((currentUsers) =>
+          currentUsers.map((currentUser) =>
+            currentUser.id === user.id ? updatedUser : currentUser,
+          ),
+        );
+        setSelectedUser(updatedUser);
+        setUpdateError("");
+        setIsEditingUser(false);
+      } else {
+        setUpdateError(data.message || "Error updating user.");
+      }
+    } catch (error) {
+      console.error("Error updating user:", error);
+      setUpdateError("Error updating user.");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   // Handle application approval
   const handleApproveUser = async (user: Pilots) => {
     setIsUpdating(true);
@@ -233,12 +341,7 @@ export default function Users() {
       if (data.success) {
         setSelectedUser(null);
         setAdminNotes("");
-        // Refresh users list
-        const response = await fetch("/api/admin/users");
-        const data = await response.json();
-        // Make sure it’s an array
-        const usersArray = Array.isArray(data) ? data : data.users || [];
-        setUsers(usersArray);
+        await loadUsers();
       } else {
         console.error("Error approving user:", data.message);
       }
@@ -268,12 +371,7 @@ export default function Users() {
       if (data.success) {
         setSelectedUser(null);
         setAdminNotes("");
-        // Refresh users list
-        const response = await fetch("/api/admin/users");
-        const data = await response.json();
-        // Make sure it’s an array
-        const usersArray = Array.isArray(data) ? data : data.users || [];
-        setUsers(usersArray);
+        await loadUsers();
       } else {
         console.error("Error rejecting user:", data.message);
       }
@@ -496,12 +594,20 @@ export default function Users() {
                               {getStatusBadge("" + user.status)}
                             </TableCell>
                             <TableCell className="text-right">
-                              <Dialog>
+                              <Dialog
+                                onOpenChange={(open) => {
+                                  if (!open) {
+                                    setSelectedUser(null);
+                                    setUpdateError("");
+                                    setIsEditingUser(false);
+                                  }
+                                }}
+                              >
                                 <DialogTrigger asChild>
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    onClick={() => setSelectedUser(user)}
+                                    onClick={() => handleViewUser(user)}
                                   >
                                     <Eye className="h-4 w-4 mr-1" />
                                     <span className="hidden sm:inline">
@@ -557,26 +663,133 @@ export default function Users() {
                                             User Information
                                           </CardTitle>
                                         </CardHeader>
-                                        <CardContent className=" pt-0">
+                                        <CardContent className="space-y-4 pt-0">
+                                          <div className="grid grid-cols-1 gap-4">
+                                            <div className="space-y-2">
+                                              <Label
+                                                htmlFor={`name-${user.id}`}
+                                              >
+                                                Name
+                                              </Label>
+                                              <Input
+                                                id={`name-${user.id}`}
+                                                value={editForm.name}
+                                                disabled={!isEditingUser}
+                                                onChange={(event) =>
+                                                  handleEditFormChange(
+                                                    "name",
+                                                    event.target.value,
+                                                  )
+                                                }
+                                              />
+                                            </div>
+                                            <div className="space-y-2">
+                                              <Label
+                                                htmlFor={`email-${user.id}`}
+                                              >
+                                                Email
+                                              </Label>
+                                              <Input
+                                                id={`email-${user.id}`}
+                                                type="email"
+                                                value={editForm.email}
+                                                disabled={!isEditingUser}
+                                                onChange={(event) =>
+                                                  handleEditFormChange(
+                                                    "email",
+                                                    event.target.value,
+                                                  )
+                                                }
+                                              />
+                                            </div>
+                                            <div className="space-y-2">
+                                              <Label
+                                                htmlFor={`callsign-${user.id}`}
+                                              >
+                                                Assigned Callsign
+                                              </Label>
+                                              <Input
+                                                id={`callsign-${user.id}`}
+                                                value={editForm.callsign}
+                                                disabled={!isEditingUser}
+                                                onChange={(event) =>
+                                                  handleEditFormChange(
+                                                    "callsign",
+                                                    event.target.value,
+                                                  )
+                                                }
+                                              />
+                                            </div>
+                                            <div className="space-y-2">
+                                              <Label
+                                                htmlFor={`status-${user.id}`}
+                                              >
+                                                Status
+                                              </Label>
+                                              <Select
+                                                value={editForm.status}
+                                                disabled={!isEditingUser}
+                                                onValueChange={(value) =>
+                                                  handleEditFormChange(
+                                                    "status",
+                                                    value,
+                                                  )
+                                                }
+                                              >
+                                                <SelectTrigger
+                                                  id={`status-${user.id}`}
+                                                >
+                                                  <SelectValue placeholder="Select status" />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-white">
+                                                  <SelectItem value="0">
+                                                    Pending
+                                                  </SelectItem>
+                                                  <SelectItem value="1">
+                                                    Active
+                                                  </SelectItem>
+                                                  <SelectItem value="2">
+                                                    Rejected
+                                                  </SelectItem>
+                                                  <SelectItem value="3">
+                                                    Inactive
+                                                  </SelectItem>
+                                                </SelectContent>
+                                              </Select>
+                                            </div>
+                                          </div>
+
+                                          {updateError && (
+                                            <p className="text-sm text-red-600">
+                                              {updateError}
+                                            </p>
+                                          )}
+
+                                          <div className="flex justify-end">
+                                            {isEditingUser ? (
+                                              <Button
+                                                disabled={isUpdating}
+                                                onClick={() =>
+                                                  handleUpdateUser(user)
+                                                }
+                                              >
+                                                <Save className="mr-2 h-4 w-4" />
+                                                Save Changes
+                                              </Button>
+                                            ) : (
+                                              <Button
+                                                variant="outline"
+                                                onClick={() =>
+                                                  setIsEditingUser(true)
+                                                }
+                                              >
+                                                <Pencil className="mr-2 h-4 w-4" />
+                                                Edit
+                                              </Button>
+                                            )}
+                                          </div>
+
                                           <dl className="space-y-2 text-sm">
-                                            <div className="flex justify-between">
-                                              <dt className="text-muted-foreground">
-                                                Name:
-                                              </dt>
-                                              <dd>{user.name}</dd>
-                                            </div>
-                                            <div className="flex justify-between">
-                                              <dt className="text-muted-foreground">
-                                                Email:
-                                              </dt>
-                                              <dd>{user.email}</dd>
-                                            </div>
-                                            <div className="flex justify-between">
-                                              <dt className="text-muted-foreground">
-                                                Assigned Callsign:
-                                              </dt>
-                                              <dd>{user.callsign}</dd>
-                                            </div>
                                             <div className="flex justify-between">
                                               <dt className="text-muted-foreground">
                                                 IFC:

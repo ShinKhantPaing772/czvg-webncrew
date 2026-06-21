@@ -3,9 +3,9 @@
 import type React from "react";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import ThemedButton from "@/components/system/ThemedButton";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import SimpleField from "@/components/system/SimpleField";
 import { CheckCircle2, AlertCircle, Loader2, XCircle } from "lucide-react";
 
 export function SignupForm() {
@@ -137,11 +137,8 @@ export function SignupForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="name" className="text-gray-700">
-          Full Name
-        </Label>
+    <form onSubmit={onSubmit} className="space-y-5">
+      <SimpleField id="name" label="Preferred Name">
         <Input
           id="name"
           placeholder="John Doe"
@@ -150,12 +147,9 @@ export function SignupForm() {
           value={formData.name}
           onChange={handleChange}
         />
-      </div>
+      </SimpleField>
 
-      <div className="space-y-2">
-        <Label htmlFor="email" className="text-gray-700">
-          Email Address
-        </Label>
+      <SimpleField id="email" label="Email Address">
         <Input
           id="email"
           type="email"
@@ -166,20 +160,32 @@ export function SignupForm() {
           value={formData.email}
           onChange={handleChange}
         />
-      </div>
+      </SimpleField>
 
-      <div className="space-y-2">
-        <Label htmlFor="ifc" className="text-gray-700">
-          Infinite Flight Community Profile URL
-        </Label>
-        <div className="flex items-center">
-          <span className="inline-flex h-10 items-center rounded-l-md border border-r-0 border-blue-200 bg-blue-50 px-3 text-sm text-gray-600">
+      <SimpleField
+        id="ifc"
+        label="Infinite Flight Community Profile URL"
+        description={
+          <span className="text-xs text-gray-600">
+            All pilots are required to have an active{" "}
+            <Link
+              href="https://community.infiniteflight.com"
+              className="font-medium text-blue-600 hover:underline"
+            >
+              Infinite Flight Community
+            </Link>{" "}
+            Account
+          </span>
+        }
+      >
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-0">
+          <span className="inline-flex h-9 shrink-0 items-center rounded-md border border-blue-200 bg-blue-50 px-3 text-sm text-gray-600 sm:rounded-r-none sm:border-r-0">
             https://community.infiniteflight.com/u/
           </span>
-          <div className="relative w-full">
+          <div className="relative w-full min-w-0">
             <Input
               id="ifc"
-              className="rounded-l-none border-blue-200 focus-visible:ring-blue-500 pr-10"
+              className="border-blue-200 pr-10 focus-visible:ring-blue-500 sm:rounded-l-none"
               placeholder="username"
               required
               value={formData.ifc}
@@ -198,22 +204,9 @@ export function SignupForm() {
             </span>
           </div>
         </div>
-        <p className="text-xs text-gray-600">
-          All pilots are required to have an active{" "}
-          <Link
-            href="https://community.infiniteflight.com"
-            className="font-medium text-blue-600 hover:underline"
-          >
-            Infinite Flight Community
-          </Link>{" "}
-          Account
-        </p>
-      </div>
+      </SimpleField>
 
-      <div className="space-y-2">
-        <Label htmlFor="password" className="text-gray-700">
-          Password
-        </Label>
+      <SimpleField id="password" label="Password">
         <Input
           id="password"
           type="password"
@@ -223,11 +216,11 @@ export function SignupForm() {
           autoComplete="new-password"
           className="border-blue-200 focus-visible:ring-blue-500"
         />
-        <div className="flex items-center gap-1 text-xs">
+        <div className="flex items-center gap-1.5 text-xs">
           {formData.password.length >= 8 ? (
-            <CheckCircle2 className="h-4 w-4 text-green-500" />
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" />
           ) : (
-            <AlertCircle className="h-4 w-4 text-blue-400" />
+            <AlertCircle className="h-4 w-4 shrink-0 text-blue-400" />
           )}
           <span
             className={
@@ -237,12 +230,9 @@ export function SignupForm() {
             Must be at least 8 characters long
           </span>
         </div>
-      </div>
+      </SimpleField>
 
-      <div className="space-y-2">
-        <Label htmlFor="passwordConfirm" className="text-gray-700">
-          Confirm Password
-        </Label>
+      <SimpleField id="passwordConfirm" label="Confirm Password">
         <Input
           id="passwordConfirm"
           type="password"
@@ -253,37 +243,37 @@ export function SignupForm() {
           className="border-blue-200 focus-visible:ring-blue-500"
         />
         {passwordError && (
-          <div className="flex items-center gap-1 text-xs text-red-500">
-            <AlertCircle className="h-4 w-4" />
+          <div className="flex items-center gap-1.5 text-xs text-red-500">
+            <AlertCircle className="h-4 w-4 shrink-0" />
             <span>{passwordError}</span>
           </div>
         )}
         {formData.passwordConfirm &&
           formData.password === formData.passwordConfirm &&
           !passwordError && (
-            <div className="flex items-center gap-1 text-xs text-green-600">
-              <CheckCircle2 className="h-4 w-4" />
+            <div className="flex items-center gap-1.5 text-xs text-green-600">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
               <span>Passwords match</span>
             </div>
           )}
-      </div>
+      </SimpleField>
 
-      <Button
+      <ThemedButton
         type="submit"
         className="w-full bg-blue-600 hover:bg-blue-700 text-white"
         disabled={isLoading}
       >
         {isLoading ? "Sending application..." : "Apply"}
-      </Button>
+      </ThemedButton>
 
       {message.text && (
-        <div
-          className={`mt-2 text-sm ${
+        <p
+          className={`text-sm ${
             message.type === "error" ? "text-red-600" : "text-green-600"
           }`}
         >
           {message.text}
-        </div>
+        </p>
       )}
     </form>
   );
