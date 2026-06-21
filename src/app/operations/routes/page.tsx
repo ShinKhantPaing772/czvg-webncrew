@@ -183,13 +183,13 @@ export default function RoutesPage() {
               <div className="flex justify-center space-x-4">
                 <Link
                   href="/crew?type=signup"
-                  className="bg-white text-blue-700 px-6 py-3 rounded font-medium hover:bg-gray-100 transition-colors"
+                  className="bg-white text-blue-700 px-6 py-3 rounded-md font-medium hover:bg-gray-100 transition-colors"
                 >
                   Apply Now
                 </Link>
                 <Link
                   href="/operations/fleet"
-                  className="border border-white px-6 py-3 rounded font-medium hover:bg-blue-600 transition-colors"
+                  className="border border-white px-6 py-3 rounded-md font-medium hover:bg-blue-600 transition-colors"
                 >
                   View Our Fleet
                 </Link>

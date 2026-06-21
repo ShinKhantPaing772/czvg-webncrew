@@ -183,7 +183,7 @@ export default function OperationsPage() {
               </p>
               <Link
                 href="/crew?type=signup"
-                className="bg-white text-blue-700 px-6 py-3 rounded font-medium hover:bg-gray-100 transition-colors"
+                className="bg-white text-blue-700 px-6 py-3 rounded-md font-medium hover:bg-gray-100 transition-colors"
               >
                 Apply Now
               </Link>

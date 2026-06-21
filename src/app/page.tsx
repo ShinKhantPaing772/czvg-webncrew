@@ -11,22 +11,22 @@ export default function Home() {
       <Header />
       <main className="flex-1">
         <section className="relative">
-          <div className="absolute inset-0 bg-gradient-to-r from-white/80 to-transparent z-10" />
-          <div className="container relative z-20 px-4 py-12 md:py-24 lg:py-32">
+          <div className="absolute inset-0 bg-gradient-to-r from-white/90 via-white/70 to-transparent z-10" />
+          <div className="container relative z-20 px-4 py-16 md:py-24 lg:py-32">
             <div className="grid gap-6 lg:grid-cols-2">
-              <div className="flex flex-col justify-center space-y-4">
+              <div className="flex flex-col justify-center space-y-5">
                 <div className="space-y-2">
-                  <h1 className="text-4xl font-bold tracking-tighter sm:text-5xl md:text-6xl text-right">
+                  <h1 className="max-w-3xl text-4xl font-bold tracking-normal text-slate-950 sm:text-5xl md:text-6xl">
                     Welcome to China Southern Virtual Group
                   </h1>
-                  <h1 className="text-4xl font-bold tracking-tighter sm:text-5xl md:text-6xl text-right">
+                  <p className="text-2xl font-semibold text-slate-800 sm:text-3xl md:text-4xl">
                     欢迎来到虚拟中国南方航空集团
-                  </h1>
-                  <p className=" text-gray-500 md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed text-right">
+                  </p>
+                  <p className="text-sm font-semibold uppercase text-gray-600 tracking-[0.18em] md:text-base">
                     FLY INTO YOUR DREAMS
                   </p>
-                  <div className="flex flex-col gap-2 min-[400px]:flex-row justify-end">
-                    <Button className="bg-primary border border-white text-white">
+                  <div className="flex flex-col gap-2 pt-3 min-[400px]:flex-row">
+                    <Button asChild className="bg-primary border border-white text-white">
                       <Link href="/crew?type=signup">Apply Now</Link>
                     </Button>
                   </div>
@@ -55,12 +55,12 @@ export default function Home() {
                   <p className="max-w-[600px] text-gray-500 md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
                     China Southern Virtual Group has 10 different types of
                     aircraft representing 6 different airlines. Explore our
-                    diverse fleet of aircrafts, from regional jets to wide-body
+                    diverse fleet of aircraft, from regional jets to wide-body
                     airliners.
                   </p>
                 </div>
                 <div>
-                  <Button variant="link" className="p-0 text-primary">
+                  <Button asChild variant="link" className="p-0 text-primary">
                     <Link href="/operations/fleet">View Fleet →</Link>
                   </Button>
                 </div>
@@ -71,14 +71,13 @@ export default function Home() {
                     Our Routes
                   </h2>
                   <p className="max-w-[600px] text-gray-500 md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
-                    China Southern operated to 300+ destinations and having a
-                    handful number of routes to explore the world. Discover our
-                    global network of destinations and take your next virtual
-                    flight.
+                    China Southern operates to more than 300 destinations, with
+                    a large route network to explore around the world. Discover
+                    our destinations and take your next virtual flight.
                   </p>
                 </div>
                 <div>
-                  <Button variant="link" className="p-0 text-primary">
+                  <Button asChild variant="link" className="p-0 text-primary">
                     <Link href="/operations/routes">Explore Routes →</Link>
                   </Button>
                 </div>
@@ -89,14 +88,14 @@ export default function Home() {
                     Our Hubs
                   </h2>
                   <p className="max-w-[600px] text-gray-500 md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
-                    China Southern and its subsidaries has a number of hubs and
-                    focus cities. Become part of our virtual pilot community and
+                    China Southern and its subsidiaries have a number of hubs
+                    and focus cities. Become part of our virtual pilot community and
                     start your journey today.
                   </p>
                 </div>
                 <div>
-                  <Button variant="link" className="p-0 text-primary">
-                    Apply Now →
+                  <Button asChild variant="link" className="p-0 text-primary">
+                    <Link href="/crew?type=signup">Apply Now →</Link>
                   </Button>
                 </div>
               </div>
@@ -112,10 +111,10 @@ export default function Home() {
                     CEO's Message
                   </h2>
                   <blockquote className="border-l-4 border-primary pl-4 italic">
-                    Welcome IF Pilots, As the CEO of this virtual airline. I
-                    hope this VA brings you an excellent experience. Our virtual
-                    airline has a welcoming community together with countless
-                    routes you can fly. Come and join us in the IF skies. <br />
+                    Welcome IF pilots. As the CEO of this virtual airline, I
+                    hope CZVG brings you an excellent experience. Our virtual
+                    airline has a welcoming community and countless routes to
+                    fly. Come and join us in the IF skies. <br />
                   </blockquote>
                   <p className="font-semibold">- Nelson Paing, CEO</p>
                 </div>
@@ -144,14 +143,15 @@ export default function Home() {
                 virtual skies.
               </p>
               <div className="flex flex-col gap-2 min-[400px]:flex-row justify-center pt-4">
-                <Button className="bg-white text-primary hover:bg-white/90">
+                <Button asChild className="bg-white text-primary hover:bg-white/90">
                   <Link href="/crew?type=signup">Apply Now</Link>
                 </Button>
                 <Button
+                  asChild
                   variant="outline"
                   className="border-white text-white hover:bg-white/20"
                 >
-                  Learn More
+                  <Link href="/about-us">Learn More</Link>
                 </Button>
               </div>
             </div>

@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { ChevronDown, X, LogOut } from "lucide-react";
+import { ChevronDown, X, LogOut, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -100,23 +100,19 @@ export function Header() {
           )}
         </nav>
         <div className="flex items-center gap-4">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="default"
-                className="bg-primary text-white hidden md:inline-flex"
-              >
-                {!user ? (
-                  <Link href="/crew">Pilot Portal</Link>
-                ) : (
+          {user ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="default"
+                  className="bg-primary text-white hidden md:inline-flex"
+                >
                   <div className="flex items-center gap-2">
                     <p>{user?.name}</p>
                     <ChevronDown className="h-4 w-4" />
                   </div>
-                )}
-              </Button>
-            </DropdownMenuTrigger>
-            {user && (
+                </Button>
+              </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-white">
                 <DropdownMenuItem
                   onClick={handleLogout}
@@ -128,30 +124,25 @@ export function Header() {
                   </div>
                 </DropdownMenuItem>
               </DropdownMenuContent>
-            )}
-          </DropdownMenu>
+            </DropdownMenu>
+          ) : (
+            <Button
+              asChild
+              variant="default"
+              className="bg-primary text-white hidden md:inline-flex"
+            >
+              <Link href="/crew">Pilot Portal</Link>
+            </Button>
+          )}
           <Button
             variant="outline"
             size="icon"
             className="md:hidden bg-white"
+            aria-expanded={mobileMenuOpen}
+            aria-controls="mobile-menu"
             onClick={() => setMobileMenuOpen(true)}
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="h-6 w-6"
-            >
-              <line x1="4" x2="20" y1="12" y2="12" />
-              <line x1="4" x2="20" y1="6" y2="6" />
-              <line x1="4" x2="20" y1="18" y2="18" />
-            </svg>
+            <Menu className="h-6 w-6" />
             <span className="sr-only">Toggle menu</span>
           </Button>
         </div>
@@ -159,8 +150,12 @@ export function Header() {
 
       {/* Mobile Menu */}
       <div
-        className={`fixed inset-y-0 right-0 z-50 w-full bg-white px-6 py-6 sm:max-w-sm sm:ring-1 sm:ring-gray-900/10 transform ${
-          mobileMenuOpen ? "translate-x-0" : "translate-x-full"
+        id="mobile-menu"
+        aria-hidden={!mobileMenuOpen}
+        className={`fixed inset-y-0 right-0 z-50 w-full bg-white px-6 py-6 shadow-xl sm:max-w-sm sm:ring-1 sm:ring-gray-900/10 transform ${
+          mobileMenuOpen
+            ? "visible translate-x-0"
+            : "invisible translate-x-full pointer-events-none"
         } transition-transform duration-200 ease-in-out md:hidden`}
       >
         <div className="flex items-center justify-between">
@@ -234,7 +229,7 @@ export function Header() {
               </Link>
               {!user ? (
                 <Link
-                  href="/crew"
+                  href="/crew?type=signup"
                   className="-mx-3 block rounded-lg px-3 py-2 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50"
                   onClick={() => setMobileMenuOpen(false)}
                 >
@@ -251,24 +246,16 @@ export function Header() {
               )}
             </div>
             <div className="py-6">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="default"
-                    className="w-full bg-primary text-white"
-                    onClick={() => setMobileMenuOpen(false)}
-                  >
-                    {!user ? (
-                      <Link href="/crew">Pilot Portal</Link>
-                    ) : (
+              {user ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="default" className="w-full bg-primary text-white">
                       <div className="flex items-center gap-2">
                         <p>{user.name}</p>
                         <ChevronDown className="h-4 w-4" />
                       </div>
-                    )}
-                  </Button>
-                </DropdownMenuTrigger>
-                {user && (
+                    </Button>
+                  </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     {/* <DropdownMenuItem>
                     <Link href="/profile" className="w-full">
@@ -291,8 +278,17 @@ export function Header() {
                       </div>
                     </DropdownMenuItem>
                   </DropdownMenuContent>
-                )}
-              </DropdownMenu>
+                </DropdownMenu>
+              ) : (
+                <Button
+                  asChild
+                  variant="default"
+                  className="w-full bg-primary text-white"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <Link href="/crew">Pilot Portal</Link>
+                </Button>
+              )}
             </div>
           </div>
         </nav>

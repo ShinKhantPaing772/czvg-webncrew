@@ -248,7 +248,7 @@ export default function FleetPage() {
                   {category.aircraft.map((aircraft, aircraftIndex) => (
                     <div
                       key={aircraftIndex}
-                      className="bg-gray-50 rounded-xl shadow-md overflow-hidden"
+                      className="bg-gray-50 rounded-md shadow-md overflow-hidden"
                     >
                       <div className="md:flex p-2">
                         <div className="md:w-2/3 p-6">
@@ -295,13 +295,13 @@ export default function FleetPage() {
               <div className="flex justify-center space-x-4">
                 <Link
                   href="/crew?type=signup"
-                  className="bg-white text-blue-700 px-6 py-3 rounded font-medium hover:bg-gray-100 transition-colors"
+                  className="bg-white text-blue-700 px-6 py-3 rounded-md font-medium hover:bg-gray-100 transition-colors"
                 >
                   Apply Now
                 </Link>
                 <Link
                   href="/operations/routes"
-                  className="border border-white px-6 py-3 rounded font-medium hover:bg-blue-600 transition-colors"
+                  className="border border-white px-6 py-3 rounded-md font-medium hover:bg-blue-600 transition-colors"
                 >
                   Explore Routes
                 </Link>

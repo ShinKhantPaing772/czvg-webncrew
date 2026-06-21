@@ -25,16 +25,16 @@ export default function AboutPage() {
               <div className="prose prose-lg">
                 <p>
                   Founded in July 2021, China Southern Virtual Group was
-                  established when the idea of bringing another China-based
-                  airline to Infinite Flight started. Our hubs are at Guangzhou
-                  Baiyun and Beijing Daxing.
+                  established to bring another China-based airline experience
+                  to Infinite Flight. Our hubs are Guangzhou Baiyun and Beijing
+                  Daxing.
                 </p>
                 <br />
                 <p>
-                  As one of the largest airlines in China, we fly to more than
-                  300+ destinations across 1000+ routes from our hubs and focus
-                  cities to many places around the world. We also have a large
-                  variety of fleets you can fly!
+                  Inspired by one of the largest airlines in China, we fly to
+                  more than 300 destinations across over 1,000 routes from our
+                  hubs and focus cities. We also offer a wide variety of
+                  aircraft for pilots to fly.
                 </p>
                 <br />
                 <p className="font-medium">
@@ -93,13 +93,16 @@ export default function AboutPage() {
                 ].map((airline, index) => (
                   <div
                     key={index}
-                    className="bg-white p-6 rounded-lg shadow-sm border hover:shadow-md transition-shadow"
+                    className="bg-white p-6 rounded-md shadow-sm border hover:shadow-md transition-shadow"
                   >
                     <Image
                       src={airline.logo || "/placeholder.svg"}
                       alt={`${airline.name} logo`}
                       width={160}
                       height={80}
+                      unoptimized={airline.logo.startsWith(
+                        "https://upload.wikimedia.org",
+                      )}
                       className="mb-4 h-1/3 object-contain w-full"
                     />
                     <h3 className="font-bold text-lg mb-2">{airline.name}</h3>
@@ -125,13 +128,13 @@ export default function AboutPage() {
               <div className="flex justify-center space-x-4">
                 <Link
                   href="/crew?type=signup"
-                  className="bg-blue-700 text-white px-6 py-3 rounded hover:bg-blue-800 transition-colors"
+                  className="bg-blue-700 text-white px-6 py-3 rounded-md hover:bg-blue-800 transition-colors"
                 >
                   Apply Now
                 </Link>
                 <Link
                   href="/operations"
-                  className="border border-gray-300 px-6 py-3 rounded hover:bg-gray-50 transition-colors"
+                  className="border border-gray-300 px-6 py-3 rounded-md hover:bg-gray-50 transition-colors"
                 >
                   Learn More
                 </Link>
