@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { models } from "@/lib/models";
+import { requireAuth } from "@/lib/server-auth";
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAuth(request);
+    if (!auth.ok) return auth.response;
+
     const body = await request.json();
     const {
       flightnum,
@@ -23,6 +27,10 @@ export async function POST(request: NextRequest) {
         { error: "Pilot ID is required" },
         { status: 400 }
       );
+    }
+
+    if (String(auth.user.id) !== String(pilotid)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     if (!aircraftId) {
@@ -87,7 +95,7 @@ export async function POST(request: NextRequest) {
       flighttime: multiplier
         ? totalSeconds * multiplier.multiplier
         : totalSeconds,
-      pilotid,
+      pilotid: auth.user.id,
       date: date || new Date(),
       aircraftid: aircraftId,
       fuelused: parsedFuel,

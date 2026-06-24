@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import sequelize from "@/lib/database";
 import { models } from "@/lib/models";
-import { Op } from "sequelize";
+import { Op, QueryTypes } from "sequelize";
+import { requirePermission } from "@/lib/server-auth";
 
 // Mark this route as dynamic to prevent static optimization
 export const dynamic = "force-dynamic";
@@ -9,6 +10,9 @@ export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   try {
+    const auth = await requirePermission(request, "home");
+    if (!auth.ok) return auth.response;
+
     const { searchParams } = new URL(request.url);
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
@@ -43,11 +47,17 @@ export async function GET(request: Request) {
     const flightHoursQuery = `
       SELECT SUM(flighttime) as total 
       FROM pireps 
-      WHERE date BETWEEN '${startDate}' AND '${endDate}' AND status = 1
+      WHERE date BETWEEN :startDate AND :endDate AND status = 1
     `;
-    const [flightHoursResult] = await sequelize.query(flightHoursQuery);
+    const flightHoursResult = await sequelize.query<{ total: number | null }>(
+      flightHoursQuery,
+      {
+        replacements: { startDate, endDate },
+        type: QueryTypes.SELECT,
+      },
+    );
     const flightHoursSeconds =
-      (flightHoursResult[0] as { total: number | null })?.total || 0;
+      flightHoursResult[0]?.total || 0;
     const flightHours = flightHoursSeconds / 3600; // Convert seconds to hours
 
     // Compile date range stats

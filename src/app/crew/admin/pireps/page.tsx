@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { CrewHeader } from "@/components/crew-header";
 import { Button } from "@/components/ui/button";
-import { getToken } from "@/lib/utils/auth";
+import { authFetch } from "@/lib/utils/api";
 import {
   Card,
   CardContent,
@@ -133,7 +133,7 @@ export default function AdminPireps() {
       setError(null);
 
       // Simplified fetch with no parameters
-      const response = await fetch(`/api/admin/pireps`);
+      const response = await authFetch(`/api/admin/pireps`);
       const data: PirepsResponse = await response.json();
 
       if (!data.success) {
@@ -217,14 +217,12 @@ export default function AdminPireps() {
   // Handle PIREP approval
   const handleApprovePirep = async (pirep: Pirep) => {
     const remark = remarkRef.current?.value.trim() ?? "";
-    const token = getToken();
 
     try {
-      const response = await fetch(`/api/admin/pireps`, {
+      const response = await authFetch(`/api/admin/pireps`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           id: pirep.id,
@@ -261,14 +259,12 @@ export default function AdminPireps() {
       setError("A remark is required to reject this PIREP.");
       return;
     }
-    const token = getToken();
 
     try {
-      const response = await fetch(`/api/admin/pireps`, {
+      const response = await authFetch(`/api/admin/pireps`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           id: pirep.id,

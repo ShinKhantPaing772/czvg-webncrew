@@ -2,12 +2,17 @@ import { NextResponse } from "next/server";
 import sequelize from "@/lib/database";
 import { formatFlightTime } from "@/lib/utils/time";
 import { formatFlightTimewithcolon } from "@/lib/utils/format-flight-time";
+import { QueryTypes } from "sequelize";
+import { requirePermission } from "@/lib/server-auth";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: { id: string } },
 ) {
   try {
+    const auth = await requirePermission(request, "routes");
+    if (!auth.ok) return auth.response;
+
     const routeId = params.id;
 
     // Build the SQL query to get route details with aircraft
@@ -36,16 +41,16 @@ export async function GET(
       FROM routes r
       LEFT JOIN route_aircraft ra ON r.id = ra.routeid
       LEFT JOIN aircraft a ON ra.aircraftid = a.id
-      WHERE r.id = '${routeId}'
+      WHERE r.id = :routeId
       GROUP BY r.id
     `;
 
     // Execute the query
-    const [routeResult] = await sequelize.query(routeQuery);
-    const route =
-      Array.isArray(routeResult) && routeResult.length > 0
-        ? routeResult[0]
-        : null;
+    const routeResult = await sequelize.query(routeQuery, {
+      replacements: { routeId },
+      type: QueryTypes.SELECT,
+    });
+    const route = routeResult.length > 0 ? routeResult[0] : null;
 
     if (!route) {
       return NextResponse.json(

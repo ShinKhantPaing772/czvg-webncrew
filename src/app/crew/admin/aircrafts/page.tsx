@@ -28,6 +28,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { CrewHeader } from "@/components/crew-header";
 import { Card, CardContent } from "@/components/ui/card";
+import { authFetch } from "@/lib/utils/api";
 
 interface Aircraft {
   id: number;
@@ -72,7 +73,7 @@ export default function AircraftPage() {
 
   const fetchAircraft = async () => {
     setIsloadingaircraft(true);
-    const res = await fetch("/api/aircraft");
+    const res = await authFetch("/api/aircraft");
     const data = await res.json();
     setAircraft(data.aircrafts);
     setIsloadingaircraft(false);
@@ -85,7 +86,7 @@ export default function AircraftPage() {
   const openAddModal = async () => {
     setOpen(true);
     setIsloadingaircraftif(true);
-    const res = await fetch("/api/aircraft/if/aircraft");
+    const res = await authFetch("/api/aircraft/if/aircraft");
     const data = await res.json();
     setIfAircraftList(data.result);
     setIsloadingaircraftif(false);
@@ -103,7 +104,7 @@ export default function AircraftPage() {
     });
 
     setIsloadingliveryif(true);
-    const res = await fetch(`/api/aircraft/if/liveries/${id}`);
+    const res = await authFetch(`/api/aircraft/if/liveries/${id}`);
     const data = await res.json();
     setIfLiveryList(data.result);
     setIsloadingliveryif(false);
@@ -112,7 +113,7 @@ export default function AircraftPage() {
   const handleSubmit = async () => {
     if (!form.ifAircraftId || !form.ifLiveryId) return;
     setIsloading(true);
-    const res = await fetch("/api/aircraft", {
+    const res = await authFetch("/api/aircraft", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(form),

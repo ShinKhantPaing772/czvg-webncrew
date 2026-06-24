@@ -23,6 +23,7 @@ import { CrewHeader } from "@/components/crew-header";
 import { formatFlightTimeHM } from "@/lib/utils/format-flight-time";
 import { useSession } from "@/hooks/use-session";
 import { useEffect, useState } from "react";
+import { authFetch } from "@/lib/utils/api";
 
 interface Pirep {
   id: string;
@@ -44,7 +45,7 @@ export default function UserDashboard() {
   useEffect(() => {
     const fetchPireps = async () => {
       try {
-        const response = await fetch(`/api/pilots/${user?.id}/pireps`);
+        const response = await authFetch(`/api/pilots/${user?.id}/pireps`);
         const data = await response.json();
         const recentPireps = data.pireps
           .slice(0, 5)

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { models } from "@/lib/models";
+import { requirePermission } from "@/lib/server-auth";
 // Mark this route as dynamic to prevent static optimization
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -107,6 +108,9 @@ function validateRouteRow(row: any, rowNumber: number): any {
 
 export async function POST(request: Request) {
   try {
+    const auth = await requirePermission(request, "routes");
+    if (!auth.ok) return auth.response;
+
     const body = await request.json();
     const { mode, parsedData, aircraftMappings } = body;
 

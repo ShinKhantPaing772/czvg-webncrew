@@ -50,6 +50,7 @@ import {
 } from "@/components/ui/pagination";
 import { Input } from "@/components/ui/input"; // 🔍 new import
 import { useSession } from "@/hooks/use-session";
+import { authFetch } from "@/lib/utils/api";
 
 interface PirepComment {
   id: number;
@@ -99,7 +100,7 @@ export default function ViewPireps() {
   useEffect(() => {
     const fetchPireps = async () => {
       try {
-        const response = await fetch(`/api/pilots/${user?.id}/pireps`);
+        const response = await authFetch(`/api/pilots/${user?.id}/pireps`);
         if (!response.ok) throw new Error("Failed to fetch PIREPs");
         const data = await response.json();
         setPirepsData(data.pireps);

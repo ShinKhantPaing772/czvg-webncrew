@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { models } from "@/lib/models";
 import sequelize from "@/lib/database";
+import { requirePermission } from "@/lib/server-auth";
 
 // Mark this route as dynamic to prevent static optimization
 export const dynamic = "force-dynamic";
@@ -8,6 +9,9 @@ export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   try {
+    const auth = await requirePermission(request, "users");
+    if (!auth.ok) return auth.response;
+
     const [users] = await sequelize.query(`
       SELECT p.*, 
         (
@@ -30,6 +34,9 @@ export async function GET(request: Request) {
 
 export async function PUT(request: Request) {
   try {
+    const auth = await requirePermission(request, "users");
+    if (!auth.ok) return auth.response;
+
     const body = await request.json();
     const { id, name, email, callsign, status, notes } = body;
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

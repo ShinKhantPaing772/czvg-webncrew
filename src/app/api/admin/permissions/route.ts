@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { QueryTypes } from "sequelize";
 import sequelize from "@/lib/database";
 import { models } from "@/lib/models";
+import { requirePermission } from "@/lib/server-auth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -71,8 +72,11 @@ async function replaceUserPermissions(userid: number, permissions: string[]) {
   });
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const auth = await requirePermission(request, "permissions");
+    if (!auth.ok) return auth.response;
+
     const rows = await sequelize.query<AdminPermissionRow>(
       `
         SELECT
@@ -112,6 +116,9 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const auth = await requirePermission(request, "permissions");
+    if (!auth.ok) return auth.response;
+
     const body = await request.json();
     const email = typeof body.email === "string" ? body.email.trim() : "";
     const roleId = typeof body.role === "string" ? body.role : "";
@@ -148,6 +155,9 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   try {
+    const auth = await requirePermission(request, "permissions");
+    if (!auth.ok) return auth.response;
+
     const body = await request.json();
     const userid = Number(body.id);
     const permissions = normalizePermissions(body.permissions);
@@ -184,6 +194,9 @@ export async function PUT(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    const auth = await requirePermission(request, "permissions");
+    if (!auth.ok) return auth.response;
+
     const { searchParams } = new URL(request.url);
     const userid = Number(searchParams.get("id"));
 

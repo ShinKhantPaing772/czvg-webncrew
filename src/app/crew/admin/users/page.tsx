@@ -81,6 +81,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import Link from "next/link";
+import { authFetch } from "@/lib/utils/api";
 
 interface Pilots {
   id: string;
@@ -128,7 +129,7 @@ export default function Users() {
   const itemsPerPage = 10;
 
   const loadUsers = async () => {
-    const response = await fetch("/api/admin/users");
+    const response = await authFetch("/api/admin/users");
     const data = await response.json();
     // Make sure it’s an array
     const usersArray = Array.isArray(data) ? data : data.users || [];
@@ -281,7 +282,7 @@ export default function Users() {
 
     setIsUpdating(true);
     try {
-      const response = await fetch("/api/admin/users", {
+      const response = await authFetch("/api/admin/users", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -326,7 +327,7 @@ export default function Users() {
   const handleApproveUser = async (user: Pilots) => {
     setIsUpdating(true);
     try {
-      const response = await fetch("/api/admin/users", {
+      const response = await authFetch("/api/admin/users", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -356,7 +357,7 @@ export default function Users() {
   const handleRejectUser = async (user: Pilots) => {
     setIsUpdating(true);
     try {
-      const response = await fetch("/api/admin/users", {
+      const response = await authFetch("/api/admin/users", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

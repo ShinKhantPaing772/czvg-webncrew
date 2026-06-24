@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import sequelize from "@/lib/database";
 import { formatFlightTime } from "@/lib/utils/time";
+import { QueryTypes } from "sequelize";
 
 export async function GET(
   _request: Request,
@@ -37,16 +38,16 @@ export async function GET(
       FROM routes r
       LEFT JOIN route_aircraft ra ON r.id = ra.routeid
       LEFT JOIN aircraft a ON ra.aircraftid = a.id
-      WHERE r.id = '${routeId}'
+      WHERE r.id = :routeId
       GROUP BY r.id
     `;
 
     // Execute the query
-    const [routeResult] = await sequelize.query(routeQuery);
-    const route =
-      Array.isArray(routeResult) && routeResult.length > 0
-        ? routeResult[0]
-        : null;
+    const routeResult = await sequelize.query(routeQuery, {
+      replacements: { routeId },
+      type: QueryTypes.SELECT,
+    });
+    const route = routeResult.length > 0 ? routeResult[0] : null;
 
     if (!route) {
       return NextResponse.json(
@@ -69,17 +70,15 @@ export async function GET(
       FROM pireps p
       JOIN aircraft a ON p.aircraftid = a.id
       JOIN pilots pilot ON p.pilotid = pilot.id
-      WHERE p.departure = '${(route as any).dep}' AND p.arrival = '${
-      (route as any).arr
-    }'
+      WHERE p.departure = :dep AND p.arrival = :arr
       ORDER BY p.date DESC
       LIMIT 10
     `;
 
-    const [recentFlightsResult] = await sequelize.query(recentFlightsQuery);
-    const recentFlights = Array.isArray(recentFlightsResult)
-      ? recentFlightsResult
-      : [];
+    const recentFlights = await sequelize.query(recentFlightsQuery, {
+      replacements: { dep: (route as any).dep, arr: (route as any).arr },
+      type: QueryTypes.SELECT,
+    });
 
     // Format the route data
     const formattedRoute = {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { models } from "@/lib/models";
+import { hasPermission, requireAuth } from "@/lib/server-auth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -293,6 +294,9 @@ async function findCurrentFlight(ifUserId: string) {
 }
 
 export async function GET(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (!auth.ok) return auth.response;
+
   const pilotId = request.nextUrl.searchParams.get("pilotId");
 
   if (!pilotId) {
@@ -300,6 +304,14 @@ export async function GET(request: NextRequest) {
       { error: "Pilot ID is required" },
       { status: 400 },
     );
+  }
+
+  const canFetchPilot =
+    String(auth.user.id) === String(pilotId) ||
+    hasPermission(auth.user, ["pireps", "users"]);
+
+  if (!canFetchPilot) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   if (!process.env.IF_API) {

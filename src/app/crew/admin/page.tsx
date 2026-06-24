@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/popover";
 import { DayPicker } from "react-day-picker";
 import { cn } from "@/lib/utils";
+import { authFetch } from "@/lib/utils/api";
 
 export default function AdminDashboard() {
   const [selected, setSelected] = useState<{
@@ -57,7 +58,7 @@ export default function AdminDashboard() {
       try {
         setLoading(true);
 
-        const response = await fetch(`/api/admin/dashboard/`);
+        const response = await authFetch(`/api/admin/dashboard/`);
         if (!response.ok) {
           throw new Error("Failed to fetch dashboard statistics");
         }
@@ -88,7 +89,7 @@ export default function AdminDashboard() {
           params.append("endDate", format(date.to, "yyyy-MM-dd"));
         }
 
-        const response = await fetch(`/api/admin/dashboard/filter?${params}`);
+        const response = await authFetch(`/api/admin/dashboard/filter?${params}`);
         if (!response.ok) {
           throw new Error("Failed to fetch filtered statistics");
         }

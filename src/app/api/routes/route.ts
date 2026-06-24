@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import sequelize from "@/lib/database";
 import { formatFlightTime } from "@/lib/utils/time";
-import { models } from "@/lib/models";
+import { QueryTypes } from "sequelize";
 
 // Mark this route as dynamic to prevent static optimization
 export const dynamic = "force-dynamic";
@@ -19,6 +19,43 @@ export async function GET(request: Request) {
     const aircraftId = searchParams.get("aircraftId");
     const minDuration = searchParams.get("minDuration");
     const maxDuration = searchParams.get("maxDuration");
+
+    const whereClauses = ["1=1"];
+    const replacements: Record<string, string | number> = {};
+
+    if (fltnum) {
+      whereClauses.push("r.fltnum LIKE :fltnum");
+      replacements.fltnum = `%${fltnum}%`;
+    }
+    if (dep) {
+      whereClauses.push("r.dep = :dep");
+      replacements.dep = dep;
+    }
+    if (arr) {
+      whereClauses.push("r.arr = :arr");
+      replacements.arr = arr;
+    }
+    if (minDuration) {
+      const value = Number(minDuration);
+      if (!Number.isNaN(value)) {
+        whereClauses.push("r.duration >= :minDuration");
+        replacements.minDuration = value;
+      }
+    }
+    if (maxDuration) {
+      const value = Number(maxDuration);
+      if (!Number.isNaN(value)) {
+        whereClauses.push("r.duration <= :maxDuration");
+        replacements.maxDuration = value;
+      }
+    }
+    if (aircraftId) {
+      whereClauses.push("a.id = :aircraftId");
+      replacements.aircraftId = aircraftId;
+    } else if (aircraft) {
+      whereClauses.push("a.name LIKE :aircraft");
+      replacements.aircraft = `%${aircraft}%`;
+    }
 
     // Build the SQL query with filters
     let query = `
@@ -43,22 +80,16 @@ export async function GET(request: Request) {
       FROM routes r
       LEFT JOIN route_aircraft ra ON r.id = ra.routeid
       LEFT JOIN aircraft a ON ra.aircraftid = a.id
-      WHERE 1=1
-      ${fltnum ? `AND r.fltnum LIKE '%${fltnum}%'` : ""}
-      ${dep ? `AND r.dep = '${dep}'` : ""}
-      ${arr ? `AND r.arr = '${arr}'` : ""}
-      ${minDuration ? `AND r.duration >= ${minDuration}` : ""}
-      ${maxDuration ? `AND r.duration <= ${maxDuration}` : ""}
-      ${aircraftId ? `AND a.id = '${aircraftId}'` : ""}
-      ${
-        !aircraftId && aircraft ? `AND a.name LIKE '%${aircraft}%'` : ""
-      } /* For backward compatibility */
+      WHERE ${whereClauses.join(" AND ")}
     `;
 
     // Add group by and order by
     query += " GROUP BY r.id ORDER BY r.fltnum";
     // Execute the raw query
-    const [routes] = await sequelize.query(query);
+    const routes = await sequelize.query(query, {
+      replacements,
+      type: QueryTypes.SELECT,
+    });
 
     // Format the routes data
     let formattedRoutes = Array.isArray(routes)

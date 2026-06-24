@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCached, setCached } from "@/lib/utils/if-cache";
+import { requirePermission } from "@/lib/server-auth";
 
 const CACHE_KEY = "if-aircraft-list";
 const CACHE_TTL_SECONDS = 60 * 60; // 60 minutes
 
 export async function GET(req: NextRequest) {
+  const auth = await requirePermission(req, "aircrafts");
+  if (!auth.ok) return auth.response;
+
   const cachedData = await getCached<Record<string, unknown>>(CACHE_KEY);
   if (cachedData) {
     return NextResponse.json(cachedData, { status: 200 });

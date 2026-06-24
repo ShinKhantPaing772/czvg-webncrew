@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
 import sequelize from "@/lib/database";
 import { models } from "@/lib/models";
+import { requirePermission } from "@/lib/server-auth";
 
 // Mark this route as dynamic to prevent static optimization
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export async function GET(_request: Request) {
+export async function GET(request: Request) {
   try {
+    const auth = await requirePermission(request, "home");
+    if (!auth.ok) return auth.response;
+
     // Get total pilots count
     const totalPilots = await models.Pilot.count({
       where: {

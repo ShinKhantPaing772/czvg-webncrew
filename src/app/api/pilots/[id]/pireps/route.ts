@@ -1,13 +1,24 @@
 import { NextResponse } from "next/server";
 import { models } from "@/lib/models";
 import { formatFlightTime } from "@/lib/utils/time";
+import { hasPermission, requireAuth } from "@/lib/server-auth";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: { id: string } },
 ) {
   try {
+    const auth = await requireAuth(request);
+    if (!auth.ok) return auth.response;
+
     const pilotId = params.id;
+    const canViewPireps =
+      String(auth.user.id) === String(pilotId) ||
+      hasPermission(auth.user, ["pireps", "users"]);
+
+    if (!canViewPireps) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     // Fetch ALL PIREPs for the pilot (regardless of status)
     const pireps = await models.Pirep.findAll({

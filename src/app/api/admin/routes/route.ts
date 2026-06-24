@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { models } from "@/lib/models";
 import { formatFlightTime } from "@/lib/utils/time";
 import { Op } from "sequelize";
+import { requirePermission } from "@/lib/server-auth";
 
 // Mark this route as dynamic to prevent static optimization
 export const dynamic = "force-dynamic";
@@ -19,6 +20,9 @@ function convertDurationToSeconds(duration: string | number): number {
 
 export async function GET(request: Request) {
   try {
+    const auth = await requirePermission(request, "routes");
+    if (!auth.ok) return auth.response;
+
     const { searchParams } = new URL(request.url);
 
     // Build filter conditions using Sequelize operators
@@ -95,6 +99,9 @@ export async function GET(request: Request) {
 // Create a new route
 export async function POST(request: Request) {
   try {
+    const auth = await requirePermission(request, "routes");
+    if (!auth.ok) return auth.response;
+
     const body = await request.json();
     const { fltnum, dep, arr, duration, notes, aircraft } = body;
 
@@ -145,6 +152,9 @@ export async function POST(request: Request) {
 // Update a route
 export async function PUT(request: Request) {
   try {
+    const auth = await requirePermission(request, "routes");
+    if (!auth.ok) return auth.response;
+
     const body = await request.json();
     const { id, fltnum, dep, arr, duration, notes, aircraft } = body;
 
@@ -212,6 +222,9 @@ export async function PUT(request: Request) {
 // Delete a route
 export async function DELETE(request: Request) {
   try {
+    const auth = await requirePermission(request, "routes");
+    if (!auth.ok) return auth.response;
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCached, setCached } from "@/lib/utils/if-cache";
+import { requirePermission } from "@/lib/server-auth";
 
 const CACHE_TTL_SECONDS = 60 * 60; // 60 minutes
 
@@ -7,6 +8,9 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
+  const auth = await requirePermission(req, "aircrafts");
+  if (!auth.ok) return auth.response;
+
   const { id } = params;
 
   if (!id) {

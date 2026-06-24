@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/select";
 import { CrewHeader } from "@/components/crew-header";
 import { useSearchParams } from "next/navigation";
+import { authFetch } from "@/lib/utils/api";
 interface aircraft {
   id: string;
   name: string;
@@ -149,7 +150,7 @@ export default function FilePirep() {
     }
 
     try {
-      const response = await fetch("/api/pireps", {
+      const response = await authFetch("/api/pireps", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -186,7 +187,7 @@ export default function FilePirep() {
     setAcarsMessage(null);
 
     try {
-      const response = await fetch(
+      const response = await authFetch(
         `/api/acars/current-flight?pilotId=${user.id}`,
       );
       const data: AcarsResponse = await response.json();

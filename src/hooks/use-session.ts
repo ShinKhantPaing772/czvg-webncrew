@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getToken, isAuthenticated } from "@/lib/utils/auth";
+import { authFetch } from "@/lib/utils/api";
 
 type User = {
   callsign: string;
@@ -28,7 +29,7 @@ async function fetchWithTimeout(
   const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    return await fetch(input, {
+    return await authFetch(input, {
       ...init,
       signal: controller.signal,
     });

@@ -62,6 +62,7 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { authFetch } from "@/lib/utils/api";
 
 const routeSchema = z.object({
   fltnum: z.string().min(1, "Flight number is required."),
@@ -154,7 +155,7 @@ export default function RoutesPage() {
       // Step 1: Parse and preview CSV
       const csvContent = await file.text();
 
-      const response = await fetch("/api/admin/routes/bulk-import", {
+      const response = await authFetch("/api/admin/routes/bulk-import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -214,7 +215,7 @@ export default function RoutesPage() {
       setImportLoading(true);
 
       // Step 2: Import with aircraft mappings
-      const response = await fetch("/api/admin/routes/bulk-import", {
+      const response = await authFetch("/api/admin/routes/bulk-import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -274,7 +275,7 @@ export default function RoutesPage() {
         if (max === 0) url.searchParams.delete("maxDuration");
       }
 
-      const response = await fetch(url.toString());
+      const response = await authFetch(url.toString());
 
       if (!response.ok) {
         throw new Error("Failed to fetch routes");
@@ -294,7 +295,7 @@ export default function RoutesPage() {
   // Fetch aircraft options
   const fetchAircraft = async () => {
     try {
-      const response = await fetch("/api/aircraft");
+      const response = await authFetch("/api/aircraft");
 
       if (!response.ok) {
         throw new Error("Failed to fetch aircraft");
@@ -334,7 +335,7 @@ export default function RoutesPage() {
     if (!selectedRoute) return;
 
     try {
-      const response = await fetch(
+      const response = await authFetch(
         `/api/admin/routes?id=${(selectedRoute as any).id}`,
         {
           method: "DELETE",
@@ -650,7 +651,7 @@ export default function RoutesPage() {
                 const payload = { ...data, aircraft: newRoute.aircraft };
 
                 try {
-                  const response = await fetch("/api/admin/routes", {
+                  const response = await authFetch("/api/admin/routes", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(payload),

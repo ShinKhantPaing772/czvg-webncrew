@@ -17,6 +17,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CrewHeader } from "@/components/crew-header";
+import { authFetch } from "@/lib/utils/api";
 
 interface Aircraft {
   id: number;
@@ -53,7 +54,7 @@ export default function EditRoutePage() {
   useEffect(() => {
     const fetchRoute = async () => {
       try {
-        const res = await fetch(`/api/admin/routes/${id}`);
+        const res = await authFetch(`/api/admin/routes/${id}`);
         if (!res.ok) throw new Error("Failed to fetch route");
         const data = await res.json();
         setRouteData(data.data);
@@ -65,7 +66,7 @@ export default function EditRoutePage() {
     };
 
     const fetchAircraft = async () => {
-      const res = await fetch("/api/aircraft");
+      const res = await authFetch("/api/aircraft");
       const data = await res.json();
       setAircraftOptions(data.aircrafts);
     };
@@ -79,7 +80,7 @@ export default function EditRoutePage() {
 
     setSaving(true);
     try {
-      const res = await fetch("/api/admin/routes", {
+      const res = await authFetch("/api/admin/routes", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

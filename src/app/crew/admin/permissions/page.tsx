@@ -51,6 +51,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { authFetch } from "@/lib/utils/api";
 
 type AdminUser = {
   id: number;
@@ -185,7 +186,7 @@ export default function AdminPermissions() {
     setError("");
 
     try {
-      const response = await fetch("/api/admin/permissions");
+      const response = await authFetch("/api/admin/permissions");
       const data = await response.json();
 
       if (!response.ok) {
@@ -245,7 +246,7 @@ export default function AdminPermissions() {
     setMessage("");
 
     try {
-      const response = await fetch("/api/admin/permissions", {
+      const response = await authFetch("/api/admin/permissions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -281,7 +282,7 @@ export default function AdminPermissions() {
     setMessage("");
 
     try {
-      const response = await fetch("/api/admin/permissions", {
+      const response = await authFetch("/api/admin/permissions", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -313,7 +314,7 @@ export default function AdminPermissions() {
     setMessage("");
 
     try {
-      const response = await fetch(`/api/admin/permissions?id=${admin.id}`, {
+      const response = await authFetch(`/api/admin/permissions?id=${admin.id}`, {
         method: "DELETE",
       });
       const data = await response.json();
