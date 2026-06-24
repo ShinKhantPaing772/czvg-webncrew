@@ -1,5 +1,8 @@
 import Link from "next/link";
 import Image from "next/image";
+import { ArrowRight, MapPinned } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 
@@ -66,14 +69,20 @@ export default function HubsPage() {
     },
   ];
 
+  const subsidiaryGroups = [
+    { name: "Chengdu Airlines", hubs: chengduAirHubs },
+    { name: "Hebei Airlines", hubs: hebeiAirHubs },
+    { name: "Jiangxi Air", hubs: jiangxiAirHubs },
+    { name: "Chongqing Airlines", hubs: chongqingAirHubs },
+  ];
+
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="flex min-h-screen flex-col bg-white">
       <Header />
       <main className="flex-1">
-        {/* Hero Section */}
-        <section className="py-16 md:py-24">
-          <div className="container mx-auto px-4">
-            <div className="flex items-center gap-2 text-sm text-gray-500 mb-4">
+        <section className="site-section bg-slate-950 text-white">
+          <div className="site-container">
+            <div className="mb-5 flex items-center gap-2 text-sm text-slate-300">
               <Link href="/" className="hover:text-blue-700">
                 Home
               </Link>
@@ -82,11 +91,16 @@ export default function HubsPage() {
                 Operations
               </Link>
               <span>/</span>
-              <span className="text-gray-700">Hubs</span>
+              <span className="text-white">Hubs</span>
             </div>
-            <h1 className="text-4xl md:text-5xl font-bold mb-6">Our Hubs</h1>
             <div className="max-w-3xl">
-              <p className="text-lg text-gray-600 mb-8">
+              <p className="text-xs font-semibold uppercase text-sky-200">
+                Hubs
+              </p>
+              <h1 className="mt-3 text-4xl font-bold leading-tight sm:text-5xl">
+                Main hubs and focus cities across the CZVG network.
+              </h1>
+              <p className="mt-5 text-lg leading-8 text-slate-300">
                 Learn about our main operational hubs and focus cities across
                 China.
               </p>
@@ -94,12 +108,16 @@ export default function HubsPage() {
           </div>
         </section>
 
-        {/* Hubs Overview */}
-        <section className="py-12 bg-gray-50">
-          <div className="container mx-auto px-4">
-            <div className="max-w-4xl mx-auto">
-              <h2 className="text-3xl font-bold mb-6">Our Airlines Network</h2>
-              <div className="prose prose-lg">
+        <section className="site-section">
+          <div className="site-container">
+            <div className="grid gap-10 lg:grid-cols-[0.85fr_1.15fr]">
+              <div>
+                <p className="site-eyebrow">Airline network</p>
+                <h2 className="site-heading mt-3">
+                  A network centered around China with several regional bases.
+                </h2>
+              </div>
+              <div className="text-base leading-8 text-slate-600">
                 <p>
                   China Southern Virtual Group, along with its subsidiary
                   airlines, operates an extensive network of hubs and focus
@@ -112,59 +130,68 @@ export default function HubsPage() {
           </div>
         </section>
 
-        {/* Main Hubs */}
-        <section className="py-16">
-          <div className="container mx-auto px-4">
-            <div className="max-w-6xl mx-auto">
-              <h2 className="text-3xl font-bold mb-8">
-                China Southern Airlines Main Hubs
+        <section className="site-section bg-slate-50">
+          <div className="site-container">
+            <div className="mb-8">
+              <p className="site-eyebrow">Main hubs</p>
+              <h2 className="site-heading mt-3">
+                China Southern Airlines main hubs
               </h2>
+            </div>
 
-              <div className="space-y-16">
+              <div className="space-y-6">
                 {chinaSouthernHubs.map((hub, index) => (
                   <div
-                    key={index}
-                    className="bg-white rounded-lg shadow-md overflow-hidden border"
+                    key={hub.code}
+                    className="site-card overflow-hidden"
                   >
-                    <div className="md:flex flex-col lg:flex-row">
-                      <div className="lg:w-1/2">
-                        <div className="h-64 lg:h-full relative">
-                          <Image
-                            src={hub.image || "/placeholder.svg"}
-                            alt={hub.name}
-                            fill
-                            className="object-cover"
-                          />
+                    <div className="grid lg:grid-cols-[0.95fr_1.05fr]">
+                      <div>
+                        <div className="relative h-72 lg:h-full">
+                          {hub.image ? (
+                            <Image
+                              src={hub.image}
+                              alt={hub.name}
+                              fill
+                              className="object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full items-center justify-center text-sm font-medium text-slate-500">
+                              Image coming soon
+                            </div>
+                          )}
                         </div>
                       </div>
-                      <div className="lg:w-1/2 p-6">
-                        <div className="flex items-center mb-3">
-                          <h3 className="text-2xl font-bold">{hub.name}</h3>
-                          <span className="ml-2 bg-blue-100 text-blue-800 text-sm font-medium px-2.5 py-0.5 rounded">
+                      <div className="p-6 lg:p-8">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <h3 className="text-2xl font-bold text-slate-950">
+                            {hub.name}
+                          </h3>
+                          <span className="site-badge w-fit">
                             {hub.code}
                           </span>
                         </div>
-                        <p className="text-gray-600 mb-6">{hub.description}</p>
+                        <p className="mt-4 text-slate-600">{hub.description}</p>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
                           <div>
-                            <p className="text-sm text-gray-500">Location</p>
+                            <p className="text-sm text-slate-500">Location</p>
                             <p className="font-medium">
                               {hub.details.location}
                             </p>
                           </div>
                           <div>
-                            <p className="text-sm text-gray-500">Terminals</p>
+                            <p className="text-sm text-slate-500">Terminals</p>
                             <p className="font-medium">
                               {hub.details.terminals}
                             </p>
                           </div>
                           <div>
-                            <p className="text-sm text-gray-500">Runways</p>
+                            <p className="text-sm text-slate-500">Runways</p>
                             <p className="font-medium">{hub.details.runways}</p>
                           </div>
                           <div>
-                            <p className="text-sm text-gray-500">
+                            <p className="text-sm text-slate-500">
                               Destinations
                             </p>
                             <p className="font-medium">
@@ -177,90 +204,107 @@ export default function HubsPage() {
                   </div>
                 ))}
               </div>
-            </div>
           </div>
         </section>
 
-        {/* Focus Cities */}
-        <section className="py-16 bg-gray-50">
-          <div className="container mx-auto px-4">
-            <div className="max-w-6xl mx-auto">
-              <h2 className="text-3xl font-bold mb-8">
-                China Southern Airlines Focus Cities
+        <section className="site-section">
+          <div className="site-container">
+            <div className="mb-8">
+              <p className="site-eyebrow">Focus cities</p>
+              <h2 className="site-heading mt-3">
+                China Southern Airlines focus cities
               </h2>
+            </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 {chinaSouthernFocusCities.map((city, index) => (
                   <div
-                    key={index}
-                    className="bg-white rounded-lg shadow-md overflow-hidden border"
+                    key={city.code}
+                    className="site-card overflow-hidden"
                   >
-                    <div className="h-48 relative">
-                      <Image
-                        src={city.image || "/placeholder.svg"}
-                        alt={city.name}
-                        fill
-                        className="object-cover"
-                      />
+                    <div className="relative h-48">
+                        {city.image ? (
+                          <Image
+                            src={city.image}
+                            alt={city.name}
+                            fill
+                            className="object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full items-center justify-center text-sm font-medium text-slate-500">
+                            Image coming soon
+                          </div>
+                        )}
                     </div>
                     <div className="p-6">
-                      <div className="flex items-center mb-3">
-                        <h3 className="text-xl font-bold">{city.name}</h3>
-                        <span className="ml-2 bg-blue-100 text-blue-800 text-sm font-medium px-2.5 py-0.5 rounded">
+                      <div className="flex flex-col gap-3">
+                        <h3 className="text-xl font-bold text-slate-950">
+                          {city.name}
+                        </h3>
+                        <span className="site-badge w-fit">
                           {city.code}
                         </span>
                       </div>
-                      <p className="text-gray-600">{city.description}</p>
+                      <p className="mt-4 text-sm leading-6 text-slate-600">
+                        {city.description}
+                      </p>
                     </div>
                   </div>
                 ))}
               </div>
-            </div>
           </div>
         </section>
 
-        {/* Subsidiary Airlines */}
-        <section className="py-16">
-          <div className="container mx-auto px-4">
-            <div className="max-w-6xl mx-auto">
-              <h2 className="text-3xl font-bold mb-8">
-                Subsidiary Airlines Network
-              </h2>
+        <section className="site-section bg-slate-50">
+          <div className="site-container">
+            <div className="mb-8">
+              <p className="site-eyebrow">Subsidiary network</p>
+              <h2 className="site-heading mt-3">Subsidiary airline hubs</h2>
+            </div>
 
-              {/* Xiamen Air */}
-              <div className="mb-16">
-                <h3 className="text-2xl font-bold mb-6">Xiamen Air</h3>
+              <div className="mb-12">
+                <h3 className="mb-6 text-2xl font-bold text-slate-950">
+                  Xiamen Air
+                </h3>
                 <div className="space-y-8">
                   {xiamenAirHubs.map((hub, index) => (
                     <div
-                      key={index}
-                      className="bg-white rounded-lg shadow-md overflow-hidden border"
+                      key={hub.code}
+                      className="site-card overflow-hidden"
                     >
-                      <div className="md:flex">
-                        <div className="md:w-1/2">
-                          <div className="h-64 md:h-full relative">
-                            <Image
-                              src={hub.image || "/placeholder.svg"}
-                              alt={hub.name}
-                              fill
-                              className="object-cover"
-                            />
+                      <div className="grid md:grid-cols-2">
+                        <div>
+                          <div className="relative h-64 md:h-full">
+                            {hub.image ? (
+                              <Image
+                                src={hub.image}
+                                alt={hub.name}
+                                fill
+                                className="object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-full items-center justify-center text-sm font-medium text-slate-500">
+                                Image coming soon
+                              </div>
+                            )}
                           </div>
                         </div>
-                        <div className="md:w-1/2 p-6">
-                          <div className="flex items-center mb-3">
-                            <h4 className="text-xl font-bold">{hub.name}</h4>
-                            <span className="ml-2 bg-blue-100 text-blue-800 text-sm font-medium px-2.5 py-0.5 rounded">
+                        <div className="p-6">
+                          <div className="flex flex-col gap-3">
+                            <h4 className="text-xl font-bold text-slate-950">
+                              {hub.name}
+                            </h4>
+                            <span className="site-badge w-fit">
                               {hub.code}
                             </span>
                           </div>
-                          <p className="text-gray-600 mb-6">
+                          <p className="mt-4 text-slate-600">
                             {hub.description}
                           </p>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
                             {Object.entries(hub.details).map(([key, value]) => (
                               <div key={key}>
-                                <p className="text-sm text-gray-500 capitalize">
+                                <p className="text-sm capitalize text-slate-500">
                                   {key}
                                 </p>
                                 <p className="font-medium">{value}</p>
@@ -274,25 +318,35 @@ export default function HubsPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     {xiamenAirFocusCities.map((city, index) => (
                       <div
-                        key={index}
-                        className="bg-white rounded-lg shadow-md overflow-hidden border"
+                        key={city.code}
+                        className="site-card overflow-hidden"
                       >
-                        <div className="h-48 relative">
-                          <Image
-                            src={city.image || "/placeholder.svg"}
-                            alt={city.name}
-                            fill
-                            className="object-cover"
-                          />
+                        <div className="relative h-48">
+                          {city.image ? (
+                            <Image
+                              src={city.image}
+                              alt={city.name}
+                              fill
+                              className="object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full items-center justify-center text-sm font-medium text-slate-500">
+                              Image coming soon
+                            </div>
+                          )}
                         </div>
                         <div className="p-6">
-                          <div className="flex items-center mb-3">
-                            <h4 className="text-xl font-bold">{city.name}</h4>
-                            <span className="ml-2 bg-blue-100 text-blue-800 text-sm font-medium px-2.5 py-0.5 rounded">
+                          <div className="flex flex-col gap-3">
+                            <h4 className="text-xl font-bold text-slate-950">
+                              {city.name}
+                            </h4>
+                            <span className="site-badge w-fit">
                               {city.code}
                             </span>
                           </div>
-                          <p className="text-gray-600">{city.description}</p>
+                          <p className="mt-4 text-sm leading-6 text-slate-600">
+                            {city.description}
+                          </p>
                         </div>
                       </div>
                     ))}
@@ -300,47 +354,48 @@ export default function HubsPage() {
                 </div>
               </div>
 
-              {/* Other Subsidiaries */}
-              {[
-                { name: "Chengdu Airlines", hubs: chengduAirHubs },
-                { name: "Hebei Airlines", hubs: hebeiAirHubs },
-                { name: "Jiangxi Air", hubs: jiangxiAirHubs },
-                { name: "Chongqing Airlines", hubs: chongqingAirHubs },
-              ].map((subsidiary, index) => (
-                <div key={index} className="mb-16">
-                  <h3 className="text-2xl font-bold mb-6">{subsidiary.name}</h3>
-                  <div className="space-y-8">
+              {subsidiaryGroups.map((subsidiary) => (
+                <div key={subsidiary.name} className="mb-12">
+                  <h3 className="mb-6 text-2xl font-bold text-slate-950">
+                    {subsidiary.name}
+                  </h3>
+                  <div className="grid gap-5 lg:grid-cols-2">
                     {subsidiary.hubs.map((hub, hubIndex) => (
                       <div
-                        key={hubIndex}
-                        className="bg-white rounded-lg shadow-md overflow-hidden border"
+                        key={hub.code}
+                        className="site-card overflow-hidden"
                       >
-                        <div className="md:flex">
-                          <div className="md:w-1/2">
-                            <div className="h-64 md:h-full relative">
-                              <Image
-                                src={hub.image || "/placeholder.svg"}
-                                alt={hub.name}
-                                fill
-                                className="object-cover"
-                              />
-                            </div>
-                          </div>
-                          <div className="md:w-1/2 p-6">
-                            <div className="flex items-center mb-3">
-                              <h4 className="text-xl font-bold">{hub.name}</h4>
-                              <span className="ml-2 bg-blue-100 text-blue-800 text-sm font-medium px-2.5 py-0.5 rounded">
+                        <div className="relative h-52 bg-slate-100">
+                              {hub.image ? (
+                                <Image
+                                  src={hub.image}
+                                  alt={hub.name}
+                                  fill
+                                  className="object-cover"
+                                />
+                              ) : (
+                                <div className="flex h-full items-center justify-center text-sm font-medium text-slate-500">
+                                  Image coming soon
+                                </div>
+                              )}
+                        </div>
+                        <div className="p-6">
+                            <div className="flex flex-col gap-3">
+                              <h4 className="text-xl font-bold text-slate-950">
+                                {hub.name}
+                              </h4>
+                              <span className="site-badge w-fit">
                                 {hub.code}
                               </span>
                             </div>
-                            <p className="text-gray-600 mb-6">
+                            <p className="mt-4 text-sm leading-6 text-slate-600">
                               {hub.description}
                             </p>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
                               {Object.entries(hub.details).map(
                                 ([key, value]) => (
                                   <div key={key}>
-                                    <p className="text-sm text-gray-500 capitalize">
+                                    <p className="text-sm capitalize text-slate-500">
                                       {key}
                                     </p>
                                     <p className="font-medium">{value}</p>
@@ -348,41 +403,40 @@ export default function HubsPage() {
                                 )
                               )}
                             </div>
-                          </div>
                         </div>
                       </div>
                     ))}
                   </div>
                 </div>
               ))}
-            </div>
           </div>
         </section>
 
-        {/* CTA Section */}
-        <section className="py-16 bg-blue-700 text-white">
-          <div className="container mx-auto px-4">
-            <div className="max-w-4xl mx-auto text-center">
-              <h2 className="text-3xl font-bold mb-4">
-                Ready to Explore Our Network?
+        <section className="bg-primary py-16 text-white">
+          <div className="site-container text-center">
+            <div className="mx-auto max-w-3xl">
+              <MapPinned className="mx-auto h-8 w-8 text-white/80" />
+              <h2 className="mt-4 text-3xl font-bold">
+                Ready to explore our network?
               </h2>
-              <p className="text-xl mb-8">
+              <p className="mt-4 text-white/80">
                 Join our virtual airline group today and fly from our hubs to
                 destinations around the world.
               </p>
-              <div className="flex justify-center space-x-4">
-                <Link
-                  href="/crew?type=signup"
-                  className="bg-white text-blue-700 px-6 py-3 rounded-md font-medium hover:bg-gray-100 transition-colors"
+              <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+                <Button asChild className="bg-white text-primary hover:bg-white/90">
+                  <Link href="/crew?type=signup">
+                    Apply Now
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </Button>
+                <Button
+                  asChild
+                  variant="outline"
+                  className="border-white/60 bg-transparent text-white hover:bg-white/10 hover:text-white"
                 >
-                  Apply Now
-                </Link>
-                <Link
-                  href="/operations/routes"
-                  className="border border-white px-6 py-3 rounded-md font-medium hover:bg-blue-600 transition-colors"
-                >
-                  View Routes
-                </Link>
+                  <Link href="/operations/routes">View Routes</Link>
+                </Button>
               </div>
             </div>
           </div>

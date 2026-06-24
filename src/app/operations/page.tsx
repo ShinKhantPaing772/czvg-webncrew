@@ -1,192 +1,150 @@
 import Link from "next/link";
 import Image from "next/image";
+import { ArrowRight, MapPinned, Plane, Route } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 
+const operations = [
+  {
+    title: "Our Fleet",
+    description:
+      "Explore aircraft ranging from regional jets to wide-body long-haul aircraft.",
+    href: "/operations/fleet",
+    image:
+      "https://global.discourse-cdn.com/infiniteflight/original/4X/4/4/9/449f11d44e6be0994c1ac7fd69a0565967bd46ab.png",
+    icon: Plane,
+  },
+  {
+    title: "Our Routes",
+    description:
+      "Discover a large domestic and international network built for virtual pilots.",
+    href: "/operations/routes",
+    image:
+      "https://global.discourse-cdn.com/infiniteflight/original/4X/8/e/f/8eff2df8d46564a0d6ebeb6f6776078af2073377.jpeg",
+    icon: Route,
+  },
+  {
+    title: "Our Hubs",
+    description:
+      "Learn about our main hubs, focus cities, and subsidiary airline bases.",
+    href: "/operations/hubs",
+    image:
+      "https://global.discourse-cdn.com/infiniteflight/optimized/4X/9/0/3/9032d2dcfa32d3d3ebab7f79d3a02c0c833fdd58_2_1640x1138.jpeg",
+    icon: MapPinned,
+  },
+];
+
 export default function OperationsPage() {
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="flex min-h-screen flex-col bg-white">
       <Header />
       <main className="flex-1">
-        {/* Hero Section */}
-        <section className="py-16 md:py-24">
-          <div className="container mx-auto px-4">
-            <h1 className="text-4xl md:text-5xl font-bold mb-6">Operations</h1>
+        <section className="site-section bg-slate-950 text-white">
+          <div className="site-container">
             <div className="max-w-3xl">
-              <p className="text-lg text-gray-600 mb-8">
-                Explore our fleet, routes network, and operational hubs across
-                China and beyond.
+              <p className="text-xs font-semibold uppercase text-sky-200">
+                Operations
+              </p>
+              <h1 className="mt-3 text-4xl font-bold leading-tight sm:text-5xl">
+                Fleet, routes, and hubs built around realistic virtual flying.
+              </h1>
+              <p className="mt-5 text-lg leading-8 text-slate-300">
+                Explore our aircraft, route network, and operational bases
+                across China and beyond.
               </p>
             </div>
           </div>
         </section>
 
-        {/* Operations Overview */}
-        <section className="py-12 bg-gray-50">
-          <div className="container mx-auto px-4">
-            <div className="max-w-4xl mx-auto">
-              <h2 className="text-3xl font-bold mb-6">Our Operations</h2>
-              <div className="prose prose-lg">
-                <p>
+        <section className="site-section">
+          <div className="site-container">
+            <div className="grid gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-start">
+              <div>
+                <p className="site-eyebrow">Network overview</p>
+                <h2 className="site-heading mt-3">
+                  A broad operation with room for every flight style.
+                </h2>
+                <p className="site-copy mt-5">
                   China Southern Virtual Group operates one of the most
                   extensive networks in the virtual aviation community. With
-                  over 300 destinations and 1000+ routes, we provide virtual
-                  pilots with endless flying opportunities.
+                  over 300 destinations and 1000+ routes, pilots can choose
+                  short domestic sectors, international wide-body flights, and
+                  partner operations.
                 </p>
-                <p>
-                  Our operations are centered around our main hubs at Guangzhou
-                  Baiyun International Airport and Beijing Daxing International
-                  Airport, with additional focus cities throughout China and
-                  Asia.
-                </p>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-3">
+                {[
+                  ["300+", "Destinations"],
+                  ["1000+", "Routes"],
+                  ["6", "Airlines"],
+                ].map(([value, label]) => (
+                  <div key={label} className="site-card p-5">
+                    <p className="text-3xl font-bold text-primary">{value}</p>
+                    <p className="mt-2 text-sm font-medium text-slate-600">
+                      {label}
+                    </p>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
         </section>
 
-        {/* Operations Cards */}
-        <section className="py-16">
-          <div className="container mx-auto px-4">
-            <div className="max-w-6xl mx-auto">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                {/* Fleet Card */}
-                <div className="bg-white rounded-lg shadow-md overflow-hidden border hover:shadow-lg transition-shadow">
-                  <div className="h-48 relative">
-                    <Image
-                      src="/placeholder.svg?height=400&width=600"
-                      alt="Aircraft fleet"
-                      fill
-                      className="object-cover"
-                    />
-                  </div>
-                  <div className="p-6">
-                    <h3 className="text-2xl font-bold mb-3">Our Fleet</h3>
-                    <p className="text-gray-600 mb-4">
-                      Explore our diverse fleet of aircraft, from regional jets
-                      to wide-body airliners.
-                    </p>
-                    <Link
-                      href="/operations/fleet"
-                      className="text-blue-700 font-medium hover:underline inline-flex items-center"
-                    >
-                      View Fleet
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-4 w-4 ml-1"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M9 5l7 7-7 7"
-                        />
-                      </svg>
-                    </Link>
-                  </div>
-                </div>
+        <section className="site-section bg-slate-50">
+          <div className="site-container">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+              {operations.map((operation) => {
+                const Icon = operation.icon;
 
-                {/* Routes Card */}
-                <div className="bg-white rounded-lg shadow-md overflow-hidden border hover:shadow-lg transition-shadow">
-                  <div className="h-48 relative">
-                    <Image
-                      src="/placeholder.svg?height=400&width=600"
-                      alt="Route map"
-                      fill
-                      className="object-cover"
-                    />
-                  </div>
-                  <div className="p-6">
-                    <h3 className="text-2xl font-bold mb-3">Our Routes</h3>
-                    <p className="text-gray-600 mb-4">
-                      Discover our global network of destinations and plan your
-                      next virtual flight.
-                    </p>
-                    <Link
-                      href="/operations/routes"
-                      className="text-blue-700 font-medium hover:underline inline-flex items-center"
-                    >
-                      Explore Routes
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-4 w-4 ml-1"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M9 5l7 7-7 7"
-                        />
-                      </svg>
-                    </Link>
-                  </div>
-                </div>
-
-                {/* Hubs Card */}
-                <div className="bg-white rounded-lg shadow-md overflow-hidden border hover:shadow-lg transition-shadow">
-                  <div className="h-48 relative">
-                    <Image
-                      src="/placeholder.svg?height=400&width=600"
-                      alt="Airport hub"
-                      fill
-                      className="object-cover"
-                    />
-                  </div>
-                  <div className="p-6">
-                    <h3 className="text-2xl font-bold mb-3">Our Hubs</h3>
-                    <p className="text-gray-600 mb-4">
-                      Learn about our main operational hubs and focus cities
-                      across China.
-                    </p>
-                    <Link
-                      href="/operations/hubs"
-                      className="text-blue-700 font-medium hover:underline inline-flex items-center"
-                    >
-                      View Hubs
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-4 w-4 ml-1"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M9 5l7 7-7 7"
-                        />
-                      </svg>
-                    </Link>
-                  </div>
-                </div>
-              </div>
+                return (
+                  <Link
+                    key={operation.title}
+                    href={operation.href}
+                    className="site-card group overflow-hidden transition hover:-translate-y-0.5 hover:shadow-md"
+                  >
+                    <div className="relative h-52 bg-slate-100">
+                      <Image
+                        src={operation.image}
+                        alt={operation.title}
+                        fill
+                        className="object-cover transition-transform duration-300 group-hover:scale-105"
+                      />
+                    </div>
+                    <div className="p-6">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10 text-primary">
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <h3 className="mt-5 text-2xl font-bold text-slate-950">
+                        {operation.title}
+                      </h3>
+                      <p className="mt-3 text-sm leading-6 text-slate-600">
+                        {operation.description}
+                      </p>
+                      <span className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-primary">
+                        Learn more
+                        <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                      </span>
+                    </div>
+                  </Link>
+                );
+              })}
             </div>
           </div>
         </section>
 
-        {/* CTA Section */}
-        <section className="py-16 bg-blue-700 text-white">
-          <div className="container mx-auto px-4">
-            <div className="max-w-4xl mx-auto text-center">
-              <h2 className="text-3xl font-bold mb-4">
-                Ready to Start Flying?
-              </h2>
-              <p className="text-xl mb-8">
-                Join our virtual airline group today and experience the thrill
-                of flying with China Southern.
-              </p>
-              <Link
-                href="/crew?type=signup"
-                className="bg-white text-blue-700 px-6 py-3 rounded-md font-medium hover:bg-gray-100 transition-colors"
-              >
-                Apply Now
-              </Link>
+        <section className="bg-primary py-16 text-white">
+          <div className="site-container text-center">
+            <h2 className="text-3xl font-bold">Ready to start flying?</h2>
+            <p className="mx-auto mt-4 max-w-2xl text-white/80">
+              Join our virtual airline group and experience China Southern
+              operations across Infinite Flight.
+            </p>
+            <div className="mt-8">
+              <Button asChild className="bg-white text-primary hover:bg-white/90">
+                <Link href="/crew?type=signup">Apply Now</Link>
+              </Button>
             </div>
           </div>
         </section>

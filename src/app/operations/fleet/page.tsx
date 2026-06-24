@@ -1,5 +1,8 @@
 import Link from "next/link";
 import Image from "next/image";
+import { ArrowRight, Plane } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 
@@ -188,13 +191,12 @@ export default function FleetPage() {
   ];
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="flex min-h-screen flex-col bg-white">
       <Header />
       <main className="flex-1">
-        {/* Hero Section */}
-        <section className="py-16 md:py-24">
-          <div className="container mx-auto px-4">
-            <div className="flex items-center gap-2 text-sm text-gray-500 mb-4">
+        <section className="site-section bg-slate-950 text-white">
+          <div className="site-container">
+            <div className="mb-5 flex items-center gap-2 text-sm text-slate-300">
               <Link href="/" className="hover:text-blue-700">
                 Home
               </Link>
@@ -203,11 +205,17 @@ export default function FleetPage() {
                 Operations
               </Link>
               <span>/</span>
-              <span className="text-gray-700">Fleet</span>
+              <span className="text-white">Fleet</span>
             </div>
-            <h1 className="text-4xl md:text-5xl font-bold mb-6">Our Fleet</h1>
             <div className="max-w-3xl">
-              <p className="text-lg text-gray-600 mb-8">
+              <p className="text-xs font-semibold uppercase text-sky-200">
+                Fleet
+              </p>
+              <h1 className="mt-3 text-4xl font-bold leading-tight sm:text-5xl">
+                Aircraft for regional hops, domestic workhorses, and long-haul
+                flagships.
+              </h1>
+              <p className="mt-5 text-lg leading-8 text-slate-300">
                 Explore our diverse fleet of aircraft, from regional jets to
                 wide-body airliners.
               </p>
@@ -215,12 +223,16 @@ export default function FleetPage() {
           </div>
         </section>
 
-        {/* Fleet Overview */}
-        <section className="py-12 bg-gray-50">
-          <div className="container mx-auto px-4">
-            <div className="max-w-4xl mx-auto">
-              <h2 className="text-3xl font-bold mb-6">Fleet Overview</h2>
-              <div className="prose prose-lg">
+        <section className="site-section">
+          <div className="site-container">
+            <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr]">
+              <div>
+                <p className="site-eyebrow">Fleet overview</p>
+                <h2 className="site-heading mt-3">
+                  A flexible lineup across multiple airlines.
+                </h2>
+              </div>
+              <div className="space-y-5 text-base leading-8 text-slate-600">
                 <p>
                   China Southern Virtual Group operates a diverse fleet of
                   aircraft to serve our extensive network of destinations. Our
@@ -238,73 +250,86 @@ export default function FleetPage() {
           </div>
         </section>
 
-        {/* Fleet Categories */}
         {fleetCategories.map((category, categoryIndex) => (
-          <section key={categoryIndex} className="py-16">
-            <div className="container mx-auto px-4">
-              <div className="max-w-6xl mx-auto">
-                <h2 className="text-3xl font-bold mb-8">{category.category}</h2>
-                <div className="space-y-12">
+          <section
+            key={category.category}
+            className={categoryIndex % 2 === 0 ? "site-section bg-slate-50" : "site-section"}
+          >
+            <div className="site-container">
+              <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="site-eyebrow">Aircraft category</p>
+                  <h2 className="site-heading mt-2">{category.category}</h2>
+                </div>
+                <span className="site-badge">
+                  {category.aircraft.length} aircraft
+                </span>
+              </div>
+              <div className="grid gap-5 lg:grid-cols-2">
                   {category.aircraft.map((aircraft, aircraftIndex) => (
                     <div
-                      key={aircraftIndex}
-                      className="bg-gray-50 rounded-md shadow-md overflow-hidden"
+                      key={`${aircraft.type}-${aircraft.airline}-${aircraftIndex}`}
+                      className="site-card overflow-hidden"
                     >
-                      <div className="md:flex p-2">
-                        <div className="md:w-2/3 p-6">
-                          <h3 className="text-2xl font-bold mb-3">
+                      <div className="grid min-h-full md:grid-cols-[1fr_0.85fr]">
+                        <div className="p-6">
+                          <Plane className="h-5 w-5 text-primary" />
+                          <h3 className="mt-4 text-xl font-bold text-slate-950">
                             {aircraft.type}
                           </h3>
-                          <p className="text-sm text-gray-800 mb-3">
+                          <p className="mt-2 text-sm font-semibold text-primary">
                             {aircraft.airline}
                           </p>
-                          <p className="text-gray-600 mb-4">
+                          <p className="mt-4 text-sm leading-6 text-slate-600">
                             {aircraft.description}
                           </p>
                         </div>
-                        <div className="md:w-1/3">
-                          <div className="h-64 md:h-full relative">
-                            <Image
-                              src={aircraft.image || "/placeholder.svg"}
-                              alt={aircraft.type}
-                              fill
-                              className="object-contain"
-                            />
+                        <div className="bg-slate-50 p-4">
+                          <div className="relative h-48 md:h-full md:min-h-[220px]">
+                            {aircraft.image ? (
+                              <Image
+                                src={aircraft.image}
+                                alt={aircraft.type}
+                                fill
+                                className="object-contain"
+                              />
+                            ) : (
+                              <div className="flex h-full items-center justify-center rounded-md border border-dashed border-slate-300 text-sm font-medium text-slate-500">
+                                Image coming soon
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
                     </div>
                   ))}
-                </div>
               </div>
             </div>
           </section>
         ))}
 
-        {/* CTA Section */}
-        <section className="py-16 bg-blue-700 text-white">
-          <div className="container mx-auto px-4">
-            <div className="max-w-4xl mx-auto text-center">
-              <h2 className="text-3xl font-bold mb-4">
-                Ready to Fly Our Fleet?
-              </h2>
-              <p className="text-xl mb-8">
+        <section className="bg-primary py-16 text-white">
+          <div className="site-container text-center">
+            <div className="mx-auto max-w-3xl">
+              <h2 className="text-3xl font-bold">Ready to fly our fleet?</h2>
+              <p className="mt-4 text-white/80">
                 Join our virtual airline group today and experience flying these
                 amazing aircraft.
               </p>
-              <div className="flex justify-center space-x-4">
-                <Link
-                  href="/crew?type=signup"
-                  className="bg-white text-blue-700 px-6 py-3 rounded-md font-medium hover:bg-gray-100 transition-colors"
+              <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+                <Button asChild className="bg-white text-primary hover:bg-white/90">
+                  <Link href="/crew?type=signup">
+                    Apply Now
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </Button>
+                <Button
+                  asChild
+                  variant="outline"
+                  className="border-white/60 bg-transparent text-white hover:bg-white/10 hover:text-white"
                 >
-                  Apply Now
-                </Link>
-                <Link
-                  href="/operations/routes"
-                  className="border border-white px-6 py-3 rounded-md font-medium hover:bg-blue-600 transition-colors"
-                >
-                  Explore Routes
-                </Link>
+                  <Link href="/operations/routes">Explore Routes</Link>
+                </Button>
               </div>
             </div>
           </div>

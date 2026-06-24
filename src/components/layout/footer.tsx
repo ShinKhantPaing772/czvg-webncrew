@@ -1,132 +1,121 @@
 import Link from "next/link";
+import { BadgeCheck, ExternalLink, Instagram, MessageCircle } from "lucide-react";
+
+const communityLinks = [
+  {
+    href: "https://community.infiniteflight.com/",
+    label: "Infinite Flight Community",
+  },
+  {
+    href: "https://community.infiniteflight.com/t/china-southern-virtual-group-fly-into-your-dreams-official-thread-2026/1141730?u=gds111006",
+    label: "CZVG IFC Thread",
+  },
+  {
+    href: "https://ifvarb.com/",
+    label: "IFVARB",
+  },
+];
+
+const siteLinks = [
+  { href: "/", label: "Home" },
+  { href: "/about-us", label: "About" },
+  { href: "/operations", label: "Operations" },
+  { href: "/crew?type=signup", label: "Join Us" },
+];
 
 export function Footer() {
   return (
-    <footer className="bg-gray-100">
-      <div className="py-4 bg-gray-50">
-        <div className="container mx-auto px-4">
-          <div className="flex justify-center space-x-6">
-            <a
-              href="https://ifvarb.com/database.php?action=view&xid=1226"
-              className="text-gray-600 hover:text-blue-700"
-            >
-              <span className="sr-only">IFVARB</span>
-              <svg
-                className="h-6 w-6"
-                viewBox="0 0 16 16"
-                xmlns="http://www.w3.org/2000/svg"
-                version="1.1"
-                fill="none"
-                stroke="#f1b357"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-              >
-                <path d="m14.25 8.75c-.5 2.5-2.3849 4.85363-5.03069 5.37991-2.64578.5263-5.33066-.7044-6.65903-3.0523-1.32837-2.34784-1.00043-5.28307.81336-7.27989 1.81379-1.99683 4.87636-2.54771 7.37636-1.54771" />
-                <polyline points="5.75 7.75,8.25 10.25,14.25 3.75" />
-              </svg>
-            </a>
-
-            <a
-              href="https://community.infiniteflight.com/u/chinasouthernvg/"
-              className="text-gray-600 hover:text-blue-700"
-            >
-              <span className="sr-only">IFC</span>
+    <footer className="border-t border-slate-200 bg-slate-950 text-white">
+      <div className="site-container py-10">
+        <div className="grid gap-10 md:grid-cols-[1.3fr_1fr_1fr]">
+          <div>
+            <Link href="/" className="inline-flex items-center gap-3">
               <img
-                src="https://webcdn.infiniteflight.com/static/favicon.png"
-                alt="IFC icon"
-                className="h-6 w-6"
+                src="https://sea1.discourse-cdn.com/infiniteflight/user_avatar/community.infiniteflight.com/chinasouthernvg/288/886608_2.png"
+                alt="China Southern Virtual Group Logo"
+                className="h-9 w-9 rounded-full"
               />
-            </a>
-            <a
-              href="https://www.instagram.com/chinasouthernvg_if/"
-              className="text-gray-600 hover:text-blue-700"
-            >
-              <span className="sr-only">Instagram</span>
-              <svg
-                className="h-6 w-6"
-                fill="#eb3588"
-                viewBox="0 0 24 24"
-                aria-hidden="true"
+              <div>
+                <span className="block text-lg font-bold">
+                  China Southern Virtual Group
+                </span>
+                <span className="text-sm text-slate-300">
+                  Fly into your dreams
+                </span>
+              </div>
+            </Link>
+            <p className="mt-5 max-w-xl text-sm leading-6 text-slate-300">
+              A China-based virtual airline group for Infinite Flight pilots,
+              operating a broad network of hubs, focus cities, and partner
+              routes.
+            </p>
+            <div className="mt-5 flex items-center gap-3">
+              <a
+                href="https://ifvarb.com/database.php?action=view&xid=1226"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-white/15 text-slate-200 transition-colors hover:bg-white/10 hover:text-white"
               >
-                <path
-                  fillRule="evenodd"
-                  d="M12.315 2c2.43 0 2.784.013 3.808.06 1.064.049 1.791.218 2.427.465a4.902 4.902 0 011.772 1.153 4.902 4.902 0 011.153 1.772c.247.636.416 1.363.465 2.427.048 1.067.06 1.407.06 4.123v.08c0 2.643-.012 2.987-.06 4.043-.049 1.064-.218 1.791-.465 2.427a4.902 4.902 0 01-1.153 1.772 4.902 4.902 0 01-1.772 1.153c-.636.247-1.363.416-2.427.465-1.067.048-1.407.06-4.123.06h-.08c-2.643 0-2.987-.012-4.043-.06-1.064-.049-1.791-.218-2.427-.465a4.902 4.902 0 01-1.772-1.153 4.902 4.902 0 01-1.153-1.772c-.247-.636-.416-1.363-.465-2.427-.047-1.024-.06-1.379-.06-3.808v-.63c0-2.43.013-2.784.06-3.808.049-1.064.218-1.791.465-2.427a4.902 4.902 0 011.153-1.772A4.902 4.902 0 015.45 2.525c.636-.247 1.363-.416 2.427-.465C8.901 2.013 9.256 2 11.685 2h.63zm-.081 1.802h-.468c-2.456 0-2.784.011-3.807.058-.975.045-1.504.207-1.857.344-.467.182-.8.398-1.15.748-.35.35-.566.683-.748 1.15-.137.353-.3.882-.344 1.857-.047 1.023-.058 1.351-.058 3.807v.468c0 2.456.011 2.784.058 3.807.045.975.207 1.504.344 1.857.182.466.399.8.748 1.15.35.35.683.566 1.15.748.353.137.882.3 1.857.344 1.054.048 1.37.058 4.041.058h.08c2.597 0 2.917-.01 3.96-.058.976-.045 1.505-.207 1.858-.344.466-.182.8-.398 1.15-.748.35-.35.566-.683.748-1.15.137-.353.3-.882.344-1.857.048-1.055.058-1.37.058-4.041v-.08c0-2.597-.01-2.917-.058-3.96-.045-.976-.207-1.505-.344-1.858a3.097 3.097 0 00-.748-1.15 3.098 3.098 0 00-1.15-.748c-.353-.137-.882-.3-1.857-.344-1.023-.047-1.351-.058-3.807-.058zM12 6.865a5.135 5.135 0 110 10.27 5.135 5.135 0 010-10.27zm0 1.802a3.333 3.333 0 100 6.666 3.333 3.333 0 000-6.666zm5.338-3.205a1.2 1.2 0 110 2.4 1.2 1.2 0 010-2.4z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </a>
+                <span className="sr-only">IFVARB</span>
+                <BadgeCheck className="h-5 w-5" />
+              </a>
+              <a
+                href="https://community.infiniteflight.com/u/chinasouthernvg/"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-white/15 text-slate-200 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                <span className="sr-only">IFC profile</span>
+                <MessageCircle className="h-5 w-5" />
+              </a>
+              <a
+                href="https://www.instagram.com/chinasouthernvg_if/"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-white/15 text-slate-200 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                <span className="sr-only">Instagram</span>
+                <Instagram className="h-5 w-5" />
+              </a>
+            </div>
+          </div>
+
+          <div>
+            <h2 className="text-sm font-semibold uppercase text-slate-400">
+              Community
+            </h2>
+            <div className="mt-4 space-y-3">
+              {communityLinks.map((link) => (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  className="flex items-center gap-2 text-sm text-slate-300 transition-colors hover:text-white"
+                >
+                  {link.label}
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h2 className="text-sm font-semibold uppercase text-slate-400">
+              Explore
+            </h2>
+            <div className="mt-4 space-y-3">
+              {siteLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="block text-sm text-slate-300 transition-colors hover:text-white"
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex flex-col md:flex-row justify-between items-start">
-          <div className="flex items-center space-x-2 mb-4 md:mb-0">
-            <img
-              src="https://sea1.discourse-cdn.com/infiniteflight/user_avatar/community.infiniteflight.com/chinasouthernvg/288/886608_2.png"
-              alt="China Southern Virtual Group Logo"
-              className="h-6 w-6 rounded-full"
-            />
-            <span className="font-bold text-lg">
-              China Southern Virtual Group
-            </span>
-          </div>
-          <div className="flex flex-col justify-start items-start">
-            <span className="font-medium">Explore the community</span>
-            <Link
-              href="https://community.infiniteflight.com/"
-              className="text-sm text-gray-600 hover:text-blue-700"
-            >
-              Infinite Flight Community
-            </Link>
-            <Link
-              href="https://community.infiniteflight.com/t/china-southern-virtual-group-fly-into-your-dreams-official-thread-2026/1141730?u=gds111006"
-              className="text-sm text-gray-600 hover:text-blue-700"
-            >
-              CZVG IFC Thread
-            </Link>
-            <Link
-              href="https://ifvarb.com/"
-              className="text-sm text-gray-600 hover:text-blue-700"
-            >
-              IFVARB
-            </Link>
-          </div>
-          <div className="flex flex-col justify-start">
-            <span className="font-medium">Explore More</span>
-            <Link
-              href="/"
-              className="text-sm text-gray-600 hover:text-blue-700"
-            >
-              Home
-            </Link>
-            <Link
-              href="/about-us"
-              className="text-sm text-gray-600 hover:text-blue-700"
-            >
-              About
-            </Link>
-            <Link
-              href="/operations"
-              className="text-sm text-gray-600 hover:text-blue-700"
-            >
-              Operations
-            </Link>
-            <Link
-              href="/crew?type=signup"
-              className="text-sm text-gray-600 hover:text-blue-700"
-            >
-              Join Us
-            </Link>
-          </div>
-        </div>
-        <div className="mt-6 text-center text-xs text-gray-500">
+
+        <div className="mt-10 border-t border-white/10 pt-6 text-xs leading-5 text-slate-400">
           China Southern Virtual Group is a virtual airline exclusively for the
           Infinite Flight platform operating under IFVARB. We have no connection
           or affiliation with China Southern Group and its subsidiaries,
-          Infinite Flight, or any other real-world airlines/organizations and
-          subsidiaries. All logos and trademarks remain the property of China
-          Southern Group and its subsidiaries.
+          Infinite Flight, or any real-world airline or organization. All logos
+          and trademarks remain the property of their respective owners.
         </div>
       </div>
     </footer>

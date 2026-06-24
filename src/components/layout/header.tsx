@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import { ChevronDown, X, LogOut, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,6 +17,21 @@ export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const { user } = useSession();
+  const pathname = usePathname();
+
+  const navLinks = [
+    { href: "/", label: "Home" },
+    { href: "/about-us", label: "About Us" },
+  ];
+
+  const operationLinks = [
+    { href: "/operations/hubs", label: "Hubs" },
+    { href: "/operations/fleet", label: "Fleet" },
+    { href: "/operations/routes", label: "Routes" },
+  ];
+
+  const isActive = (href: string) =>
+    href === "/" ? pathname === href : pathname?.startsWith(href);
 
   const handleLogout = async () => {
     try {
@@ -30,70 +46,71 @@ export function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-white">
-      <div className="flex h-16 items-center justify-between px-4 md:px-6">
+    <header className="sticky top-0 z-50 w-full border-b border-slate-200 bg-white/95 backdrop-blur">
+      <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between px-4 md:px-6">
         <div className="flex items-center gap-2">
           <Link href="/" className="flex items-center gap-2">
             <img
               src="https://sea1.discourse-cdn.com/infiniteflight/user_avatar/community.infiniteflight.com/chinasouthernvg/288/886608_2.png"
               alt="China Southern Virtual Group Logo"
-              className="h-6 w-6"
+              className="h-8 w-8 rounded-full"
             />
             <div className="flex flex-col">
-              <span className="text-xl font-bold">
+              <span className="text-base font-bold leading-tight text-slate-950 md:text-lg">
                 China Southern Virtual Group
               </span>
-              <span className="text-xs text-muted-foreground">CZVG</span>
+              <span className="text-xs font-medium text-muted-foreground">
+                CZVG
+              </span>
             </div>
           </Link>
         </div>
-        <nav className="hidden md:flex gap-6">
-          <Link
-            href="/"
-            className="text-sm font-medium hover:underline underline-offset-4"
-          >
-            Home
-          </Link>
-          <Link
-            href="/about-us"
-            className="text-sm font-medium hover:underline underline-offset-4"
-          >
-            About Us
-          </Link>
+        <nav className="hidden items-center gap-1 md:flex">
+          {navLinks.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                isActive(link.href)
+                  ? "bg-primary/10 text-primary"
+                  : "text-slate-700 hover:bg-slate-100 hover:text-slate-950"
+              }`}
+            >
+              {link.label}
+            </Link>
+          ))}
           <DropdownMenu>
-            <DropdownMenuTrigger className="flex items-center gap-1 text-sm font-medium hover:underline underline-offset-4">
+            <DropdownMenuTrigger
+              className={`flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                isActive("/operations")
+                  ? "bg-primary/10 text-primary"
+                  : "text-slate-700 hover:bg-slate-100 hover:text-slate-950"
+              }`}
+            >
               Operations
               <ChevronDown className="h-4 w-4" />
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="bg-white border rounded-md shadow-md">
-              <DropdownMenuItem>
-                <Link href="/operations/hubs" className="flex w-full">
-                  Hubs
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Link href="/operations/fleet" className="flex w-full">
-                  Fleet
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Link href="/operations/routes" className="flex w-full">
-                  Routes
-                </Link>
-              </DropdownMenuItem>
+            <DropdownMenuContent className="rounded-md border border-slate-200 bg-white shadow-lg">
+              {operationLinks.map((link) => (
+                <DropdownMenuItem key={link.href}>
+                  <Link href={link.href} className="flex w-full">
+                    {link.label}
+                  </Link>
+                </DropdownMenuItem>
+              ))}
             </DropdownMenuContent>
           </DropdownMenu>
           {!user ? (
             <Link
               href="/crew?type=signup"
-              className="text-sm font-medium hover:underline underline-offset-4"
+              className="rounded-md px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-950"
             >
               Join Us
             </Link>
           ) : (
             <Link
               href="/crew/home"
-              className="text-sm font-medium hover:underline underline-offset-4"
+              className="rounded-md px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-950"
             >
               Crew Center
             </Link>
@@ -105,7 +122,7 @@ export function Header() {
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="default"
-                  className="bg-primary text-white hidden md:inline-flex"
+                  className="hidden bg-primary text-white md:inline-flex"
                 >
                   <div className="flex items-center gap-2">
                     <p>{user?.name}</p>
@@ -137,7 +154,7 @@ export function Header() {
           <Button
             variant="outline"
             size="icon"
-            className="md:hidden bg-white"
+            className="bg-white md:hidden"
             aria-expanded={mobileMenuOpen}
             aria-controls="mobile-menu"
             onClick={() => setMobileMenuOpen(true)}
@@ -152,10 +169,10 @@ export function Header() {
       <div
         id="mobile-menu"
         aria-hidden={!mobileMenuOpen}
-        className={`fixed inset-y-0 right-0 z-50 w-full bg-white px-6 py-6 shadow-xl sm:max-w-sm sm:ring-1 sm:ring-gray-900/10 transform ${
+        className={`fixed inset-y-0 right-0 z-50 w-full transform bg-white px-6 py-6 shadow-xl sm:max-w-sm sm:ring-1 sm:ring-gray-900/10 ${
           mobileMenuOpen
             ? "visible translate-x-0"
-            : "invisible translate-x-full pointer-events-none"
+            : "hidden invisible translate-x-full pointer-events-none"
         } transition-transform duration-200 ease-in-out md:hidden`}
       >
         <div className="flex items-center justify-between">
@@ -163,9 +180,9 @@ export function Header() {
             <img
               src="https://sea1.discourse-cdn.com/infiniteflight/user_avatar/community.infiniteflight.com/chinasouthernvg/288/886608_2.png"
               alt="China Southern Virtual Group Logo"
-              className="h-6 w-6"
+              className="h-8 w-8 rounded-full"
             />
-            <span className="text-xl font-bold">
+            <span className="text-lg font-bold leading-tight">
               China Southern Virtual Group
             </span>
           </Link>
@@ -182,55 +199,40 @@ export function Header() {
         <nav className="mt-6 flow-root">
           <div className="-my-6 divide-y divide-gray-500/10">
             <div className="space-y-2 py-6">
-              <Link
-                href="/"
-                className="-mx-3 block rounded-lg px-3 py-2 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Home
-              </Link>
+              {navLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="-mx-3 block rounded-md px-3 py-2 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  {link.label}
+                </Link>
+              ))}
               <Link
                 href="/crew"
-                className="-mx-3 block rounded-lg px-3 py-2 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50"
+                className="-mx-3 block rounded-md px-3 py-2 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 Crew Center
               </Link>
-              <Link
-                href="/about-us"
-                className="-mx-3 block rounded-lg px-3 py-2 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                About
-              </Link>
               <div className="-mx-3 px-3 py-2 text-base font-semibold leading-7 text-gray-900">
                 Operations
               </div>
-              <Link
-                href="/operations/hubs"
-                className="-mx-3 block rounded-lg px-3 py-2 pl-6 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Hubs
-              </Link>
-              <Link
-                href="/operations/fleet"
-                className="-mx-3 block rounded-lg px-3 py-2 pl-6 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Fleet
-              </Link>
-              <Link
-                href="/operations/routes"
-                className="-mx-3 block rounded-lg px-3 py-2 pl-6 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Routes
-              </Link>
+              {operationLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="-mx-3 block rounded-md px-3 py-2 pl-6 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  {link.label}
+                </Link>
+              ))}
               {!user ? (
                 <Link
                   href="/crew?type=signup"
-                  className="-mx-3 block rounded-lg px-3 py-2 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50"
+                  className="-mx-3 block rounded-md px-3 py-2 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50"
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   Join Us
@@ -238,7 +240,7 @@ export function Header() {
               ) : (
                 <Link
                   href="/crew"
-                  className="-mx-3 block rounded-lg px-3 py-2 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50"
+                  className="-mx-3 block rounded-md px-3 py-2 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50"
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   Crew Center

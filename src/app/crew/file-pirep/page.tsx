@@ -77,10 +77,16 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
+type AcarsResponse = {
+  acars?: Partial<FormValues>;
+  error?: string;
+};
+
 export default function FilePirep() {
   const { user } = useSession();
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingAcars, setIsFetchingAcars] = useState(false);
+  const [acarsMessage, setAcarsMessage] = useState<string | null>(null);
   // State for aircraft data
   const [originalAircraftData, setOriginalAircraftData] = useState<aircraft[]>(
     [],
@@ -171,25 +177,41 @@ export default function FilePirep() {
 
   // Function to fetch ACARS data
   async function fetchAcarsData() {
+    if (!user?.id) {
+      setAcarsMessage("Please sign in before fetching ACARS data.");
+      return;
+    }
+
     setIsFetchingAcars(true);
+    setAcarsMessage(null);
 
     try {
-      // TODO: Implement ACARS data fetching
-      const acarsData = {
-        flightnum: "",
-        departure: "",
-        arrival: "",
-        flightTime: "",
-        date: format(new Date(), "yyyy-MM-dd"),
-        aircraftId: "",
-        fuelUsed: "",
-        multi: "",
-      };
+      const response = await fetch(
+        `/api/acars/current-flight?pilotId=${user.id}`,
+      );
+      const data: AcarsResponse = await response.json();
+
+      if (!response.ok || !data.acars) {
+        throw new Error(data.error || "Failed to fetch ACARS data");
+      }
+
+      const acarsValues = Object.fromEntries(
+        Object.entries(data.acars).filter(([, value]) => value),
+      ) as Partial<FormValues>;
 
       // Update form with fetched data
-      form.reset(acarsData);
+      form.reset({
+        ...form.getValues(),
+        ...acarsValues,
+      });
+      setAcarsMessage(
+        "ACARS data loaded from your current Infinite Flight flight.",
+      );
     } catch (error) {
       console.error(error);
+      setAcarsMessage(
+        error instanceof Error ? error.message : "Failed to fetch ACARS data",
+      );
     } finally {
       setIsFetchingAcars(false);
     }
@@ -203,7 +225,8 @@ export default function FilePirep() {
             <div>
               <CardTitle className="text-2xl">Submit PIREP</CardTitle>
             </div>
-            {/* <Button
+            <Button
+              type="button"
               variant="outline"
               onClick={fetchAcarsData}
               disabled={isFetchingAcars}
@@ -215,10 +238,15 @@ export default function FilePirep() {
                 <RefreshCw className="h-4 w-4" />
               )}
               Fetch ACARS
-            </Button> */}
+            </Button>
           </div>
         </CardHeader>
         <CardContent>
+          {acarsMessage && (
+            <div className="mb-4 rounded-md border px-3 py-2 text-sm text-muted-foreground">
+              {acarsMessage}
+            </div>
+          )}
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               <div className="grid grid-cols-1 gap-4">

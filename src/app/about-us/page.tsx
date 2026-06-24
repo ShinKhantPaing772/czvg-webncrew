@@ -1,144 +1,178 @@
 import Link from "next/link";
 import Image from "next/image";
+import { ArrowRight, Building2, Globe2, Plane } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 
+const airlines = [
+  {
+    name: "China Southern Airlines",
+    logo: "https://upload.wikimedia.org/wikipedia/en/b/b4/China_Southern_Airlines_logo.svg",
+    description:
+      "Our flagship carrier with extensive domestic and international routes.",
+  },
+  {
+    name: "Xiamen Air",
+    logo: "https://upload.wikimedia.org/wikipedia/en/c/c8/XiamenAir.svg",
+    description: "Based in Xiamen, serving destinations across Asia and beyond.",
+  },
+  {
+    name: "Chongqing Air",
+    logo: "https://upload.wikimedia.org/wikipedia/commons/0/0f/Chongqing_Airlines_logo.png",
+    description: "Operating from Chongqing to cities throughout China.",
+  },
+  {
+    name: "Chengdu Air",
+    logo: "https://upload.wikimedia.org/wikipedia/en/c/c1/Chengdu_Airlines_logo.png",
+    description: "Focused on routes from Chengdu to major Chinese cities.",
+  },
+  {
+    name: "Hebei Air",
+    logo: "https://upload.wikimedia.org/wikipedia/en/0/0b/HebeiAirLogo.png",
+    description: "Connecting Hebei province with destinations across China.",
+  },
+  {
+    name: "Jiangxi Air",
+    logo: "https://upload.wikimedia.org/wikipedia/en/4/4a/Jiangxi_Air_logo.svg",
+    description: "Serving routes from Nanchang to major Chinese destinations.",
+  },
+];
+
+const facts = [
+  { icon: Building2, label: "Founded", value: "July 2021" },
+  { icon: Globe2, label: "Network", value: "300+ destinations" },
+  { icon: Plane, label: "Routes", value: "1000+ flight options" },
+];
+
 export default function AboutPage() {
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="flex min-h-screen flex-col bg-white">
       <Header />
       <main className="flex-1">
-        {/* Hero Section */}
-        <section className="py-16 md:py-24">
-          <div className="container mx-auto px-4">
-            <h1 className="text-4xl md:text-5xl font-bold mb-6">About Us</h1>
-          </div>
-        </section>
-
-        {/* Background Section */}
-        <section className="py-12 bg-gray-50">
-          <div className="container mx-auto px-4">
-            <div className="max-w-4xl mx-auto">
-              <h2 className="text-3xl font-bold mb-6">
-                China Southern's Background
-              </h2>
-              <div className="prose prose-lg">
-                <p>
-                  Founded in July 2021, China Southern Virtual Group was
-                  established to bring another China-based airline experience
-                  to Infinite Flight. Our hubs are Guangzhou Baiyun and Beijing
-                  Daxing.
-                </p>
-                <br />
-                <p>
-                  Inspired by one of the largest airlines in China, we fly to
-                  more than 300 destinations across over 1,000 routes from our
-                  hubs and focus cities. We also offer a wide variety of
-                  aircraft for pilots to fly.
-                </p>
-                <br />
-                <p className="font-medium">
-                  Join China Southern Virtual Group today to explore the
-                  exciting world of virtual flight with us!
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Airlines We Operate */}
-        <section className="py-16">
-          <div className="container mx-auto px-4">
-            <div className="max-w-4xl mx-auto">
-              <h2 className="text-3xl font-bold mb-8">Airlines We Operate</h2>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {[
-                  {
-                    name: "China Southern Airlines",
-                    logo: "https://upload.wikimedia.org/wikipedia/en/thumb/b/b4/China_Southern_Airlines_logo.svg/400px-China_Southern_Airlines_logo.svg.png",
-                    description:
-                      "Our flagship carrier with extensive domestic and international routes.",
-                  },
-                  {
-                    name: "Xiamen Air",
-                    logo: "https://upload.wikimedia.org/wikipedia/en/thumb/c/c8/XiamenAir.svg/480px-XiamenAir.svg.png",
-                    description:
-                      "Based in Xiamen, serving destinations across Asia and beyond.",
-                  },
-                  {
-                    name: "Chongqing Air",
-                    logo: "https://upload.wikimedia.org/wikipedia/commons/0/0f/Chongqing_Airlines_logo.png",
-                    description:
-                      "Operating from Chongqing to cities throughout China.",
-                  },
-                  {
-                    name: "Chengdu Air",
-                    logo: "https://upload.wikimedia.org/wikipedia/en/thumb/c/c1/Chengdu_Airlines_logo.png/400px-Chengdu_Airlines_logo.png",
-                    description:
-                      "Focused on routes from Chengdu to major Chinese cities.",
-                  },
-                  {
-                    name: "Hebei Air",
-                    logo: "https://upload.wikimedia.org/wikipedia/en/thumb/0/0b/HebeiAirLogo.png/440px-HebeiAirLogo.png",
-                    description:
-                      "Connecting Hebei province with destinations across China.",
-                  },
-                  {
-                    name: "Jiangxi Air",
-                    logo: "https://upload.wikimedia.org/wikipedia/en/thumb/4/4a/Jiangxi_Air_logo.svg/440px-Jiangxi_Air_logo.svg.png",
-                    description:
-                      "Serving routes from Nanchang to major Chinese destinations.",
-                  },
-                ].map((airline, index) => (
-                  <div
-                    key={index}
-                    className="bg-white p-6 rounded-md shadow-sm border hover:shadow-md transition-shadow"
-                  >
-                    <Image
-                      src={airline.logo || "/placeholder.svg"}
-                      alt={`${airline.name} logo`}
-                      width={160}
-                      height={80}
-                      unoptimized={airline.logo.startsWith(
-                        "https://upload.wikimedia.org",
-                      )}
-                      className="mb-4 h-1/3 object-contain w-full"
-                    />
-                    <h3 className="font-bold text-lg mb-2">{airline.name}</h3>
-                    <p className="text-gray-600">{airline.description}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Join Us CTA */}
-        <section className="py-16">
-          <div className="container mx-auto px-4">
-            <div className="max-w-4xl mx-auto text-center">
-              <h2 className="text-3xl font-bold mb-4">
-                Ready to Join Our Team?
-              </h2>
-              <p className="text-lg text-gray-600 mb-8">
-                Become part of our virtual pilot community and start your
-                journey today.
+        <section className="site-section bg-slate-950 text-white">
+          <div className="site-container">
+            <div className="max-w-3xl">
+              <p className="text-xs font-semibold uppercase text-sky-200">
+                About CZVG
               </p>
-              <div className="flex justify-center space-x-4">
-                <Link
-                  href="/crew?type=signup"
-                  className="bg-blue-700 text-white px-6 py-3 rounded-md hover:bg-blue-800 transition-colors"
-                >
-                  Apply Now
-                </Link>
-                <Link
-                  href="/operations"
-                  className="border border-gray-300 px-6 py-3 rounded-md hover:bg-gray-50 transition-colors"
-                >
-                  Learn More
-                </Link>
+              <h1 className="mt-3 text-4xl font-bold leading-tight sm:text-5xl">
+                A China-based virtual airline group for Infinite Flight pilots.
+              </h1>
+              <p className="mt-5 text-lg leading-8 text-slate-300">
+                China Southern Virtual Group brings a broad Chinese airline
+                network, realistic hub operations, and varied aircraft choices
+                into the Infinite Flight community.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section className="site-section">
+          <div className="site-container">
+            <div className="grid gap-10 lg:grid-cols-[1fr_0.8fr] lg:items-start">
+              <div>
+                <p className="site-eyebrow">Our background</p>
+                <h2 className="site-heading mt-3">
+                  Built around China Southern and its partner network.
+                </h2>
+                <div className="mt-5 space-y-5 text-base leading-8 text-slate-600">
+                  <p>
+                    Founded in July 2021, China Southern Virtual Group was
+                    established to bring another China-based airline experience
+                    to Infinite Flight. Our primary hubs are Guangzhou Baiyun
+                    and Beijing Daxing.
+                  </p>
+                  <p>
+                    Inspired by one of the largest airlines in China, we fly to
+                    more than 300 destinations across over 1,000 routes from our
+                    hubs and focus cities. We also offer a wide variety of
+                    aircraft for pilots to fly.
+                  </p>
+                  <p className="font-semibold text-slate-950">
+                    Join China Southern Virtual Group today to explore the
+                    exciting world of virtual flight with us.
+                  </p>
+                </div>
               </div>
+              <div className="grid gap-4">
+                {facts.map((fact) => {
+                  const Icon = fact.icon;
+
+                  return (
+                    <div key={fact.label} className="site-card p-5">
+                      <Icon className="h-5 w-5 text-primary" />
+                      <p className="mt-4 text-sm font-medium text-slate-500">
+                        {fact.label}
+                      </p>
+                      <p className="mt-1 text-xl font-bold text-slate-950">
+                        {fact.value}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="site-section bg-slate-50">
+          <div className="site-container">
+            <div className="max-w-3xl">
+              <p className="site-eyebrow">Airlines we operate</p>
+              <h2 className="site-heading mt-3">
+                Six carriers, one connected virtual group.
+              </h2>
+            </div>
+            <div className="mt-10 grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+              {airlines.map((airline) => (
+                <div key={airline.name} className="site-card p-5">
+                  <div className="flex h-28 items-center justify-center rounded-md bg-slate-50 p-4">
+                    <Image
+                      src={airline.logo}
+                      alt={`${airline.name} logo`}
+                      width={180}
+                      height={90}
+                      unoptimized={airline.logo.startsWith(
+                        "https://upload.wikimedia.org"
+                      )}
+                      className="max-h-20 w-full object-contain"
+                    />
+                  </div>
+                  <h3 className="mt-5 text-lg font-bold text-slate-950">
+                    {airline.name}
+                  </h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                    {airline.description}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="bg-primary py-16 text-white">
+          <div className="site-container text-center">
+            <h2 className="text-3xl font-bold">Ready to join our team?</h2>
+            <p className="mx-auto mt-4 max-w-2xl text-white/80">
+              Become part of our virtual pilot community and start your journey
+              today.
+            </p>
+            <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+              <Button asChild className="bg-white text-primary hover:bg-white/90">
+                <Link href="/crew?type=signup">
+                  Apply Now
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
+              <Button
+                asChild
+                variant="outline"
+                className="border-white/60 bg-transparent text-white hover:bg-white/10 hover:text-white"
+              >
+                <Link href="/operations">Explore Operations</Link>
+              </Button>
             </div>
           </div>
         </section>
