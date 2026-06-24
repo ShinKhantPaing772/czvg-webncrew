@@ -237,7 +237,7 @@ export default function FilePirep() {
               ) : (
                 <RefreshCw className="h-4 w-4" />
               )}
-              Fetch ACARS
+              Fetch ACARS (Beta,  Use With Caution)
             </Button>
           </div>
         </CardHeader>
