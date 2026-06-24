@@ -144,7 +144,7 @@ export default function Home() {
                 China Southern Virtual Group
               </h1>
               <p className="mt-4 text-2xl font-semibold text-sky-100 sm:text-3xl">
-                歡迎來到虛擬中國南方航空集團
+                欢迎来到虚拟中国南方航空集团
               </p>
               <p className="mt-5 max-w-2xl text-base leading-8 text-white/80 md:text-lg">
                 Fly a China-based network built for Infinite Flight pilots:

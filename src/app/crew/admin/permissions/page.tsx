@@ -1,24 +1,28 @@
 "use client";
 
-import { useState } from "react";
-import {
-  Search,
-  Shield,
-  UserPlus,
-  Edit,
-  Trash,
-  AlertTriangle,
-} from "lucide-react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { Edit, Search, Trash, UserPlus } from "lucide-react";
 import { CrewHeader } from "@/components/crew-header";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -36,16 +40,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -57,198 +51,286 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-// Mock data for admin users
-const adminUsersData = [
-  {
-    id: "A001",
-    name: "Admin User",
-    email: "admin@example.com",
-    role: "Super Admin",
-    permissions: [
-      "manage_pireps",
-      "manage_applications",
-      "manage_routes",
-      "manage_users",
-      "manage_admins",
-      "manage_settings",
-    ],
-    lastActive: "2023-03-15T18:30:00Z",
-    createdAt: "2022-01-01T10:00:00Z",
-    avatar: "/placeholder.svg?height=40&width=40",
-  },
-  {
-    id: "A002",
-    name: "Jane Smith",
-    email: "jane.smith@example.com",
-    role: "PIREP Manager",
-    permissions: ["manage_pireps"],
-    lastActive: "2023-03-14T12:45:00Z",
-    createdAt: "2022-02-15T14:30:00Z",
-    avatar: "/placeholder.svg?height=40&width=40",
-  },
-  {
-    id: "A003",
-    name: "Robert Wilson",
-    email: "robert.wilson@example.com",
-    role: "Route Manager",
-    permissions: ["manage_routes"],
-    lastActive: "2023-03-10T09:20:00Z",
-    createdAt: "2022-03-10T11:15:00Z",
-    avatar: "/placeholder.svg?height=40&width=40",
-  },
-  {
-    id: "A004",
-    name: "Emily Davis",
-    email: "emily.davis@example.com",
-    role: "Application Reviewer",
-    permissions: ["manage_applications"],
-    lastActive: "2023-03-05T16:10:00Z",
-    createdAt: "2022-04-05T09:45:00Z",
-    avatar: "/placeholder.svg?height=40&width=40",
-  },
-  {
-    id: "A005",
-    name: "Michael Johnson",
-    email: "michael.johnson@example.com",
-    role: "Admin",
-    permissions: [
-      "manage_pireps",
-      "manage_applications",
-      "manage_routes",
-      "manage_users",
-    ],
-    lastActive: "2023-03-01T14:30:00Z",
-    createdAt: "2022-05-20T13:20:00Z",
-    avatar: "/placeholder.svg?height=40&width=40",
-  },
-];
+type AdminUser = {
+  id: number;
+  name: string;
+  email: string;
+  callsign: string;
+  joined: string;
+  lastActive: string | null;
+  permissions: string[];
+};
 
-// Mock data for roles
 const rolesData = [
   {
-    id: "R001",
+    id: "super_admin",
     name: "Super Admin",
-    description: "Full access to all system features and settings",
-    permissions: [
-      "manage_pireps",
-      "manage_applications",
-      "manage_routes",
-      "manage_users",
-      "manage_admins",
-      "manage_settings",
-    ],
-    createdAt: "2022-01-01T10:00:00Z",
-    updatedAt: "2022-01-01T10:00:00Z",
-    userCount: 1,
+    permissions: ["admin"],
   },
   {
-    id: "R002",
+    id: "admin",
     name: "Admin",
-    description: "Access to most system features except admin management",
-    permissions: [
-      "manage_pireps",
-      "manage_applications",
-      "manage_routes",
-      "manage_users",
-    ],
-    createdAt: "2022-01-01T10:00:00Z",
-    updatedAt: "2022-01-01T10:00:00Z",
-    userCount: 1,
+    permissions: ["home", "pireps", "routes", "users", "aircrafts"],
   },
   {
-    id: "R003",
+    id: "pirep_manager",
     name: "PIREP Manager",
-    description: "Can manage and process pilot reports",
-    permissions: ["manage_pireps"],
-    createdAt: "2022-01-01T10:00:00Z",
-    updatedAt: "2022-01-01T10:00:00Z",
-    userCount: 1,
+    permissions: ["home", "pireps"],
   },
   {
-    id: "R004",
+    id: "route_manager",
     name: "Route Manager",
-    description: "Can manage flight routes and schedules",
-    permissions: ["manage_routes"],
-    createdAt: "2022-01-01T10:00:00Z",
-    updatedAt: "2022-01-01T10:00:00Z",
-    userCount: 1,
+    permissions: ["home", "routes"],
   },
   {
-    id: "R005",
-    name: "Application Reviewer",
-    description: "Can review and process user applications",
-    permissions: ["manage_applications"],
-    createdAt: "2022-01-01T10:00:00Z",
-    updatedAt: "2022-01-01T10:00:00Z",
-    userCount: 1,
+    id: "user_manager",
+    name: "User Manager",
+    permissions: ["home", "users"],
+  },
+  {
+    id: "aircraft_manager",
+    name: "Aircraft Manager",
+    permissions: ["home", "aircrafts"],
+  },
+  {
+    id: "permissions_manager",
+    name: "Permissions Manager",
+    permissions: ["home", "permissions"],
   },
 ];
 
-// Available permissions
 const availablePermissions = [
   {
-    id: "manage_pireps",
+    id: "home",
+    name: "Admin Dashboard",
+    description: "View admin dashboard metrics",
+  },
+  {
+    id: "pireps",
     name: "Manage PIREPs",
     description: "Review, approve, and reject pilot reports",
   },
   {
-    id: "manage_applications",
-    name: "Manage Applications",
-    description: "Review, approve, and reject user applications",
-  },
-  {
-    id: "manage_routes",
+    id: "routes",
     name: "Manage Routes",
     description: "Create, edit, and delete flight routes",
   },
   {
-    id: "manage_users",
+    id: "users",
     name: "Manage Users",
-    description: "View and edit user profiles and settings",
+    description: "View and edit user profiles and applications",
   },
   {
-    id: "manage_admins",
-    name: "Manage Admins",
-    description: "Add, edit, and remove admin users",
+    id: "aircrafts",
+    name: "Manage Aircrafts",
+    description: "Manage aircraft records",
   },
   {
-    id: "manage_settings",
-    name: "Manage Settings",
-    description: "Configure system-wide settings",
+    id: "permissions",
+    name: "Manage Permissions",
+    description: "Grant and remove admin permissions",
+  },
+  {
+    id: "admin",
+    name: "Full Admin Access",
+    description: "Access every admin area",
   },
 ];
 
+function getRoleName(permissions: string[]) {
+  if (permissions.includes("admin")) {
+    return "Super Admin";
+  }
+
+  const sortedPermissions = [...permissions].sort().join(",");
+  const role = rolesData.find(
+    (role) => [...role.permissions].sort().join(",") === sortedPermissions,
+  );
+
+  return role?.name || "Custom";
+}
+
+function formatDate(date: string | null) {
+  if (!date) {
+    return "Never";
+  }
+
+  return new Date(date).toLocaleDateString();
+}
+
+function permissionLabel(permissionId: string) {
+  return (
+    availablePermissions.find((permission) => permission.id === permissionId)
+      ?.name || permissionId
+  );
+}
+
 export default function AdminPermissions() {
+  const [admins, setAdmins] = useState<AdminUser[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [showAddAdminDialog, setShowAddAdminDialog] = useState(false);
+  const [newAdminEmail, setNewAdminEmail] = useState("");
+  const [newAdminRole, setNewAdminRole] = useState("admin");
+  const [selectedAdmin, setSelectedAdmin] = useState<AdminUser | null>(null);
+  const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
 
-  // Filter admin users based on search and role filter
-  const filteredAdmins = adminUsersData.filter((admin) => {
-    const matchesSearch =
-      admin.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      admin.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      admin.role.toLowerCase().includes(searchQuery.toLowerCase());
+  const loadAdmins = async () => {
+    setLoading(true);
+    setError("");
 
-    const matchesRole = roleFilter === "all" ? true : admin.role === roleFilter;
+    try {
+      const response = await fetch("/api/admin/permissions");
+      const data = await response.json();
 
-    return matchesSearch && matchesRole;
-  });
-  // Handle adding a new admin
-  const handleAddAdmin = (formData: FormData) => {
-    // In a real app, you would call an API to add a new admin
-    console.log("Adding new admin:", Object.fromEntries(formData));
-    setShowAddAdminDialog(false);
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to load permissions");
+      }
+
+      setAdmins(Array.isArray(data.admins) ? data.admins : []);
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : "Failed to load permissions",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadAdmins();
+  }, []);
+
+  const filteredAdmins = useMemo(() => {
+    return admins.filter((admin) => {
+      const role = getRoleName(admin.permissions);
+      const query = searchQuery.toLowerCase();
+      const matchesSearch =
+        admin.name.toLowerCase().includes(query) ||
+        admin.email.toLowerCase().includes(query) ||
+        admin.callsign.toLowerCase().includes(query) ||
+        role.toLowerCase().includes(query);
+      const matchesRole = roleFilter === "all" || role === roleFilter;
+
+      return matchesSearch && matchesRole;
+    });
+  }, [admins, roleFilter, searchQuery]);
+
+  const openEditDialog = (admin: AdminUser) => {
+    setSelectedAdmin(admin);
+    setSelectedPermissions(admin.permissions);
+    setError("");
+    setMessage("");
+  };
+
+  const togglePermission = (permissionId: string, checked: boolean) => {
+    setSelectedPermissions((current) => {
+      if (checked) {
+        return Array.from(new Set([...current, permissionId]));
+      }
+
+      return current.filter((permission) => permission !== permissionId);
+    });
+  };
+
+  const handleAddAdmin = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/admin/permissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: newAdminEmail,
+          role: newAdminRole,
+        }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to add admin");
+      }
+
+      setMessage("Admin permissions saved.");
+      setNewAdminEmail("");
+      setNewAdminRole("admin");
+      setShowAddAdminDialog(false);
+      await loadAdmins();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Failed to add admin");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleUpdatePermissions = async () => {
+    if (!selectedAdmin) {
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/admin/permissions", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: selectedAdmin.id,
+          permissions: selectedPermissions,
+        }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to update permissions");
+      }
+
+      setMessage("Permissions updated.");
+      setSelectedAdmin(null);
+      await loadAdmins();
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : "Failed to update permissions",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRemoveAdmin = async (admin: AdminUser) => {
+    setSaving(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch(`/api/admin/permissions?id=${admin.id}`, {
+        method: "DELETE",
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to remove admin access");
+      }
+
+      setMessage("Admin access removed.");
+      await loadAdmins();
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : "Failed to remove admin access",
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -257,84 +339,83 @@ export default function AdminPermissions() {
         <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
           <h1 className="text-2xl font-bold">Admin Permissions</h1>
 
-          <div className="flex items-center gap-2">
-            <Dialog
-              open={showAddAdminDialog}
-              onOpenChange={setShowAddAdminDialog}
-            >
-              <DialogTrigger asChild>
-                <Button>
-                  <UserPlus className="mr-2 h-4 w-4" />
-                  <span>Add Admin</span>
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Add New Admin</DialogTitle>
-                  <DialogDescription>
-                    Add a new administrator to the system. They will receive an
-                    email with login instructions.
-                  </DialogDescription>
-                </DialogHeader>
+          <Dialog
+            open={showAddAdminDialog}
+            onOpenChange={setShowAddAdminDialog}
+          >
+            <DialogTrigger asChild>
+              <Button>
+                <UserPlus className="mr-2 h-4 w-4" />
+                <span>Add Admin</span>
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add Admin Access</DialogTitle>
+                <DialogDescription>
+                  Grant admin permissions to an existing pilot account.
+                </DialogDescription>
+              </DialogHeader>
 
-                <form action={handleAddAdmin} className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Full Name</Label>
-                    <Input
-                      id="name"
-                      name="name"
-                      placeholder="John Doe"
-                      required
-                    />
-                  </div>
+              <form onSubmit={handleAddAdmin} className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="email">Pilot Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="pilot@example.com"
+                    value={newAdminEmail}
+                    onChange={(event) => setNewAdminEmail(event.target.value)}
+                    required
+                  />
+                </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      name="email"
-                      type="email"
-                      placeholder="john.doe@example.com"
-                      required
-                    />
-                  </div>
+                <div className="space-y-2">
+                  <Label htmlFor="role">Role</Label>
+                  <Select value={newAdminRole} onValueChange={setNewAdminRole}>
+                    <SelectTrigger id="role">
+                      <SelectValue placeholder="Select a role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {rolesData.map((role) => (
+                        <SelectItem key={role.id} value={role.id}>
+                          {role.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="role">Role</Label>
-                    <Select name="role" required>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a role" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {rolesData.map((role) => (
-                          <SelectItem key={role.id} value={role.id}>
-                            {role.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      The role determines what permissions the admin will have.
-                    </p>
-                  </div>
-
-                  <DialogFooter>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setShowAddAdminDialog(false)}
-                    >
-                      Cancel
-                    </Button>
-                    <Button type="submit">Add Admin</Button>
-                  </DialogFooter>
-                </form>
-              </DialogContent>
-            </Dialog>
-          </div>
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowAddAdminDialog(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={saving}>
+                    {saving ? "Saving..." : "Add Admin"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
         </div>
 
-        <div className="flex flex-col gap-4">
+        {(message || error) && (
+          <div
+            className={`mt-4 rounded-md border px-4 py-3 text-sm ${
+              error
+                ? "border-red-200 bg-red-50 text-red-700"
+                : "border-green-200 bg-green-50 text-green-700"
+            }`}
+          >
+            {error || message}
+          </div>
+        )}
+
+        <div className="mt-5 flex flex-col gap-4">
           <div className="flex flex-col gap-4 md:flex-row md:items-end">
             <div className="flex-1 space-y-2">
               <Label htmlFor="search">Search Admins</Label>
@@ -342,10 +423,10 @@ export default function AdminPermissions() {
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   id="search"
-                  placeholder={"Search by name, email, role..."}
+                  placeholder="Search by name, email, callsign, role..."
                   className="pl-8"
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(event) => setSearchQuery(event.target.value)}
                 />
               </div>
             </div>
@@ -358,11 +439,14 @@ export default function AdminPermissions() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Roles</SelectItem>
-                  {rolesData.map((role) => (
-                    <SelectItem key={role.id} value={role.name}>
-                      {role.name}
-                    </SelectItem>
-                  ))}
+                  {[...new Set(rolesData.map((role) => role.name))].map(
+                    (role) => (
+                      <SelectItem key={role} value={role}>
+                        {role}
+                      </SelectItem>
+                    ),
+                  )}
+                  <SelectItem value="Custom">Custom</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -372,7 +456,7 @@ export default function AdminPermissions() {
             <CardHeader className="p-4">
               <CardTitle>Admin Users</CardTitle>
               <CardDescription>
-                Manage administrators and their permissions
+                Manage administrators and their database-backed permissions
               </CardDescription>
             </CardHeader>
             <CardContent className="p-0">
@@ -391,13 +475,19 @@ export default function AdminPermissions() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredAdmins.length === 0 ? (
+                  {loading ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="py-8 text-center">
+                        Loading permissions...
+                      </TableCell>
+                    </TableRow>
+                  ) : filteredAdmins.length === 0 ? (
                     <TableRow>
                       <TableCell
                         colSpan={5}
                         className="text-center py-8 text-muted-foreground"
                       >
-                        No admin users found matching your criteria
+                        No admin users found
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -406,10 +496,6 @@ export default function AdminPermissions() {
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <Avatar className="h-8 w-8">
-                              <AvatarImage
-                                src={admin.avatar}
-                                alt={admin.name}
-                              />
                               <AvatarFallback>
                                 {admin.name.charAt(0)}
                               </AvatarFallback>
@@ -427,51 +513,32 @@ export default function AdminPermissions() {
                             variant="outline"
                             className="bg-primary/10 text-primary"
                           >
-                            {admin.role}
+                            {getRoleName(admin.permissions)}
                           </Badge>
                         </TableCell>
                         <TableCell className="hidden md:table-cell">
-                          <div className="flex flex-wrap gap-1">
-                            {admin.permissions.length > 3 ? (
-                              <>
-                                <Badge variant="secondary" className="text-xs">
-                                  {admin.permissions.slice(0, 2).join(", ")}
-                                </Badge>
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Badge
-                                        variant="secondary"
-                                        className="text-xs"
-                                      >
-                                        +{admin.permissions.length - 2} more
-                                      </Badge>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                      <p>{admin.permissions.join(", ")}</p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              </>
-                            ) : (
-                              admin.permissions.map((permission) => (
-                                <Badge
-                                  key={permission}
-                                  variant="secondary"
-                                  className="text-xs"
-                                >
-                                  {permission.replace("manage_", "")}
-                                </Badge>
-                              ))
-                            )}
+                          <div className="flex max-w-xl flex-wrap gap-1">
+                            {admin.permissions.map((permission) => (
+                              <Badge
+                                key={permission}
+                                variant="secondary"
+                                className="text-xs"
+                              >
+                                {permissionLabel(permission)}
+                              </Badge>
+                            ))}
                           </div>
                         </TableCell>
                         <TableCell className="hidden md:table-cell">
-                          {new Date(admin.lastActive).toLocaleDateString()}
+                          {formatDate(admin.lastActive)}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
-                            <Button variant="ghost" size="icon">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => openEditDialog(admin)}
+                            >
                               <Edit className="h-4 w-4" />
                               <span className="sr-only">Edit</span>
                             </Button>
@@ -486,16 +553,20 @@ export default function AdminPermissions() {
                               <AlertDialogContent>
                                 <AlertDialogHeader>
                                   <AlertDialogTitle>
-                                    Are you sure?
+                                    Remove admin access?
                                   </AlertDialogTitle>
                                   <AlertDialogDescription>
-                                    This will remove admin access for{" "}
-                                    {admin.name}. This action cannot be undone.
+                                    This will remove every admin permission for{" "}
+                                    {admin.name}.
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                   <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction>Delete</AlertDialogAction>
+                                  <AlertDialogAction
+                                    onClick={() => handleRemoveAdmin(admin)}
+                                  >
+                                    Remove
+                                  </AlertDialogAction>
                                 </AlertDialogFooter>
                               </AlertDialogContent>
                             </AlertDialog>
@@ -509,6 +580,60 @@ export default function AdminPermissions() {
             </CardContent>
           </Card>
         </div>
+
+        <Dialog
+          open={Boolean(selectedAdmin)}
+          onOpenChange={(open) => {
+            if (!open) {
+              setSelectedAdmin(null);
+            }
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Permissions</DialogTitle>
+              <DialogDescription>
+                {selectedAdmin
+                  ? `Update admin access for ${selectedAdmin.name}.`
+                  : "Update admin access."}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3 py-4">
+              {availablePermissions.map((permission) => (
+                <div
+                  key={permission.id}
+                  className="flex items-start gap-3 rounded-md border p-3"
+                >
+                  <Checkbox
+                    id={`permission-${permission.id}`}
+                    checked={selectedPermissions.includes(permission.id)}
+                    onCheckedChange={(checked) =>
+                      togglePermission(permission.id, checked === true)
+                    }
+                  />
+                  <div className="space-y-1 leading-none">
+                    <Label htmlFor={`permission-${permission.id}`}>
+                      {permission.name}
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      {permission.description}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setSelectedAdmin(null)}>
+                Cancel
+              </Button>
+              <Button onClick={handleUpdatePermissions} disabled={saving}>
+                {saving ? "Saving..." : "Save Permissions"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </main>
     </CrewHeader>
   );
