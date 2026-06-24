@@ -13,7 +13,12 @@ import {
   PlaneIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { Header } from "./layout/header";
 import { useSession } from "@/hooks/use-session";
 
@@ -160,19 +165,19 @@ export function CrewHeader({ children }: CrewHeaderProps) {
       <Sheet>
         <SheetTrigger asChild>
           <Button
-            variant="outline"
-            size="icon"
-            className="fixed left-4 bottom-4 z-50 md:hidden"
+            variant="default"
+            className="fixed bottom-4 left-4 z-50 h-11 rounded-md bg-primary px-4 text-primary-foreground shadow-lg md:hidden"
+            aria-label="Open crew center sidebar"
           >
             <Menu className="h-4 w-4" />
+            <span>Crew Menu</span>
           </Button>
         </SheetTrigger>
-        <p className="fixed left-16 bottom-4 z-50 md:hidden">
-          For Crew Center Sidebar
-        </p>
-        <SheetContent side="left" className="w-64 p-0 bg-white">
+        <SheetContent side="left" className="w-64 gap-0 bg-white p-0">
           <div className="flex h-16 items-center border-b px-4">
-            <h2 className="text-lg font-semibold">Crew Center</h2>
+            <SheetTitle className="text-lg font-semibold">
+              Crew Center
+            </SheetTitle>
           </div>
 
           <nav className="flex-1 overflow-auto p-2">
