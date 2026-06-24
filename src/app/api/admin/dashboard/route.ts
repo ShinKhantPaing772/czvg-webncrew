@@ -36,7 +36,7 @@ export async function GET(request: Request) {
     // Get total flight hours
     const totalHoursQuery = `
       SELECT SUM(flighttime) as total 
-      FROM pireps WHERE status = 1 OR 0
+      FROM pireps WHERE status = 1
     `;
     const [totalHoursResult] = await sequelize.query(totalHoursQuery);
     const totalHoursSeconds =
