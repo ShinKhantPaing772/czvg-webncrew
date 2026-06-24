@@ -148,7 +148,7 @@ export default function Home() {
               </p>
               <p className="mt-5 max-w-2xl text-base leading-8 text-white/80 md:text-lg">
                 Fly a China-based network built for Infinite Flight pilots:
-                major hubs, realistic route variety, partner operations, and a
+                major hubs, realistic route variety, codeshare operations, and a
                 fleet ranging from regional jets to long-haul flagships.
               </p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">

@@ -71,7 +71,7 @@ export default function OperationsPage() {
                   extensive networks in the virtual aviation community. With
                   over 300 destinations and 1000+ routes, pilots can choose
                   short domestic sectors, international wide-body flights, and
-                  partner operations.
+                  codeshare operations.
                 </p>
               </div>
               <div className="grid gap-4 sm:grid-cols-3">

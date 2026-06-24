@@ -3,17 +3,15 @@
 import { useState, useEffect, useRef } from "react";
 import {
   Search,
-  Filter,
   CheckCircle,
   XCircle,
   AlertCircle,
   FileText,
-  ChevronDown,
-  Download,
   Eye,
-  Clock,
-  Calendar,
-  Loader,
+  Pencil,
+  Plus,
+  Save,
+  Trash2,
 } from "lucide-react";
 import { CrewHeader } from "@/components/crew-header";
 import { Button } from "@/components/ui/button";
@@ -29,6 +27,22 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 
 import {
   Table,
@@ -46,8 +60,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { formatFlightTimeHM } from "@/lib/utils/format-flight-time";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // Define types for API responses
 interface Pilot {
@@ -61,6 +74,10 @@ interface Aircraft {
   id: number;
   name: string;
   liveryname: string;
+}
+
+interface AircraftOption extends Aircraft {
+  notes?: string | null;
 }
 
 interface PirepComment {
@@ -80,7 +97,8 @@ interface Pirep {
   flightnum: string;
   departure: string;
   arrival: string;
-  flighttime: number;
+  flighttime: number | string;
+  flighttimeSeconds?: number;
   pilotid: number;
   date: string;
   aircraftid: number;
@@ -92,6 +110,57 @@ interface Pirep {
   Comments?: PirepComment[];
 }
 
+interface PirepEditForm {
+  flightnum: string;
+  departure: string;
+  arrival: string;
+  flighttime: string;
+  aircraftid: string;
+  fuelused: string;
+  status: string;
+  multi: string;
+  newComment: string;
+}
+
+const secondsToDurationInput = (
+  seconds?: number,
+  formattedFlighttime?: number | string,
+) => {
+  if (!Number.isFinite(seconds)) {
+    const numericFlighttime = Number(formattedFlighttime);
+    if (Number.isFinite(numericFlighttime)) {
+      const totalMinutes = Math.round(numericFlighttime * 60);
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+
+      return `${hours}:${minutes.toString().padStart(2, "0")}`;
+    }
+
+    return "";
+  }
+
+  const totalMinutes = Math.round((seconds ?? 0) / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  return `${hours}:${minutes.toString().padStart(2, "0")}`;
+};
+
+const pirepToEditForm = (pirep: Pirep): PirepEditForm => ({
+  flightnum: pirep.flightnum ?? "",
+  departure: pirep.departure ?? "",
+  arrival: pirep.arrival ?? "",
+  flighttime: secondsToDurationInput(
+    pirep.flighttimeSeconds,
+    pirep.flighttime,
+  ),
+  aircraftid: String(pirep.aircraftid ?? ""),
+  fuelused: String(pirep.fuelused ?? ""),
+  status: String(pirep.status),
+  multi: String(pirep.multi ?? ""),
+  newComment: "",
+});
+
 interface CountsData {
   pending: number;
   approved: number;
@@ -99,26 +168,56 @@ interface CountsData {
   total: number;
 }
 
+interface PaginationData {
+  total: number;
+  totalPages: number;
+  currentPage: number;
+  limit: number;
+}
+
 interface PirepsResponse {
   success: boolean;
   data: {
     pireps: Pirep[];
     counts: CountsData;
+    pagination: PaginationData;
   };
 }
 
 export default function AdminPireps() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [dateSort, setDateSort] = useState("desc");
   const [selectedPirep, setSelectedPirep] = useState<Pirep | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [activeTab, setActiveTab] = useState("all");
   const [loading, setLoading] = useState(true);
   const remarkRef = useRef<HTMLTextAreaElement | null>(null);
   const [hasRemark, setHasRemark] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+  const [isEditingPirep, setIsEditingPirep] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [editForm, setEditForm] = useState<PirepEditForm>({
+    flightnum: "",
+    departure: "",
+    arrival: "",
+    flighttime: "",
+    aircraftid: "",
+    fuelused: "",
+    status: "0",
+    multi: "",
+    newComment: "",
+  });
+  const [deletedCommentIds, setDeletedCommentIds] = useState<number[]>([]);
+  const [aircraftOptions, setAircraftOptions] = useState<AircraftOption[]>([]);
   const [pirepsData, setPirepsData] = useState<Pirep[]>([]);
+  const [pagination, setPagination] = useState<PaginationData>({
+    total: 0,
+    totalPages: 1,
+    currentPage: 1,
+    limit: 10,
+  });
   const [counts, setCounts] = useState<CountsData>({
     pending: 0,
     approved: 0,
@@ -126,23 +225,34 @@ export default function AdminPireps() {
     total: 0,
   });
 
-  // Fetch PIREPs from API - simplified with no filters
-  const fetchPireps = async () => {
+  const fetchPireps = async (page = currentPage) => {
     try {
       setLoading(true);
       setError(null);
 
-      // Simplified fetch with no parameters
-      const response = await authFetch(`/api/admin/pireps`);
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(itemsPerPage),
+      });
+
+      if (activeTab !== "all") {
+        params.set("status", activeTab);
+      }
+
+      if (searchQuery.trim()) {
+        params.set("search", searchQuery.trim());
+      }
+
+      const response = await authFetch(`/api/admin/pireps?${params}`);
       const data: PirepsResponse = await response.json();
 
       if (!data.success) {
         throw new Error("Failed to fetch PIREPs");
       }
 
-      // Update state with fetched data
       setPirepsData(data.data.pireps);
       setCounts(data.data.counts);
+      setPagination(data.data.pagination);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "An unknown error occurred",
@@ -153,9 +263,28 @@ export default function AdminPireps() {
     }
   };
 
-  // Fetch PIREPs when component mounts - simplified with no dependencies on filters
   useEffect(() => {
     fetchPireps();
+  }, [currentPage, activeTab, searchQuery, itemsPerPage]);
+
+  useEffect(() => {
+    if (pagination.totalPages > 0 && currentPage > pagination.totalPages) {
+      setCurrentPage(pagination.totalPages);
+    }
+  }, [currentPage, pagination.totalPages]);
+
+  useEffect(() => {
+    const fetchAircraft = async () => {
+      try {
+        const response = await authFetch("/api/aircraft");
+        const data = await response.json();
+        setAircraftOptions(Array.isArray(data.aircrafts) ? data.aircrafts : []);
+      } catch (error) {
+        console.error("Error fetching aircraft:", error);
+      }
+    };
+
+    fetchAircraft();
   }, []);
 
   useEffect(() => {
@@ -164,6 +293,15 @@ export default function AdminPireps() {
       setHasRemark(false);
     }
   }, [isDialogOpen, selectedPirep]);
+
+  useEffect(() => {
+    if (selectedPirep) {
+      setEditForm(pirepToEditForm(selectedPirep));
+      setDeletedCommentIds([]);
+      setUpdateError(null);
+      setIsEditingPirep(false);
+    }
+  }, [selectedPirep]);
 
   // Get status badge variant
   const getStatusBadge = (status: number) => {
@@ -294,28 +432,147 @@ export default function AdminPireps() {
     }
   };
 
+  const handleEditFormChange = (field: keyof PirepEditForm, value: string) => {
+    setEditForm((current) => ({
+      ...current,
+      [field]: field === "departure" || field === "arrival"
+        ? value.toUpperCase()
+        : value,
+    }));
+    setUpdateError(null);
+  };
+
+  const handleDeleteComment = (commentId: number) => {
+    setDeletedCommentIds((current) =>
+      current.includes(commentId) ? current : [...current, commentId],
+    );
+    setUpdateError(null);
+  };
+
+  const handleCancelEdit = () => {
+    if (selectedPirep) {
+      setEditForm(pirepToEditForm(selectedPirep));
+    }
+    setDeletedCommentIds([]);
+    setUpdateError(null);
+    setIsEditingPirep(false);
+  };
+
+  const handleUpdatePirep = async (pirep: Pirep) => {
+    const flightnum = editForm.flightnum.trim();
+    const departure = editForm.departure.trim().toUpperCase();
+    const arrival = editForm.arrival.trim().toUpperCase();
+    const flighttime = editForm.flighttime.trim();
+    const fuelused = editForm.fuelused.trim();
+    const multi = editForm.multi.trim();
+    const newComment = editForm.newComment.trim();
+    const parsedAircraftId = Number(editForm.aircraftid);
+    const parsedStatus = Number(editForm.status);
+
+    if (
+      !flightnum ||
+      !departure ||
+      !arrival ||
+      !flighttime ||
+      !editForm.aircraftid ||
+      !fuelused ||
+      !multi
+    ) {
+      setUpdateError(
+        "Flight number, route, duration, aircraft type, fuel used, and multiplier are required.",
+      );
+      return;
+    }
+
+    if (!/^[A-Z0-9]{4}$/.test(departure) || !/^[A-Z0-9]{4}$/.test(arrival)) {
+      setUpdateError("Departure and arrival ICAO codes must be 4 characters.");
+      return;
+    }
+
+    if (!/^\d+:[0-5]\d$/.test(flighttime) && !/^\d+(\.\d+)?$/.test(flighttime)) {
+      setUpdateError("Duration must be HH:MM or decimal hours.");
+      return;
+    }
+
+    if (!Number.isFinite(Number(fuelused)) || Number(fuelused) < 0) {
+      setUpdateError("Fuel used must be a valid number.");
+      return;
+    }
+
+    if (!Number.isInteger(parsedAircraftId) || parsedAircraftId <= 0) {
+      setUpdateError("Select a valid aircraft type.");
+      return;
+    }
+
+    if (![0, 1, 2].includes(parsedStatus)) {
+      setUpdateError("Select a valid PIREP status.");
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      const response = await authFetch("/api/admin/pireps", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: pirep.id,
+          flightnum,
+          departure,
+          arrival,
+          flighttime,
+          aircraftid: parsedAircraftId,
+          fuelused,
+          status: parsedStatus,
+          multi,
+          comment: newComment,
+          deleteCommentIds: deletedCommentIds,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || "Failed to update PIREP");
+      }
+
+      const updatedPirep = data.data as Pirep;
+      setPirepsData((currentPireps) =>
+        currentPireps.map((currentPirep) =>
+          currentPirep.id === pirep.id ? updatedPirep : currentPirep,
+        ),
+      );
+      setSelectedPirep(updatedPirep);
+      setEditForm(pirepToEditForm(updatedPirep));
+      setDeletedCommentIds([]);
+      setUpdateError(null);
+      setIsEditingPirep(false);
+      await fetchPireps();
+    } catch (error) {
+      console.error("Error updating PIREP:", error);
+      setUpdateError(
+        error instanceof Error ? error.message : "Failed to update PIREP",
+      );
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   // Use counts from API response
   const pendingCount = counts.pending;
   const approvedCount = counts.approved;
   const rejectedCount = counts.rejected;
   const totalCount = counts.total;
-
-  // Filtered PIREPs based on search query and active tab
-  const filteredPireps = pirepsData.filter((pirep) => {
-    const query = searchQuery.toLowerCase();
-    const matchesSearch =
-      pirep.flightnum.toLowerCase().includes(query) ||
-      pirep.departure.toLowerCase().includes(query) ||
-      pirep.arrival.toLowerCase().includes(query) ||
-      (pirep.Pilot?.name.toLowerCase().includes(query) ?? false) ||
-      (pirep.Pilot?.callsign.toLowerCase().includes(query) ?? false);
-
-    // Filter by tab (status)
-    const matchesTab =
-      activeTab === "all" ? true : pirep.status.toString() === activeTab;
-
-    return matchesSearch && matchesTab;
-  });
+  const totalPages = Math.max(pagination.totalPages, 1);
+  const currentPageStart =
+    pagination.total === 0
+      ? 0
+      : (pagination.currentPage - 1) * pagination.limit + 1;
+  const currentPageEnd = Math.min(
+    pagination.currentPage * pagination.limit,
+    pagination.total,
+  );
 
   return (
     <CrewHeader>
@@ -328,7 +585,10 @@ export default function AdminPireps() {
           <Tabs
             defaultValue="all"
             className="space-y-4"
-            onValueChange={(val) => setActiveTab(val)}
+            onValueChange={(val) => {
+              setActiveTab(val);
+              setCurrentPage(1);
+            }}
           >
             <div className="flex justify-between">
               <TabsList>
@@ -370,9 +630,32 @@ export default function AdminPireps() {
                       placeholder="Search by flight number, pilot name, airport code..."
                       className="pl-8"
                       value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        setCurrentPage(1);
+                      }}
                     />
                   </div>
+                </div>
+                <div className="space-y-2 md:w-40">
+                  <Label htmlFor="pireps-per-page">Per Page</Label>
+                  <Select
+                    value={String(itemsPerPage)}
+                    onValueChange={(value) => {
+                      setItemsPerPage(Number(value));
+                      setCurrentPage(1);
+                    }}
+                  >
+                    <SelectTrigger id="pireps-per-page" className="w-full">
+                      <SelectValue placeholder="Per page" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white">
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
               <Card>
@@ -421,7 +704,7 @@ export default function AdminPireps() {
                             Error: {error}
                           </TableCell>
                         </TableRow>
-                      ) : filteredPireps.length === 0 ? (
+                      ) : pirepsData.length === 0 ? (
                         <TableRow>
                           <TableCell
                             colSpan={8}
@@ -431,7 +714,7 @@ export default function AdminPireps() {
                           </TableCell>
                         </TableRow>
                       ) : (
-                        filteredPireps.map((pirep) => (
+                        pirepsData.map((pirep) => (
                           <TableRow key={pirep.id}>
                             <TableCell>{pirep.flightnum}</TableCell>
                             <TableCell>{pirep.date}</TableCell>
@@ -462,9 +745,11 @@ export default function AdminPireps() {
                               </div>
                             </TableCell>
                             <TableCell className="hidden md:table-cell">
-                              {pirep.Aircraft
-                                ? `${pirep.Aircraft.name} - ${pirep.Aircraft?.liveryname}`
-                                : pirep.aircraftid}
+                              <span className="block max-w-[240px] truncate">
+                                {pirep.Aircraft
+                                  ? `${pirep.Aircraft.name} - ${pirep.Aircraft?.liveryname}`
+                                  : pirep.aircraftid}
+                              </span>
                             </TableCell>
                             <TableCell>
                               {getStatusBadge(pirep.status)}
@@ -507,11 +792,14 @@ export default function AdminPireps() {
                       setIsDialogOpen(open);
                       if (!open) {
                         setHasRemark(false);
+                        setIsEditingPirep(false);
+                        setDeletedCommentIds([]);
+                        setUpdateError(null);
                         if (remarkRef.current) remarkRef.current.value = "";
                       }
                     }}
                   >
-                    <DialogContent className="max-w-4xl bg-white">
+                    <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto bg-white">
                       {selectedPirep ? (
                         <>
                           <DialogHeader>
@@ -529,65 +817,211 @@ export default function AdminPireps() {
                           <div className="grid gap-4 py-4">
                             <div className="grid grid-cols-1 gap-4">
                               <Card>
-                                <CardHeader className="">
+                                <CardHeader className="flex flex-row items-center justify-between gap-4">
                                   <CardTitle className="text-sm font-medium">
                                     Flight Information
                                   </CardTitle>
+                                  <div className="flex gap-2">
+                                    {isEditingPirep ? (
+                                      <>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={handleCancelEdit}
+                                          disabled={isUpdating}
+                                        >
+                                          Cancel
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          onClick={() =>
+                                            handleUpdatePirep(selectedPirep)
+                                          }
+                                          disabled={isUpdating}
+                                        >
+                                          <Save className="mr-2 h-4 w-4" />
+                                          Save Changes
+                                        </Button>
+                                      </>
+                                    ) : (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() =>
+                                          setIsEditingPirep(true)
+                                        }
+                                      >
+                                        <Pencil className="mr-2 h-4 w-4" />
+                                        Edit
+                                      </Button>
+                                    )}
+                                  </div>
                                 </CardHeader>
-                                <CardContent className="pt-0">
-                                  <dl className="space-y-2 text-sm">
-                                    <div className="flex justify-between">
-                                      <dt className="text-muted-foreground">
-                                        Flight Number:
-                                      </dt>
-                                      <dd>{selectedPirep.flightnum}</dd>
+                                <CardContent className="space-y-4 pt-0">
+                                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                    <div className="space-y-2">
+                                      <Label
+                                        htmlFor={`flightnum-${selectedPirep.id}`}
+                                      >
+                                        Flight Number
+                                      </Label>
+                                      <Input
+                                        id={`flightnum-${selectedPirep.id}`}
+                                        value={editForm.flightnum}
+                                        disabled={!isEditingPirep}
+                                        onChange={(event) =>
+                                          handleEditFormChange(
+                                            "flightnum",
+                                            event.target.value,
+                                          )
+                                        }
+                                      />
                                     </div>
-                                    <div className="flex justify-between">
-                                      <dt className="text-muted-foreground">
-                                        Date:
-                                      </dt>
-                                      <dd>{selectedPirep.date}</dd>
+                                    <div className="space-y-2">
+                                      <Label>Date</Label>
+                                      <Input
+                                        value={selectedPirep.date}
+                                        disabled
+                                      />
                                     </div>
-                                    <div className="flex justify-between">
-                                      <dt className="text-muted-foreground">
-                                        Route:
-                                      </dt>
-                                      <dd>
-                                        {selectedPirep.departure} →{" "}
-                                        {selectedPirep.arrival}
-                                      </dd>
+                                    <div className="space-y-2">
+                                      <Label
+                                        htmlFor={`departure-${selectedPirep.id}`}
+                                      >
+                                        Departure ICAO
+                                      </Label>
+                                      <Input
+                                        id={`departure-${selectedPirep.id}`}
+                                        maxLength={4}
+                                        value={editForm.departure}
+                                        disabled={!isEditingPirep}
+                                        onChange={(event) =>
+                                          handleEditFormChange(
+                                            "departure",
+                                            event.target.value,
+                                          )
+                                        }
+                                      />
                                     </div>
-                                    <div className="flex justify-between">
-                                      <dt className="text-muted-foreground">
-                                        Duration:
-                                      </dt>
-                                      <dd>
-                                        {formatFlightTimeHM(
-                                          selectedPirep.flighttime,
-                                        )}
-                                      </dd>
+                                    <div className="space-y-2">
+                                      <Label
+                                        htmlFor={`arrival-${selectedPirep.id}`}
+                                      >
+                                        Arrival ICAO
+                                      </Label>
+                                      <Input
+                                        id={`arrival-${selectedPirep.id}`}
+                                        maxLength={4}
+                                        value={editForm.arrival}
+                                        disabled={!isEditingPirep}
+                                        onChange={(event) =>
+                                          handleEditFormChange(
+                                            "arrival",
+                                            event.target.value,
+                                          )
+                                        }
+                                      />
                                     </div>
-                                  </dl>
-                                </CardContent>
-                                <CardContent className=" pt-0">
-                                  <dl className="space-y-2 text-sm">
-                                    <div className="flex justify-between">
-                                      <dt className="text-muted-foreground">
-                                        Aircraft Type:
-                                      </dt>
-                                      <dd>
-                                        {selectedPirep.Aircraft
-                                          ? `${selectedPirep.Aircraft.name} - ${selectedPirep.Aircraft?.liveryname}`
-                                          : selectedPirep.aircraftid}
-                                      </dd>
+                                    <div className="space-y-2">
+                                      <Label
+                                        htmlFor={`duration-${selectedPirep.id}`}
+                                      >
+                                        Duration
+                                      </Label>
+                                      <Input
+                                        id={`duration-${selectedPirep.id}`}
+                                        placeholder="1:30"
+                                        value={editForm.flighttime}
+                                        disabled={!isEditingPirep}
+                                        onChange={(event) =>
+                                          handleEditFormChange(
+                                            "flighttime",
+                                            event.target.value,
+                                          )
+                                        }
+                                      />
                                     </div>
-                                    <div className="flex justify-between">
-                                      <dt className="text-muted-foreground">
-                                        Fuel Used:
-                                      </dt>
-                                      <dd>{selectedPirep.fuelused} kg</dd>
+                                    <div className="space-y-2">
+                                      <Label
+                                        htmlFor={`fuel-${selectedPirep.id}`}
+                                      >
+                                        Fuel Used (KG)
+                                      </Label>
+                                      <Input
+                                        id={`fuel-${selectedPirep.id}`}
+                                        type="number"
+                                        min="0"
+                                        value={editForm.fuelused}
+                                        disabled={!isEditingPirep}
+                                        onChange={(event) =>
+                                          handleEditFormChange(
+                                            "fuelused",
+                                            event.target.value,
+                                          )
+                                        }
+                                      />
                                     </div>
-                                  </dl>
+                                    <div className="min-w-0 space-y-2 md:col-span-2">
+                                      <Label
+                                        htmlFor={`aircraft-${selectedPirep.id}`}
+                                      >
+                                        Aircraft Type
+                                      </Label>
+                                      <Select
+                                        value={editForm.aircraftid}
+                                        disabled={!isEditingPirep}
+                                        onValueChange={(value) =>
+                                          handleEditFormChange(
+                                            "aircraftid",
+                                            value,
+                                          )
+                                        }
+                                      >
+                                        <SelectTrigger
+                                          id={`aircraft-${selectedPirep.id}`}
+                                          className="w-full min-w-0 max-w-full [&_[data-slot=select-value]]:block [&_[data-slot=select-value]]:truncate"
+                                        >
+                                          <SelectValue placeholder="Select aircraft" />
+                                        </SelectTrigger>
+                                        <SelectContent className="max-h-[240px] max-w-[min(760px,calc(100vw-3rem))] bg-white">
+                                          {selectedPirep.Aircraft &&
+                                            !aircraftOptions.some(
+                                              (aircraft) =>
+                                                aircraft.id ===
+                                                selectedPirep.aircraftid,
+                                            ) && (
+                                              <SelectItem
+                                                value={String(
+                                                  selectedPirep.aircraftid,
+                                                )}
+                                                className="max-w-full"
+                                              >
+                                                <span className="block max-w-full truncate">
+                                                  {selectedPirep.Aircraft.name}{" "}
+                                                  -{" "}
+                                                  {
+                                                    selectedPirep.Aircraft
+                                                      .liveryname
+                                                  }
+                                                </span>
+                                              </SelectItem>
+                                            )}
+                                          {aircraftOptions.map((aircraft) => (
+                                            <SelectItem
+                                              key={aircraft.id}
+                                              value={String(aircraft.id)}
+                                              className="max-w-full"
+                                            >
+                                              <span className="block max-w-full truncate">
+                                                {aircraft.name} -{" "}
+                                                {aircraft.liveryname}
+                                              </span>
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  </div>
                                 </CardContent>
                               </Card>
 
@@ -597,67 +1031,160 @@ export default function AdminPireps() {
                                     Status Information
                                   </CardTitle>
                                 </CardHeader>
-                                <CardContent className="pt-0">
-                                  <dl className="space-y-2 text-sm">
-                                    <div className="flex justify-between">
-                                      <dt className="text-muted-foreground">
-                                        Status:
-                                      </dt>
-                                      <dd>
-                                        {getStatusBadge(selectedPirep.status)}
-                                      </dd>
+                                <CardContent className="space-y-4 pt-0">
+                                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                    <div className="space-y-2">
+                                      <Label
+                                        htmlFor={`status-${selectedPirep.id}`}
+                                      >
+                                        Status
+                                      </Label>
+                                      <Select
+                                        value={editForm.status}
+                                        disabled={!isEditingPirep}
+                                        onValueChange={(value) =>
+                                          handleEditFormChange("status", value)
+                                        }
+                                      >
+                                        <SelectTrigger
+                                          id={`status-${selectedPirep.id}`}
+                                          className="w-full"
+                                        >
+                                          <SelectValue placeholder="Select status" />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-white">
+                                          <SelectItem value="0">
+                                            Pending
+                                          </SelectItem>
+                                          <SelectItem value="1">
+                                            Approved
+                                          </SelectItem>
+                                          <SelectItem value="2">
+                                            Rejected
+                                          </SelectItem>
+                                        </SelectContent>
+                                      </Select>
                                     </div>
-                                    <div className="flex justify-between">
-                                      <dt className="text-muted-foreground">
-                                        Multiplier:
-                                      </dt>
-                                      <dd>{selectedPirep.multi}</dd>
+                                    <div className="space-y-2">
+                                      <Label
+                                        htmlFor={`multi-${selectedPirep.id}`}
+                                      >
+                                        Multiplier
+                                      </Label>
+                                      <Input
+                                        id={`multi-${selectedPirep.id}`}
+                                        value={editForm.multi}
+                                        disabled={!isEditingPirep}
+                                        onChange={(event) =>
+                                          handleEditFormChange(
+                                            "multi",
+                                            event.target.value,
+                                          )
+                                        }
+                                      />
                                     </div>
-                                  </dl>
+                                  </div>
+
+                                  {updateError && (
+                                    <p className="text-sm text-red-600">
+                                      {updateError}
+                                    </p>
+                                  )}
                                 </CardContent>
                               </Card>
 
-                              {selectedPirep.Comments &&
-                                selectedPirep.Comments.length > 0 && (
-                                  <Card>
-                                    <CardHeader>
-                                      <CardTitle className="text-sm font-medium">
-                                        Admin Comments
-                                      </CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="pt-0">
-                                      <div className="space-y-3 text-sm">
-                                        {selectedPirep.Comments.map(
-                                          (comment) => (
-                                            <div
-                                              key={comment.id}
-                                              className="rounded-lg border border-slate-200 bg-slate-50 p-3"
-                                            >
-                                              <div className="flex items-center justify-between gap-4 text-xs text-slate-500">
-                                                <span>
-                                                  {comment.User
-                                                    ? `${comment.User.name}`
-                                                    : `User #${comment.userid}`}
-                                                </span>
-                                                <span>
-                                                  {new Date(
-                                                    comment.dateposted,
-                                                  ).toLocaleString()}
-                                                </span>
-                                              </div>
-                                              <p className="mt-2 text-sm text-slate-700">
-                                                {comment.content}
-                                              </p>
-                                            </div>
+                              <Card>
+                                <CardHeader>
+                                  <CardTitle className="text-sm font-medium">
+                                    Admin Comments
+                                  </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-4 pt-0">
+                                  {selectedPirep.Comments?.filter(
+                                    (comment) =>
+                                      !deletedCommentIds.includes(comment.id),
+                                  ).length ? (
+                                    <div className="space-y-3 text-sm">
+                                      {selectedPirep.Comments.filter(
+                                        (comment) =>
+                                          !deletedCommentIds.includes(
+                                            comment.id,
                                           ),
-                                        )}
-                                      </div>
-                                    </CardContent>
-                                  </Card>
-                                )}
+                                      ).map((comment) => (
+                                        <div
+                                          key={comment.id}
+                                          className="rounded-lg border border-slate-200 bg-slate-50 p-3"
+                                        >
+                                          <div className="flex items-center justify-between gap-4 text-xs text-slate-500">
+                                            <span>
+                                              {comment.User
+                                                ? `${comment.User.name}`
+                                                : `User #${comment.userid}`}
+                                            </span>
+                                            <div className="flex items-center gap-2">
+                                              <span>
+                                                {new Date(
+                                                  comment.dateposted,
+                                                ).toLocaleString()}
+                                              </span>
+                                              {isEditingPirep && (
+                                                <Button
+                                                  variant="ghost"
+                                                  size="sm"
+                                                  className="h-7 px-2 text-red-600 hover:text-red-700"
+                                                  onClick={() =>
+                                                    handleDeleteComment(
+                                                      comment.id,
+                                                    )
+                                                  }
+                                                >
+                                                  <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                              )}
+                                            </div>
+                                          </div>
+                                          <p className="mt-2 text-sm text-slate-700">
+                                            {comment.content}
+                                          </p>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <p className="text-sm text-muted-foreground">
+                                      No admin comments yet.
+                                    </p>
+                                  )}
+
+                                  {isEditingPirep && (
+                                    <div className="space-y-2">
+                                      <Label
+                                        htmlFor={`comment-${selectedPirep.id}`}
+                                      >
+                                        Add Admin Comment
+                                      </Label>
+                                      <Textarea
+                                        id={`comment-${selectedPirep.id}`}
+                                        placeholder="Enter a comment for the pilot..."
+                                        value={editForm.newComment}
+                                        onChange={(event) =>
+                                          handleEditFormChange(
+                                            "newComment",
+                                            event.target.value,
+                                          )
+                                        }
+                                      />
+                                      <p className="flex items-center text-xs text-muted-foreground">
+                                        <Plus className="mr-1 h-3 w-3" />
+                                        The comment will be added when changes
+                                        are saved.
+                                      </p>
+                                    </div>
+                                  )}
+                                </CardContent>
+                              </Card>
                             </div>
 
-                            {selectedPirep.status === 0 && (
+                            {selectedPirep.status === 0 && !isEditingPirep && (
                               <div className="space-y-2">
                                 <Label htmlFor="admin-remarks">
                                   Admin Remarks (Required to Reject a PIREP)
@@ -703,10 +1230,89 @@ export default function AdminPireps() {
                     </DialogContent>
                   </Dialog>
                 </CardContent>
-                <CardFooter className="flex items-center justify-between p-4">
+                <CardFooter className="flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between">
                   <div className="text-sm text-muted-foreground">
-                    Showing {filteredPireps.length} of {totalCount} PIREPs
+                    Showing {currentPageStart}-{currentPageEnd} of{" "}
+                    {pagination.total} PIREPs
                   </div>
+                  {totalPages > 1 && (
+                    <Pagination className="mx-0 w-auto">
+                      <PaginationContent>
+                        <PaginationItem>
+                          <PaginationPrevious
+                            href="#"
+                            onClick={(event) => {
+                              event.preventDefault();
+                              setCurrentPage((page) => Math.max(page - 1, 1));
+                            }}
+                            aria-disabled={currentPage === 1}
+                            className={
+                              currentPage === 1
+                                ? "pointer-events-none opacity-50"
+                                : ""
+                            }
+                          />
+                        </PaginationItem>
+
+                        {Array.from({ length: totalPages }).map((_, index) => {
+                          const page = index + 1;
+                          const shouldShowPage =
+                            page === 1 ||
+                            page === totalPages ||
+                            (page >= currentPage - 1 && page <= currentPage + 1);
+
+                          if (shouldShowPage) {
+                            return (
+                              <PaginationItem key={page}>
+                                <PaginationLink
+                                  href="#"
+                                  isActive={page === currentPage}
+                                  onClick={(event) => {
+                                    event.preventDefault();
+                                    setCurrentPage(page);
+                                  }}
+                                >
+                                  {page}
+                                </PaginationLink>
+                              </PaginationItem>
+                            );
+                          }
+
+                          if (
+                            (page === 2 && currentPage > 3) ||
+                            (page === totalPages - 1 &&
+                              currentPage < totalPages - 2)
+                          ) {
+                            return (
+                              <PaginationItem key={page}>
+                                <PaginationEllipsis />
+                              </PaginationItem>
+                            );
+                          }
+
+                          return null;
+                        })}
+
+                        <PaginationItem>
+                          <PaginationNext
+                            href="#"
+                            onClick={(event) => {
+                              event.preventDefault();
+                              setCurrentPage((page) =>
+                                Math.min(page + 1, totalPages),
+                              );
+                            }}
+                            aria-disabled={currentPage === totalPages}
+                            className={
+                              currentPage === totalPages
+                                ? "pointer-events-none opacity-50"
+                                : ""
+                            }
+                          />
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
+                  )}
                 </CardFooter>
               </Card>
             </div>

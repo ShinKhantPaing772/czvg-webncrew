@@ -49,6 +49,14 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { Input } from "@/components/ui/input"; // 🔍 new import
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useSession } from "@/hooks/use-session";
 import { authFetch } from "@/lib/utils/api";
 
@@ -83,14 +91,31 @@ interface Pirep {
   Comments?: PirepComment[];
 }
 
+interface PaginationData {
+  total: number;
+  totalPages: number;
+  currentPage: number;
+  limit: number;
+}
+
+interface PirepsResponse {
+  pireps: Pirep[];
+  pagination?: PaginationData;
+}
+
 export default function ViewPireps() {
   const { user } = useSession();
-  const dateSort = "desc";
   const [_selectedPirep, setSelectedPirep] = useState<Pirep | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   const [pirepsData, setPirepsData] = useState<Pirep[]>([]);
+  const [pagination, setPagination] = useState<PaginationData>({
+    total: 0,
+    totalPages: 1,
+    currentPage: 1,
+    limit: 10,
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -100,10 +125,32 @@ export default function ViewPireps() {
   useEffect(() => {
     const fetchPireps = async () => {
       try {
-        const response = await authFetch(`/api/pilots/${user?.id}/pireps`);
+        setLoading(true);
+        setError(null);
+
+        const params = new URLSearchParams({
+          page: String(currentPage),
+          limit: String(itemsPerPage),
+        });
+
+        if (searchTerm.trim()) {
+          params.set("search", searchTerm.trim());
+        }
+
+        const response = await authFetch(
+          `/api/pilots/${user?.id}/pireps?${params}`,
+        );
         if (!response.ok) throw new Error("Failed to fetch PIREPs");
-        const data = await response.json();
+        const data: PirepsResponse = await response.json();
         setPirepsData(data.pireps);
+        setPagination(
+          data.pagination ?? {
+            total: data.pireps.length,
+            totalPages: 1,
+            currentPage: 1,
+            limit: itemsPerPage,
+          },
+        );
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unknown error");
       } finally {
@@ -111,38 +158,22 @@ export default function ViewPireps() {
       }
     };
     if (user?.id) fetchPireps();
-  }, [user?.id]);
+  }, [user?.id, currentPage, itemsPerPage, searchTerm]);
 
-  // Sort by date
-  const sortedPireps = [...pirepsData].sort((a, b) => {
-    const dateA = new Date(a.date).getTime();
-    const dateB = new Date(b.date).getTime();
-    return dateSort === "desc" ? dateB - dateA : dateA - dateB;
-  });
+  useEffect(() => {
+    if (pagination.totalPages > 0 && currentPage > pagination.totalPages) {
+      setCurrentPage(pagination.totalPages);
+    }
+  }, [currentPage, pagination.totalPages]);
 
-  // 🔍 Filter PIREPs by search term
-  const filteredPireps = sortedPireps.filter((p) => {
-    const search = searchTerm.toLowerCase();
-    return (
-      p.flightnum.toLowerCase().includes(search) ||
-      p.departure.toLowerCase().includes(search) ||
-      p.arrival.toLowerCase().includes(search) ||
-      p.date.toLowerCase().includes(search) ||
-      p.fuelused.toString().includes(search) ||
-      p.multi.toString().includes(search) ||
-      p.Aircraft?.name.toLowerCase().includes(search) ||
-      p.Aircraft?.liveryname.toLowerCase().includes(search) ||
-      (p.status === 1 && "approved".includes(search)) ||
-      (p.status === 0 && "pending".includes(search)) ||
-      (p.status === 2 && "rejected".includes(search))
-    );
-  });
-
-  // Pagination
-  const totalPages = Math.ceil(filteredPireps.length / itemsPerPage);
-  const paginatedPireps = filteredPireps.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage,
+  const totalPages = Math.max(pagination.totalPages, 1);
+  const currentPageStart =
+    pagination.total === 0
+      ? 0
+      : (pagination.currentPage - 1) * pagination.limit + 1;
+  const currentPageEnd = Math.min(
+    pagination.currentPage * pagination.limit,
+    pagination.total,
   );
 
   const getStatusBadge = (status: number) => {
@@ -199,22 +230,47 @@ export default function ViewPireps() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <h1 className="text-2xl font-bold">My PIREPs</h1>
 
-            <div className="flex gap-2 items-center w-full sm:w-auto">
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-end">
               {/* 🔍 Search bar */}
-              <div className="relative w-full sm:w-64">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search PIREPs..."
-                  value={searchTerm}
-                  onChange={(e) => {
-                    setSearchTerm(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className="pl-8"
-                />
+              <div className="w-full space-y-2 sm:w-64">
+                <Label htmlFor="pirep-search">Search</Label>
+                <div className="relative">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="pirep-search"
+                    placeholder="Search PIREPs..."
+                    value={searchTerm}
+                    onChange={(e) => {
+                      setSearchTerm(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="pl-8"
+                  />
+                </div>
               </div>
 
-              <Button asChild>
+              <div className="space-y-2 sm:w-32">
+                <Label htmlFor="pireps-per-page">Per Page</Label>
+                <Select
+                  value={String(itemsPerPage)}
+                  onValueChange={(value) => {
+                    setItemsPerPage(Number(value));
+                    setCurrentPage(1);
+                  }}
+                >
+                  <SelectTrigger id="pireps-per-page" className="w-full">
+                    <SelectValue placeholder="Per page" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white">
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Button asChild className="sm:self-end">
                 <a href="/crew/file-pirep">Submit New PIREP</a>
               </Button>
             </div>
@@ -261,7 +317,7 @@ export default function ViewPireps() {
                       </TableCell>
                     </TableRow>
                   )}
-                  {!loading && paginatedPireps.length === 0 && (
+                  {!loading && pirepsData.length === 0 && (
                     <TableRow>
                       <TableCell
                         colSpan={8}
@@ -271,7 +327,7 @@ export default function ViewPireps() {
                       </TableCell>
                     </TableRow>
                   )}
-                  {paginatedPireps.map((pirep) => (
+                  {pirepsData.map((pirep) => (
                     <TableRow key={pirep.id}>
                       <TableCell>{pirep.flightnum}</TableCell>
                       <TableCell>{pirep.date}</TableCell>
@@ -433,8 +489,8 @@ export default function ViewPireps() {
 
             <CardFooter className="flex items-center justify-between p-4">
               <div className="text-sm text-muted-foreground">
-                Showing {paginatedPireps.length} of {filteredPireps.length}{" "}
-                filtered PIREPs
+                Showing {currentPageStart}-{currentPageEnd} of{" "}
+                {pagination.total} PIREPs
               </div>
 
               {totalPages > 1 && (

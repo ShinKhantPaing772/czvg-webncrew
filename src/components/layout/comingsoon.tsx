@@ -21,7 +21,7 @@ export default function ComingSoonPage() {
             </div>
 
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6">
-              We're Coming Back Soon
+              We&apos;re Coming Back Soon
             </h1>
 
             <p className="text-xl text-gray-600 mb-12 max-w-2xl mx-auto">
