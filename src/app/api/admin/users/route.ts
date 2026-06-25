@@ -13,7 +13,18 @@ export async function GET(request: Request) {
     if (!auth.ok) return auth.response;
 
     const [users] = await sequelize.query(`
-      SELECT p.*, 
+      SELECT
+        p.\`id\`,
+        p.\`name\`,
+        p.\`callsign\`,
+        p.\`ifc\`,
+        p.\`ifuserid\`,
+        p.\`email\`,
+        p.\`joined\`,
+        p.\`status\`,
+        p.\`notes\`,
+        p.\`transhours\`,
+        p.\`transflights\`,
         (
           SELECT MAX(\`date\`)
           FROM \`pireps\`
