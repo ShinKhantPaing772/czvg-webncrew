@@ -106,6 +106,7 @@ export default function FindRoutes() {
       setLoading(true);
       setCurrentPage(1); // Reset to the first page
       const url = new URL("/api/routes", window.location.origin);
+      url.searchParams.set("limit", "500");
       if (searchQuery) url.searchParams.set("fltnum", searchQuery);
       if (departureFilter) url.searchParams.set("dep", departureFilter);
       if (arrivalFilter) url.searchParams.set("arr", arrivalFilter);

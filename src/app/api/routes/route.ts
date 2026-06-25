@@ -19,6 +19,14 @@ export async function GET(request: Request) {
     const aircraftId = searchParams.get("aircraftId");
     const minDuration = searchParams.get("minDuration");
     const maxDuration = searchParams.get("maxDuration");
+    const pageParam = Number(searchParams.get("page") ?? "1");
+    const limitParam = Number(searchParams.get("limit") ?? "100");
+    const page = Number.isInteger(pageParam) && pageParam > 0 ? pageParam : 1;
+    const limit =
+      Number.isInteger(limitParam) && limitParam > 0 && limitParam <= 500
+        ? limitParam
+        : 100;
+    const offset = (page - 1) * limit;
 
     const whereClauses = ["1=1"];
     const replacements: Record<string, string | number> = {};
@@ -57,6 +65,25 @@ export async function GET(request: Request) {
       replacements.aircraft = `%${aircraft}%`;
     }
 
+    const fromAndWhere = `
+      FROM routes r
+      LEFT JOIN route_aircraft ra ON r.id = ra.routeid
+      LEFT JOIN aircraft a ON ra.aircraftid = a.id
+      WHERE ${whereClauses.join(" AND ")}
+    `;
+
+    const countRows = await sequelize.query<{ total: number }>(
+      `
+        SELECT COUNT(DISTINCT r.id) AS total
+        ${fromAndWhere}
+      `,
+      {
+        replacements,
+        type: QueryTypes.SELECT,
+      },
+    );
+    const total = Number(countRows[0]?.total ?? 0);
+
     // Build the SQL query with filters
     let query = `
       SELECT 
@@ -77,17 +104,18 @@ export async function GET(request: Request) {
           ), 
           '[]'
         ) AS aircrafts
-      FROM routes r
-      LEFT JOIN route_aircraft ra ON r.id = ra.routeid
-      LEFT JOIN aircraft a ON ra.aircraftid = a.id
-      WHERE ${whereClauses.join(" AND ")}
+      ${fromAndWhere}
     `;
 
     // Add group by and order by
-    query += " GROUP BY r.id ORDER BY r.fltnum";
+    query += " GROUP BY r.id ORDER BY r.fltnum LIMIT :limit OFFSET :offset";
     // Execute the raw query
     const routes = await sequelize.query(query, {
-      replacements,
+      replacements: {
+        ...replacements,
+        limit,
+        offset,
+      },
       type: QueryTypes.SELECT,
     });
 
@@ -119,7 +147,16 @@ export async function GET(request: Request) {
         })
       : [];
 
-    return NextResponse.json({ success: true, data: formattedRoutes });
+    return NextResponse.json({
+      success: true,
+      data: formattedRoutes,
+      pagination: {
+        total,
+        totalPages: Math.ceil(total / limit),
+        currentPage: page,
+        limit,
+      },
+    });
   } catch (error) {
     console.error("Error fetching routes:", error);
     return NextResponse.json(
