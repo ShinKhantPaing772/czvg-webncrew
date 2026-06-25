@@ -1,7 +1,8 @@
 import { Sequelize } from "sequelize";
 
 const sslCa = process.env.DB_SSL_CA?.replace(/\\n/g, "\n");
-const rejectUnauthorized = process.env.DB_SSL_REJECT_UNAUTHORIZED !== "false";
+const rejectUnauthorized =
+  process.env.DB_SSL_REJECT_UNAUTHORIZED === "true" || Boolean(sslCa);
 
 // Database connection configuration
 const sequelize = new Sequelize({
