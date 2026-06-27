@@ -797,7 +797,8 @@ export default function Users() {
                                       </div>
                                     </div>
 
-                                    <div className="grid grid-cols-1 gap-4">
+                                    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+                                      <div className="min-w-0">
                                       <Card>
                                         <CardHeader>
                                           <CardTitle className="text-sm font-medium">
@@ -964,10 +965,12 @@ export default function Users() {
                                           </dl>
                                         </CardContent>
                                       </Card>
+                                      </div>
 
+                                      <aside className="space-y-4 lg:sticky lg:top-4 lg:self-start">
                                       <Card>
                                         <CardHeader>
-                                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                          <div className="flex flex-col gap-3">
                                             <div>
                                               <CardTitle className="text-sm font-medium">
                                                 Application Review
@@ -981,6 +984,7 @@ export default function Users() {
                                               type="button"
                                               variant="outline"
                                               size="sm"
+                                              className="w-full"
                                               disabled={isRefreshingIF}
                                               onClick={() =>
                                                 refreshIFMetrics(
@@ -1000,7 +1004,7 @@ export default function Users() {
                                           </div>
                                         </CardHeader>
                                         <CardContent className="space-y-4 pt-0">
-                                          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                          <div className="grid grid-cols-1 gap-4">
                                             <div className="space-y-2">
                                               <Label
                                                 htmlFor={`exam-score-${user.id}`}
@@ -1046,7 +1050,7 @@ export default function Users() {
                                             </div>
                                           </div>
 
-                                          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                                          <div className="grid grid-cols-1 gap-3">
                                             <div className="rounded-md border bg-slate-50 p-3">
                                               <p className="text-xs font-medium text-muted-foreground">
                                                 Exam Status
@@ -1098,6 +1102,7 @@ export default function Users() {
                                           <div className="flex justify-end">
                                             <Button
                                               disabled={isUpdating}
+                                              className="w-full"
                                               onClick={() =>
                                                 handleUpdateApplication(
                                                   selectedUser || user,
@@ -1110,47 +1115,52 @@ export default function Users() {
                                           </div>
                                         </CardContent>
                                       </Card>
-                                    </div>
 
-                                    <Accordion
-                                      type="single"
-                                      collapsible
-                                      className="w-full"
-                                    >
                                       {user.notes && (
-                                        <AccordionItem value="admin-notes">
-                                          <AccordionTrigger>
-                                            Admin Notes
-                                          </AccordionTrigger>
-                                          <AccordionContent>
-                                            <p className="text-sm">
-                                              {user.notes}
-                                            </p>
-                                          </AccordionContent>
-                                        </AccordionItem>
+                                        <Accordion
+                                          type="single"
+                                          collapsible
+                                          className="w-full rounded-lg border px-4"
+                                        >
+                                          <AccordionItem
+                                            value="admin-notes"
+                                            className="border-0"
+                                          >
+                                            <AccordionTrigger>
+                                              Saved Admin Notes
+                                            </AccordionTrigger>
+                                            <AccordionContent>
+                                              <p className="text-sm">
+                                                {user.notes}
+                                              </p>
+                                            </AccordionContent>
+                                          </AccordionItem>
+                                        </Accordion>
                                       )}
-                                    </Accordion>
 
-                                    {user.status === 0 && (
-                                      <div className="space-y-2">
-                                        <Label htmlFor="admin-notes">
-                                          Admin Notes
-                                        </Label>
-                                        <Textarea
-                                          id="admin-notes"
-                                          placeholder="Enter notes about this application..."
-                                          value={adminNotes}
-                                          onChange={(e) =>
-                                            setAdminNotes(e.target.value)
-                                          }
-                                        />
+                                      {user.status === 0 && (
+                                        <Card>
+                                          <CardHeader>
+                                            <CardTitle className="text-sm font-medium">
+                                              Admin Notes
+                                            </CardTitle>
+                                          </CardHeader>
+                                          <CardContent className="space-y-4 pt-0">
+                                            <Textarea
+                                              id="admin-notes"
+                                              placeholder="Enter notes about this application..."
+                                              value={adminNotes}
+                                              onChange={(e) =>
+                                                setAdminNotes(e.target.value)
+                                              }
+                                            />
 
-                                        <div className="flex justify-between gap-5 mt-4">
+                                            <div className="grid gap-3">
                                           <AlertDialog>
                                             <AlertDialogTrigger asChild>
                                               <Button
                                                 variant="outline"
-                                                className="text-red-500"
+                                                    className="w-full text-red-500"
                                               >
                                                 <XCircle className="mr-2 h-4 w-4" />
                                                 Reject Application
@@ -1186,6 +1196,7 @@ export default function Users() {
 
                                           <Button
                                             disabled={isUpdating}
+                                                className="w-full"
                                             onClick={() =>
                                               handleApproveUser(user)
                                             }
@@ -1194,8 +1205,11 @@ export default function Users() {
                                             Approve Application
                                           </Button>
                                         </div>
-                                      </div>
-                                    )}
+                                          </CardContent>
+                                        </Card>
+                                      )}
+                                      </aside>
+                                    </div>
                                   </div>
                                 </DialogContent>
                               </Dialog>
