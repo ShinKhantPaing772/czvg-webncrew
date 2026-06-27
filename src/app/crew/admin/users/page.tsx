@@ -44,6 +44,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -137,6 +138,10 @@ export default function Users() {
   const [applicationForm, setApplicationForm] = useState<ApplicationEditForm>({
     examScore: "",
     discordInviteUrl: "",
+  });
+  const [approveChecks, setApproveChecks] = useState({
+    testPassed: false,
+    joinedDiscord: false,
   });
   const [updateError, setUpdateError] = useState("");
   const itemsPerPage = 10;
@@ -268,9 +273,16 @@ export default function Users() {
           : String(user.examScore),
       discordInviteUrl: user.discordInviteUrl || "",
     });
+    setApproveChecks({
+      testPassed: false,
+      joinedDiscord: false,
+    });
     setUpdateError("");
     setIsEditingUser(false);
   };
+
+  const canApproveApplication =
+    approveChecks.testPassed && approveChecks.joinedDiscord;
 
   const handleEditFormChange = (field: keyof UserEditForm, value: string) => {
     setEditForm((current) => ({
@@ -733,6 +745,10 @@ export default function Users() {
                                     setSelectedUser(null);
                                     setUpdateError("");
                                     setIsEditingUser(false);
+                                    setApproveChecks({
+                                      testPassed: false,
+                                      joinedDiscord: false,
+                                    });
                                   }
                                 }}
                               >
@@ -770,7 +786,7 @@ export default function Users() {
                                   </DialogHeader>
 
                                   <div className="grid gap-4 py-4">
-                                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                                    <div className="flex items-center gap-4">
                                       <div className="flex items-center gap-4">
                                         <Avatar className="h-16 w-16">
                                           <AvatarFallback>
@@ -789,63 +805,11 @@ export default function Users() {
                                           </div>
                                         </div>
                                       </div>
-
-                                      {user.status === 0 && (
-                                        <div className="flex flex-col gap-2 sm:flex-row">
-                                          <AlertDialog>
-                                            <AlertDialogTrigger asChild>
-                                              <Button
-                                                variant="outline"
-                                                className="text-red-500"
-                                              >
-                                                <XCircle className="mr-2 h-4 w-4" />
-                                                Reject
-                                              </Button>
-                                            </AlertDialogTrigger>
-                                            <AlertDialogContent className="bg-white text-black">
-                                              <AlertDialogHeader>
-                                                <AlertDialogTitle>
-                                                  Are you sure?
-                                                </AlertDialogTitle>
-                                                <AlertDialogDescription>
-                                                  This will reject the
-                                                  application and notify the
-                                                  applicant. This action cannot
-                                                  be undone.
-                                                </AlertDialogDescription>
-                                              </AlertDialogHeader>
-                                              <AlertDialogFooter>
-                                                <AlertDialogCancel>
-                                                  Cancel
-                                                </AlertDialogCancel>
-                                                <AlertDialogAction
-                                                  onClick={() =>
-                                                    handleRejectUser(user)
-                                                  }
-                                                  disabled={isUpdating}
-                                                >
-                                                  Reject
-                                                </AlertDialogAction>
-                                              </AlertDialogFooter>
-                                            </AlertDialogContent>
-                                          </AlertDialog>
-
-                                          <Button
-                                            disabled={isUpdating}
-                                            onClick={() =>
-                                              handleApproveUser(user)
-                                            }
-                                          >
-                                            <CheckCircle className="mr-2 h-4 w-4" />
-                                            Approve
-                                          </Button>
-                                        </div>
-                                      )}
                                     </div>
 
-                                    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_420px]">
-                                      <div className="min-w-0">
-                                      <Card>
+                                    <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,1fr)_420px]">
+                                      <div className="flex h-full min-w-0 flex-col">
+                                      <Card className="flex-1">
                                         <CardHeader>
                                           <CardTitle className="text-sm font-medium">
                                             User Information
@@ -1046,8 +1010,8 @@ export default function Users() {
                                       )}
                                       </div>
 
-                                      <aside className="space-y-4 lg:sticky lg:top-4 lg:self-start">
-                                      <Card>
+                                      <aside className="flex h-full flex-col gap-4 lg:self-stretch">
+                                      <Card className="flex-1">
                                         <CardHeader>
                                           <div className="flex flex-col gap-3">
                                             <div>
@@ -1194,6 +1158,133 @@ export default function Users() {
                                           </div>
                                         </CardContent>
                                       </Card>
+
+                                      {user.status === 0 && (
+                                        <div className="space-y-4 rounded-lg border bg-white p-4">
+                                          <div className="space-y-3">
+                                            <label className="flex items-start gap-3 rounded-md border bg-slate-50 p-3 text-sm">
+                                              <Checkbox
+                                                checked={approveChecks.testPassed}
+                                                onCheckedChange={(checked) =>
+                                                  setApproveChecks((current) => ({
+                                                    ...current,
+                                                    testPassed: checked === true,
+                                                  }))
+                                                }
+                                                className="mt-0.5"
+                                              />
+                                              <span>
+                                                Pilot&apos;s test is done and
+                                                passed above 80, or passed under
+                                                another approved condition.
+                                              </span>
+                                            </label>
+                                            <label className="flex items-start gap-3 rounded-md border bg-slate-50 p-3 text-sm">
+                                              <Checkbox
+                                                checked={
+                                                  approveChecks.joinedDiscord
+                                                }
+                                                onCheckedChange={(checked) =>
+                                                  setApproveChecks((current) => ({
+                                                    ...current,
+                                                    joinedDiscord:
+                                                      checked === true,
+                                                  }))
+                                                }
+                                                className="mt-0.5"
+                                              />
+                                              <span>
+                                                Pilot has joined Discord.
+                                              </span>
+                                            </label>
+                                          </div>
+
+                                          <div className="flex flex-col gap-2 sm:flex-row lg:justify-end">
+                                            <AlertDialog>
+                                              <AlertDialogTrigger asChild>
+                                                <Button
+                                                  variant="outline"
+                                                  className="w-full text-red-500 sm:w-auto"
+                                                >
+                                                  <XCircle className="mr-2 h-4 w-4" />
+                                                  Reject Application
+                                                </Button>
+                                              </AlertDialogTrigger>
+                                              <AlertDialogContent className="bg-white text-black">
+                                                <AlertDialogHeader>
+                                                  <AlertDialogTitle>
+                                                    Are you sure?
+                                                  </AlertDialogTitle>
+                                                  <AlertDialogDescription>
+                                                    This will reject the
+                                                    application and notify the
+                                                    applicant. This action cannot
+                                                    be undone.
+                                                  </AlertDialogDescription>
+                                                </AlertDialogHeader>
+                                                <AlertDialogFooter>
+                                                  <AlertDialogCancel>
+                                                    Cancel
+                                                  </AlertDialogCancel>
+                                                  <AlertDialogAction
+                                                    onClick={() =>
+                                                      handleRejectUser(user)
+                                                    }
+                                                    disabled={isUpdating}
+                                                  >
+                                                    Reject
+                                                  </AlertDialogAction>
+                                                </AlertDialogFooter>
+                                              </AlertDialogContent>
+                                            </AlertDialog>
+
+                                            <AlertDialog>
+                                              <AlertDialogTrigger asChild>
+                                                <Button
+                                                  disabled={
+                                                    isUpdating ||
+                                                    !canApproveApplication
+                                                  }
+                                                  className="w-full sm:w-auto"
+                                                >
+                                                  <CheckCircle className="mr-2 h-4 w-4" />
+                                                  Confirm Approve
+                                                </Button>
+                                              </AlertDialogTrigger>
+                                              <AlertDialogContent className="bg-white text-black">
+                                                <AlertDialogHeader>
+                                                  <AlertDialogTitle>
+                                                    Approve this applicant?
+                                                  </AlertDialogTitle>
+                                                  <AlertDialogDescription>
+                                                    This will approve the pilot
+                                                    application after confirming
+                                                    the test requirement and
+                                                    Discord onboarding are
+                                                    complete.
+                                                  </AlertDialogDescription>
+                                                </AlertDialogHeader>
+                                                <AlertDialogFooter>
+                                                  <AlertDialogCancel>
+                                                    Cancel
+                                                  </AlertDialogCancel>
+                                                  <AlertDialogAction
+                                                    onClick={() =>
+                                                      handleApproveUser(user)
+                                                    }
+                                                    disabled={
+                                                      isUpdating ||
+                                                      !canApproveApplication
+                                                    }
+                                                  >
+                                                    Approve
+                                                  </AlertDialogAction>
+                                                </AlertDialogFooter>
+                                              </AlertDialogContent>
+                                            </AlertDialog>
+                                          </div>
+                                        </div>
+                                      )}
 
                                       </aside>
                                     </div>
