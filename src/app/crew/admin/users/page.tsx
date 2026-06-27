@@ -7,7 +7,6 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
-  ChevronDown,
   Calendar,
   Eye,
   FileText,
@@ -62,13 +61,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -277,7 +270,6 @@ export default function Users() {
     });
     setUpdateError("");
     setIsEditingUser(false);
-    refreshIFMetrics(user);
   };
 
   const handleEditFormChange = (field: keyof UserEditForm, value: string) => {
@@ -778,23 +770,77 @@ export default function Users() {
                                   </DialogHeader>
 
                                   <div className="grid gap-4 py-4">
-                                    <div className="flex items-center gap-4">
-                                      <Avatar className="h-16 w-16">
-                                        <AvatarFallback>
-                                          {user.name.charAt(0)}
-                                        </AvatarFallback>
-                                      </Avatar>
-                                      <div>
-                                        <h3 className="text-lg font-semibold">
-                                          {user.name}
-                                        </h3>
-                                        <p className="text-sm text-muted-foreground">
-                                          {user.callsign}
-                                        </p>
-                                        <div className="mt-1">
-                                          {getStatusBadge("" + user.status)}
+                                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                                      <div className="flex items-center gap-4">
+                                        <Avatar className="h-16 w-16">
+                                          <AvatarFallback>
+                                            {user.name.charAt(0)}
+                                          </AvatarFallback>
+                                        </Avatar>
+                                        <div>
+                                          <h3 className="text-lg font-semibold">
+                                            {user.name}
+                                          </h3>
+                                          <p className="text-sm text-muted-foreground">
+                                            {user.callsign}
+                                          </p>
+                                          <div className="mt-1">
+                                            {getStatusBadge("" + user.status)}
+                                          </div>
                                         </div>
                                       </div>
+
+                                      {user.status === 0 && (
+                                        <div className="flex flex-col gap-2 sm:flex-row">
+                                          <AlertDialog>
+                                            <AlertDialogTrigger asChild>
+                                              <Button
+                                                variant="outline"
+                                                className="text-red-500"
+                                              >
+                                                <XCircle className="mr-2 h-4 w-4" />
+                                                Reject
+                                              </Button>
+                                            </AlertDialogTrigger>
+                                            <AlertDialogContent className="bg-white text-black">
+                                              <AlertDialogHeader>
+                                                <AlertDialogTitle>
+                                                  Are you sure?
+                                                </AlertDialogTitle>
+                                                <AlertDialogDescription>
+                                                  This will reject the
+                                                  application and notify the
+                                                  applicant. This action cannot
+                                                  be undone.
+                                                </AlertDialogDescription>
+                                              </AlertDialogHeader>
+                                              <AlertDialogFooter>
+                                                <AlertDialogCancel>
+                                                  Cancel
+                                                </AlertDialogCancel>
+                                                <AlertDialogAction
+                                                  onClick={() =>
+                                                    handleRejectUser(user)
+                                                  }
+                                                  disabled={isUpdating}
+                                                >
+                                                  Reject
+                                                </AlertDialogAction>
+                                              </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                          </AlertDialog>
+
+                                          <Button
+                                            disabled={isUpdating}
+                                            onClick={() =>
+                                              handleApproveUser(user)
+                                            }
+                                          >
+                                            <CheckCircle className="mr-2 h-4 w-4" />
+                                            Approve
+                                          </Button>
+                                        </div>
+                                      )}
                                     </div>
 
                                     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_420px]">
@@ -965,6 +1011,39 @@ export default function Users() {
                                           </dl>
                                         </CardContent>
                                       </Card>
+
+                                      {(user.notes || user.status === 0) && (
+                                        <Card className="mt-4">
+                                          <CardHeader>
+                                            <CardTitle className="text-sm font-medium">
+                                              Admin Notes
+                                            </CardTitle>
+                                          </CardHeader>
+                                          <CardContent className="space-y-4 pt-0">
+                                            {user.notes && (
+                                              <div className="rounded-md border bg-slate-50 p-3">
+                                                <p className="mb-2 text-xs font-medium text-muted-foreground">
+                                                  Saved Notes
+                                                </p>
+                                                <p className="text-sm">
+                                                  {user.notes}
+                                                </p>
+                                              </div>
+                                            )}
+
+                                            {user.status === 0 && (
+                                              <Textarea
+                                                id="admin-notes"
+                                                placeholder="Enter notes about this application..."
+                                                value={adminNotes}
+                                                onChange={(e) =>
+                                                  setAdminNotes(e.target.value)
+                                                }
+                                              />
+                                            )}
+                                          </CardContent>
+                                        </Card>
+                                      )}
                                       </div>
 
                                       <aside className="space-y-4 lg:sticky lg:top-4 lg:self-start">
@@ -1116,98 +1195,6 @@ export default function Users() {
                                         </CardContent>
                                       </Card>
 
-                                      {user.notes && (
-                                        <Accordion
-                                          type="single"
-                                          collapsible
-                                          className="w-full rounded-lg border px-4"
-                                        >
-                                          <AccordionItem
-                                            value="admin-notes"
-                                            className="border-0"
-                                          >
-                                            <AccordionTrigger>
-                                              Saved Admin Notes
-                                            </AccordionTrigger>
-                                            <AccordionContent>
-                                              <p className="text-sm">
-                                                {user.notes}
-                                              </p>
-                                            </AccordionContent>
-                                          </AccordionItem>
-                                        </Accordion>
-                                      )}
-
-                                      {user.status === 0 && (
-                                        <Card>
-                                          <CardHeader>
-                                            <CardTitle className="text-sm font-medium">
-                                              Admin Notes
-                                            </CardTitle>
-                                          </CardHeader>
-                                          <CardContent className="space-y-4 pt-0">
-                                            <Textarea
-                                              id="admin-notes"
-                                              placeholder="Enter notes about this application..."
-                                              value={adminNotes}
-                                              onChange={(e) =>
-                                                setAdminNotes(e.target.value)
-                                              }
-                                            />
-
-                                            <div className="grid gap-3">
-                                          <AlertDialog>
-                                            <AlertDialogTrigger asChild>
-                                              <Button
-                                                variant="outline"
-                                                    className="w-full text-red-500"
-                                              >
-                                                <XCircle className="mr-2 h-4 w-4" />
-                                                Reject Application
-                                              </Button>
-                                            </AlertDialogTrigger>
-                                            <AlertDialogContent className="bg-white text-black">
-                                              <AlertDialogHeader>
-                                                <AlertDialogTitle>
-                                                  Are you sure?
-                                                </AlertDialogTitle>
-                                                <AlertDialogDescription>
-                                                  This will reject the
-                                                  application and notify the
-                                                  applicant. This action cannot
-                                                  be undone.
-                                                </AlertDialogDescription>
-                                              </AlertDialogHeader>
-                                              <AlertDialogFooter>
-                                                <AlertDialogCancel>
-                                                  Cancel
-                                                </AlertDialogCancel>
-                                                <AlertDialogAction
-                                                  onClick={() =>
-                                                    handleRejectUser(user)
-                                                  }
-                                                  disabled={isUpdating}
-                                                >
-                                                  Reject
-                                                </AlertDialogAction>
-                                              </AlertDialogFooter>
-                                            </AlertDialogContent>
-                                          </AlertDialog>
-
-                                          <Button
-                                            disabled={isUpdating}
-                                                className="w-full"
-                                            onClick={() =>
-                                              handleApproveUser(user)
-                                            }
-                                          >
-                                            <CheckCircle className="mr-2 h-4 w-4" />
-                                            Approve Application
-                                          </Button>
-                                        </div>
-                                          </CardContent>
-                                        </Card>
-                                      )}
                                       </aside>
                                     </div>
                                   </div>
