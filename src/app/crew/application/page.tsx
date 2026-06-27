@@ -10,6 +10,7 @@ import {
   Mail,
   MessageCircle,
   Plane,
+  RotateCcw,
   Trophy,
   User,
 } from "lucide-react";
@@ -121,6 +122,41 @@ export default function ApplicationStatusPage() {
     }
   }
 
+  async function undeclareExamDone() {
+    setSaving(true);
+    setMessage("");
+
+    try {
+      const response = await authFetch("/api/applicant/status", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ action: "undeclareExam" }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to undeclare examination status");
+      }
+
+      setApplicant((current) =>
+        current
+          ? { ...current, examDeclared: false, examStatus: 0 }
+          : current,
+      );
+      setMessage("Examination completion removed.");
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Failed to undeclare examination status",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function saveFlightReplay() {
     setSavingReplay(true);
     setMessage("");
@@ -166,6 +202,8 @@ export default function ApplicationStatusPage() {
     applicant?.examScore !== null &&
     applicant?.examScore !== undefined &&
     applicant.examScore < 80;
+  const canUndeclareExam =
+    Boolean(applicant?.examDeclared) && !examScoreReceived;
   const progressSteps = [
     { label: "Application submitted", complete: true },
     { label: "Exam declared done", complete: Boolean(applicant?.examDeclared) },
@@ -296,15 +334,18 @@ export default function ApplicationStatusPage() {
                   value={applicant.callsign}
                 />
                 <InfoItem icon={Mail} label="Email" value={applicant.email} />
-                <InfoItem
-                  icon={Trophy}
-                  label="Exam Score"
-                  value={
-                    applicant.examScore === null
-                      ? "Not received yet"
-                      : `${applicant.examScore}/100`
-                  }
-                />
+                {applicant.examScore !== null && (
+                  <InfoItem
+                    icon={Trophy}
+                    label="Exam Score"
+                    value={`${applicant.examScore}/100`}
+                    valueClassName={
+                      applicant.examScore >= 80
+                        ? "text-green-700"
+                        : "text-amber-700"
+                    }
+                  />
+                )}
               </CardContent>
             </Card>
 
@@ -316,12 +357,15 @@ export default function ApplicationStatusPage() {
                     Flight Replay Review
                   </CardTitle>
                   <CardDescription>
-                    Upload a replay with full ATC coverage from departure to
-                    arrival, then paste the ShareMyInfiniteFlight link here.
+                    Your exam score is below 80, so a recruiter needs to review
+                    an additional flight replay before continuing your
+                    application.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-5">
                   <div className="rounded-lg border bg-slate-50 p-4 text-sm text-slate-700">
+                    Upload a replay with full ATC coverage from departure to
+                    arrival, then paste the ShareMyInfiniteFlight link here.
                     Required ATC coverage: Ground, Tower, Departure when
                     available, and Approach.
                   </div>
@@ -361,50 +405,75 @@ export default function ApplicationStatusPage() {
               </Card>
             )}
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Entrance Examination</CardTitle>
-                <CardDescription>
-                  Use the access key below when opening the Google Forms quiz.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-5">
-                <div className="flex flex-col gap-3 rounded-lg border bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-md bg-blue-100 text-blue-700">
-                      <KeyRound className="h-5 w-5" />
+            {!applicant.examDeclared && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Entrance Examination</CardTitle>
+                  <CardDescription>
+                    Use the access key below when opening the Google Forms quiz.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  <div className="flex flex-col gap-3 rounded-lg border bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-md bg-blue-100 text-blue-700">
+                        <KeyRound className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-slate-500">
+                          Access Key
+                        </p>
+                        <p className="font-mono text-xl font-semibold text-slate-950">
+                          {ACCESS_KEY}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-slate-500">
-                        Access Key
-                      </p>
-                      <p className="font-mono text-xl font-semibold text-slate-950">
-                        {ACCESS_KEY}
-                      </p>
-                    </div>
+                    <Button asChild>
+                      <a href={QUIZ_URL} target="_blank" rel="noreferrer">
+                        Open Quiz
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    </Button>
                   </div>
-                  <Button asChild>
-                    <a href={QUIZ_URL} target="_blank" rel="noreferrer">
-                      Open Quiz
-                      <ExternalLink className="h-4 w-4" />
-                    </a>
-                  </Button>
-                </div>
 
-                <Button
-                  className="w-full sm:w-auto"
-                  onClick={declareExamDone}
-                  disabled={saving || applicant.examDeclared}
-                  variant={applicant.examDeclared ? "secondary" : "default"}
-                >
-                  {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-                  {applicant.examDeclared && <CheckCircle2 className="h-4 w-4" />}
-                  {applicant.examDeclared
-                    ? "Examination Declared Done"
-                    : "Declare Examination Done"}
-                </Button>
-              </CardContent>
-            </Card>
+                  <Button
+                    className="w-full sm:w-auto"
+                    onClick={declareExamDone}
+                    disabled={saving}
+                  >
+                    {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                    Declare Examination Done
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
+            {canUndeclareExam && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Examination Submitted</CardTitle>
+                  <CardDescription>
+                    Your exam is marked done. You can undo this until a
+                    recruiter adds your score.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button
+                    variant="outline"
+                    onClick={undeclareExamDone}
+                    disabled={saving}
+                    className="w-full sm:w-auto"
+                  >
+                    {saving ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <RotateCcw className="h-4 w-4" />
+                    )}
+                    Undeclare Examination Done
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
 
           </>
         )}
@@ -423,10 +492,12 @@ function InfoItem({
   icon: Icon,
   label,
   value,
+  valueClassName = "",
 }: {
   icon: typeof User;
   label: string;
   value: string;
+  valueClassName?: string;
 }) {
   return (
     <div className="rounded-lg border bg-slate-50 p-4">
@@ -434,7 +505,7 @@ function InfoItem({
         <Icon className="h-4 w-4" />
         {label}
       </div>
-      <p className="break-words text-base font-semibold text-slate-950">
+      <p className={`break-words text-base font-semibold text-slate-950 ${valueClassName}`}>
         {value}
       </p>
     </div>

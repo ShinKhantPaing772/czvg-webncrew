@@ -185,6 +185,32 @@ export async function POST(request: Request) {
       });
     }
 
+    if (body.action === "undeclareExam") {
+      const examScore = normalizeScore(result.application.get("exam_score"));
+      if (examScore !== null) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "Exam completion can no longer be undeclared after a score is added",
+          },
+          { status: 400 },
+        );
+      }
+
+      await result.application.update({
+        exam_status: 0,
+        exam_completed_at: null,
+      });
+
+      return NextResponse.json({
+        success: true,
+        examStatus: 0,
+        examDeclared: false,
+        message: "Exam completion undeclared",
+      });
+    }
+
     const examStatus = Number(result.application.get("exam_status") || 0);
     if (examStatus < 1) {
       await result.application.update({
