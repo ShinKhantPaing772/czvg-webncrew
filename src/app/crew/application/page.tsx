@@ -5,9 +5,11 @@ import {
   CheckCircle2,
   ExternalLink,
   KeyRound,
+  LinkIcon,
   Loader2,
   Mail,
   MessageCircle,
+  Plane,
   Trophy,
   User,
 } from "lucide-react";
@@ -21,6 +23,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { authFetch } from "@/lib/utils/api";
 
@@ -37,6 +40,7 @@ type ApplicantStatus = {
   examStatus: number;
   examDeclared: boolean;
   examScore: number | null;
+  flightReplayUrl: string | null;
   discordInviteUrl: string | null;
 };
 
@@ -44,6 +48,8 @@ export default function ApplicationStatusPage() {
   const [applicant, setApplicant] = useState<ApplicantStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingReplay, setSavingReplay] = useState(false);
+  const [flightReplayUrl, setFlightReplayUrl] = useState("");
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -60,6 +66,7 @@ export default function ApplicationStatusPage() {
 
         if (mounted) {
           setApplicant(data);
+          setFlightReplayUrl(data.flightReplayUrl || "");
         }
       } catch (error) {
         if (mounted) {
@@ -114,20 +121,71 @@ export default function ApplicationStatusPage() {
     }
   }
 
-  const examScoreReceived = applicant?.examScore !== null && applicant?.examScore !== undefined;
-  const progressValue = applicant?.discordInviteUrl
-    ? 100
-    : examScoreReceived
-      ? 75
-      : applicant?.examDeclared
-        ? 50
-        : 25;
+  async function saveFlightReplay() {
+    setSavingReplay(true);
+    setMessage("");
+
+    try {
+      const response = await authFetch("/api/applicant/status", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "flightReplay",
+          flightReplayUrl,
+        }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to save flight replay link");
+      }
+
+      setApplicant((current) =>
+        current
+          ? { ...current, flightReplayUrl: data.flightReplayUrl }
+          : current,
+      );
+      setFlightReplayUrl(data.flightReplayUrl);
+      setMessage("Flight replay link saved.");
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Failed to save flight replay link",
+      );
+    } finally {
+      setSavingReplay(false);
+    }
+  }
+
+  const examScoreReceived =
+    applicant?.examScore !== null && applicant?.examScore !== undefined;
+  const needsFlightReplay =
+    applicant?.examScore !== null &&
+    applicant?.examScore !== undefined &&
+    applicant.examScore < 80;
   const progressSteps = [
     { label: "Application submitted", complete: true },
     { label: "Exam declared done", complete: Boolean(applicant?.examDeclared) },
     { label: "Score received", complete: examScoreReceived },
+    ...(needsFlightReplay
+      ? [
+          {
+            label: "Flight replay",
+            complete: Boolean(applicant?.flightReplayUrl),
+          },
+        ]
+      : []),
     { label: "Discord invite", complete: Boolean(applicant?.discordInviteUrl) },
   ];
+  const completedProgressSteps = progressSteps.filter(
+    (step) => step.complete,
+  ).length;
+  const progressValue = Math.round(
+    (completedProgressSteps / progressSteps.length) * 100,
+  );
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -173,7 +231,7 @@ export default function ApplicationStatusPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <Progress value={progressValue} className="h-3 bg-slate-200" />
-                <div className="grid gap-3 sm:grid-cols-4">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                   {progressSteps.map((step) => (
                     <div
                       key={step.label}
@@ -247,23 +305,61 @@ export default function ApplicationStatusPage() {
                       : `${applicant.examScore}/100`
                   }
                 />
-                <div className="rounded-lg border bg-slate-50 p-4">
-                  <p className="text-sm font-medium text-slate-500">
-                    Current Status
-                  </p>
-                  <Badge
-                    variant="outline"
-                    className="mt-2 border-amber-200 bg-amber-50 text-amber-700"
-                  >
-                    {applicant.examDeclared
-                      ? applicant.examScore === null
-                        ? "Examination submitted"
-                        : "Score received"
-                      : applicant.statusLabel}
-                  </Badge>
-                </div>
               </CardContent>
             </Card>
+
+            {needsFlightReplay && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Plane className="h-5 w-5 text-blue-700" />
+                    Flight Replay Review
+                  </CardTitle>
+                  <CardDescription>
+                    Upload a replay with full ATC coverage from departure to
+                    arrival, then paste the ShareMyInfiniteFlight link here.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  <div className="rounded-lg border bg-slate-50 p-4 text-sm text-slate-700">
+                    Required ATC coverage: Ground, Tower, Departure when
+                    available, and Approach.
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+                    <Input
+                      type="url"
+                      placeholder="https://sharemyinfiniteflight.com/..."
+                      value={flightReplayUrl}
+                      onChange={(event) =>
+                        setFlightReplayUrl(event.target.value)
+                      }
+                    />
+                    <Button
+                      onClick={saveFlightReplay}
+                      disabled={savingReplay}
+                      className="w-full sm:w-auto"
+                    >
+                      {savingReplay ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <LinkIcon className="h-4 w-4" />
+                      )}
+                      Save Replay
+                    </Button>
+                  </div>
+                  <Button asChild variant="outline">
+                    <a
+                      href="https://sharemyinfiniteflight.com/"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Open ShareMyInfiniteFlight
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
 
             <Card>
               <CardHeader>

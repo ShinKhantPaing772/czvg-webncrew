@@ -29,6 +29,30 @@ function normalizeScore(score: unknown) {
   return Number.isFinite(numericScore) ? numericScore : null;
 }
 
+function normalizeReplayUrl(value: unknown) {
+  if (typeof value !== "string") return "";
+
+  const replayUrl = value.trim();
+  if (!replayUrl) return "";
+
+  try {
+    const parsedUrl = new URL(replayUrl);
+    const host = parsedUrl.hostname.toLowerCase();
+
+    if (
+      parsedUrl.protocol !== "https:" ||
+      (host !== "sharemyinfiniteflight.com" &&
+        !host.endsWith(".sharemyinfiniteflight.com"))
+    ) {
+      return "";
+    }
+
+    return parsedUrl.toString();
+  } catch {
+    return "";
+  }
+}
+
 async function getApplicant(request: Request) {
   const auth = await requireAuth(request);
   if (!auth.ok) return auth;
@@ -67,6 +91,7 @@ export async function GET(request: Request) {
     const examStatus = Number(result.application.get("exam_status") || 0);
     const examScore = normalizeScore(result.application.get("exam_score"));
     const discordInviteUrl = result.application.get("discord_invite_url");
+    const flightReplayUrl = result.application.get("flight_replay_url");
 
     return NextResponse.json({
       id: result.pilot.get("id"),
@@ -79,6 +104,13 @@ export async function GET(request: Request) {
       examDeclared: examStatus >= 1,
       examScore,
       examResultReceivedAt: result.application.get("exam_result_received_at"),
+      flightReplayUrl:
+        typeof flightReplayUrl === "string" && flightReplayUrl.trim()
+          ? flightReplayUrl
+          : null,
+      flightReplaySubmittedAt: result.application.get(
+        "flight_replay_submitted_at",
+      ),
       discordInviteUrl:
         typeof discordInviteUrl === "string" && discordInviteUrl.trim()
           ? discordInviteUrl
@@ -107,6 +139,50 @@ export async function POST(request: Request) {
         },
         { status: 400 },
       );
+    }
+
+    let body: Record<string, unknown> = {};
+    try {
+      body = await request.json();
+    } catch {
+      body = {};
+    }
+
+    if (body.action === "flightReplay") {
+      const examScore = normalizeScore(result.application.get("exam_score"));
+      if (examScore === null || examScore >= 80) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "Flight replay is only required for applicants with an exam score below 80",
+          },
+          { status: 400 },
+        );
+      }
+
+      const flightReplayUrl = normalizeReplayUrl(body.flightReplayUrl);
+      if (!flightReplayUrl) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "Enter a valid ShareMyInfiniteFlight link beginning with https://sharemyinfiniteflight.com/",
+          },
+          { status: 400 },
+        );
+      }
+
+      await result.application.update({
+        flight_replay_url: flightReplayUrl,
+        flight_replay_submitted_at: new Date(),
+      });
+
+      return NextResponse.json({
+        success: true,
+        flightReplayUrl,
+        message: "Flight replay link saved",
+      });
     }
 
     const examStatus = Number(result.application.get("exam_status") || 0);

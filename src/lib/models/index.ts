@@ -291,6 +291,8 @@ class Application extends Model {
   declare exam_score: number | null;
   declare exam_completed_at: Date | null;
   declare exam_result_received_at: Date | null;
+  declare flight_replay_url: string | null;
+  declare flight_replay_submitted_at: Date | null;
   declare discord_invite_url: string | null;
   declare discord_invite_sent_at: Date | null;
   declare if_grade: number | null;
@@ -308,6 +310,8 @@ Application.init(
     exam_score: { type: DataTypes.DECIMAL(5, 2), allowNull: true },
     exam_completed_at: { type: DataTypes.DATE, allowNull: true },
     exam_result_received_at: { type: DataTypes.DATE, allowNull: true },
+    flight_replay_url: { type: DataTypes.TEXT, allowNull: true },
+    flight_replay_submitted_at: { type: DataTypes.DATE, allowNull: true },
     discord_invite_url: { type: DataTypes.TEXT, allowNull: true },
     discord_invite_sent_at: { type: DataTypes.DATE, allowNull: true },
     if_grade: { type: DataTypes.INTEGER, allowNull: true },

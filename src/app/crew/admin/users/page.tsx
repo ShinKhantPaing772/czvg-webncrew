@@ -94,6 +94,8 @@ interface Pilots {
   examScore: number | string | null;
   examCompletedAt: string | null;
   examResultReceivedAt: string | null;
+  flightReplayUrl: string | null;
+  flightReplaySubmittedAt: string | null;
   discordInviteUrl: string | null;
   discordInviteSentAt: string | null;
   ifGrade: number | null;
@@ -1126,8 +1128,30 @@ export default function Users() {
                                               <p className="mt-1 text-sm font-semibold">
                                                 {(selectedUser || user)
                                                   .ifViolations ??
-                                                  "Not available"}
+                                                "Not available"}
                                               </p>
+                                            </div>
+                                            <div className="rounded-md border bg-slate-50 p-3">
+                                              <p className="text-xs font-medium text-muted-foreground">
+                                                Flight Replay
+                                              </p>
+                                              {(selectedUser || user)
+                                                .flightReplayUrl ? (
+                                                <Link
+                                                  href={
+                                                    (selectedUser || user)
+                                                      .flightReplayUrl as string
+                                                  }
+                                                  target="_blank"
+                                                  className="mt-1 inline-flex text-sm font-semibold text-blue-700 hover:underline"
+                                                >
+                                                  Open replay
+                                                </Link>
+                                              ) : (
+                                                <p className="mt-1 text-sm font-semibold">
+                                                  Not submitted
+                                                </p>
+                                              )}
                                             </div>
                                           </div>
 

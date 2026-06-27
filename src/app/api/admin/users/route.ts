@@ -29,6 +29,8 @@ export async function GET(request: Request) {
         a.\`exam_score\` AS examScore,
         a.\`exam_completed_at\` AS examCompletedAt,
         a.\`exam_result_received_at\` AS examResultReceivedAt,
+        a.\`flight_replay_url\` AS flightReplayUrl,
+        a.\`flight_replay_submitted_at\` AS flightReplaySubmittedAt,
         a.\`discord_invite_url\` AS discordInviteUrl,
         a.\`discord_invite_sent_at\` AS discordInviteSentAt,
         a.\`if_grade\` AS ifGrade,
