@@ -756,7 +756,7 @@ export default function Users() {
                                     </span>
                                   </Button>
                                 </DialogTrigger>
-                                <DialogContent className="max-h-[90vh] max-w-6xl overflow-y-auto bg-white">
+                                <DialogContent className="max-h-[90vh] w-[calc(100vw-2rem)] overflow-y-auto bg-white sm:max-w-[calc(100vw-2rem)] lg:max-w-6xl xl:max-w-7xl">
                                   <DialogHeader>
                                     <DialogTitle className="flex items-center gap-2">
                                       {getStatusIcon("" + user.status)}
@@ -797,7 +797,7 @@ export default function Users() {
                                       </div>
                                     </div>
 
-                                    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+                                    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_420px]">
                                       <div className="min-w-0">
                                       <Card>
                                         <CardHeader>
