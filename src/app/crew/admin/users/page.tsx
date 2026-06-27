@@ -756,7 +756,7 @@ export default function Users() {
                                     </span>
                                   </Button>
                                 </DialogTrigger>
-                                <DialogContent className="max-w-4xl bg-white">
+                                <DialogContent className="max-h-[90vh] max-w-6xl overflow-y-auto bg-white">
                                   <DialogHeader>
                                     <DialogTitle className="flex items-center gap-2">
                                       {getStatusIcon("" + user.status)}
