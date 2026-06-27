@@ -284,6 +284,49 @@ Notification.init(
   },
 );
 
+class Application extends Model {
+  declare id: number;
+  declare pilotid: number;
+  declare exam_status: number;
+  declare exam_score: number | null;
+  declare exam_completed_at: Date | null;
+  declare exam_result_received_at: Date | null;
+  declare discord_invite_url: string | null;
+  declare discord_invite_sent_at: Date | null;
+  declare notes: string | null;
+  declare created_at: Date;
+  declare updated_at: Date;
+}
+Application.init(
+  {
+    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+    pilotid: { type: DataTypes.INTEGER, allowNull: false, unique: true },
+    exam_status: { type: DataTypes.TINYINT, allowNull: false, defaultValue: 0 },
+    exam_score: { type: DataTypes.DECIMAL(5, 2), allowNull: true },
+    exam_completed_at: { type: DataTypes.DATE, allowNull: true },
+    exam_result_received_at: { type: DataTypes.DATE, allowNull: true },
+    discord_invite_url: { type: DataTypes.TEXT, allowNull: true },
+    discord_invite_sent_at: { type: DataTypes.DATE, allowNull: true },
+    notes: { type: DataTypes.TEXT, allowNull: true },
+    created_at: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: DataTypes.NOW,
+    },
+    updated_at: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: DataTypes.NOW,
+    },
+  },
+  {
+    sequelize,
+    modelName: "Application",
+    tableName: "applications",
+    timestamps: false,
+  },
+);
+
 class PirepComment extends Model {
   declare id: number;
   declare pirepid: number;
@@ -328,6 +371,8 @@ Route.belongsToMany(Aircraft, {
 });
 Pilot.hasMany(Permission, { foreignKey: "userid" });
 Permission.belongsTo(Pilot, { foreignKey: "userid" });
+Pilot.hasOne(Application, { foreignKey: "pilotid" });
+Application.belongsTo(Pilot, { foreignKey: "pilotid" });
 
 import Token from "./token";
 import OTP from "./otp";
@@ -345,6 +390,7 @@ export const models = {
   RouteAircraft,
   News,
   Notification,
+  Application,
   PirepComment,
   Token,
   OTP,

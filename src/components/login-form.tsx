@@ -53,7 +53,7 @@ export function LoginForm() {
       }
 
       setMessage({ type: "success", text: "Login successful" });
-      router.push("/crew/home");
+      router.push(data.redirectTo || "/crew/home");
     } catch (error) {
       setMessage({
         type: "error",

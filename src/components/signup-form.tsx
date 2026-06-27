@@ -3,12 +3,15 @@
 import type React from "react";
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import ThemedButton from "@/components/system/ThemedButton";
 import { Input } from "@/components/ui/input";
 import SimpleField from "@/components/system/SimpleField";
 import { CheckCircle2, AlertCircle, Loader2, XCircle } from "lucide-react";
+import { setToken } from "@/lib/utils/auth";
 
 export function SignupForm() {
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [loadingIFC, setLoadingIFC] = useState(false);
   const [validIFC, setValidIFC] = useState(false);
@@ -107,25 +110,22 @@ export function SignupForm() {
         }),
       });
 
-      console.log(ifUserId);
       const data = await response.json();
 
       if (!response.ok) {
         throw new Error(data.error || "Registration failed");
       }
 
-      // No need to store token for signup as it doesn't return one
-      // User will need to login after registration
+      if (data.token) {
+        setToken(data.token);
+      }
 
       setMessage({
         type: "success",
         text: data.message || "Registration successful",
       });
 
-      // Redirect to login page after successful registration
-      setTimeout(() => {
-        window.location.reload;
-      }, 6000);
+      router.push(data.redirectTo || "/crew/application");
     } catch (error) {
       setMessage({
         type: "error",

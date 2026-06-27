@@ -5,6 +5,9 @@ import { models } from "@/lib/models";
 import { formatFlightTime } from "@/lib/utils/time";
 import { hasPermission, requireAuth } from "@/lib/server-auth";
 
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
 const pirepInclude: Includeable[] = [
   {
     model: models.Aircraft,
@@ -35,7 +38,11 @@ export async function GET(
     const auth = await requireAuth(request);
     if (!auth.ok) return auth.response;
 
-    const pilotId = params.id;
+    const pilotId = Number(params.id);
+    if (!Number.isInteger(pilotId) || pilotId <= 0) {
+      return NextResponse.json({ error: "Invalid pilot id" }, { status: 400 });
+    }
+
     const canViewPireps =
       String(auth.user.id) === String(pilotId) ||
       hasPermission(auth.user, ["pireps", "users"]);
@@ -76,7 +83,20 @@ export async function GET(
       ];
     }
 
-    const { count, rows: pireps } = await models.Pirep.findAndCountAll({
+    const count = await models.Pirep.count({
+      where,
+      include: searchQuery
+        ? [
+            {
+              model: models.Aircraft,
+              as: "Aircraft",
+              attributes: [],
+            },
+          ]
+        : undefined,
+    });
+
+    const pireps = await models.Pirep.findAll({
       where,
       include: pirepInclude,
       attributes: [
@@ -94,7 +114,7 @@ export async function GET(
       order: [["date", "DESC"]],
       limit,
       offset,
-      distinct: true,
+      subQuery: false,
     });
 
     // Format flight time for each PIREP (for display)

@@ -73,22 +73,30 @@ export function useSession() {
             throw new Error(userData?.error || "Failed to verify token");
           }
 
-          const pilotResponse = await fetchWithTimeout(
-            `/api/pilots/${userData.id}/pireps`
-          );
+          let pilotData = null;
+          try {
+            const pilotResponse = await fetchWithTimeout(
+              `/api/pilots/${userData.id}/pireps`
+            );
 
-          if (!pilotResponse.ok) {
-            throw new Error("Failed to load pilot statistics");
+            if (pilotResponse.ok) {
+              pilotData = await pilotResponse.json();
+            } else {
+              throw new Error("Failed to load pilot statistics");
+            }
+          } catch (statsError) {
+            console.error("Failed to load pilot statistics:", statsError);
+            if (isMounted) {
+              setError("Failed to load pilot statistics");
+            }
           }
-
-          const pilotData = await pilotResponse.json();
 
           if (isMounted) {
             setUser({
               ...userData,
               flightTime: pilotData?.statistics?.totalFlightTime ?? "0",
               pirepsFiled: pilotData?.statistics?.totalPireps ?? 0,
-              rank: pilotData?.statistics?.rank ?? userData.rank,
+              rank: pilotData?.statistics?.rank ?? userData.rank ?? "Trainee",
             });
           }
         } else {

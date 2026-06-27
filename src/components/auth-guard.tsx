@@ -13,6 +13,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
   const pathname = usePathname();
 
   const [permissions, setPermissions] = useState<string[]>([]);
+  const [userStatus, setUserStatus] = useState<number | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
 
   const token = getToken();
@@ -36,11 +37,14 @@ export function AuthGuard({ children }: AuthGuardProps) {
         setPermissions(
           user?.Permissions?.map((p: { name: string }) => p.name) || [],
         );
+        setUserStatus(typeof user?.status === "number" ? user.status : null);
         setIsAuthenticated(true);
       } else {
+        setUserStatus(null);
         setIsAuthenticated(false);
       }
     } catch {
+      setUserStatus(null);
       setIsAuthenticated(false);
     }
   }
@@ -65,6 +69,21 @@ export function AuthGuard({ children }: AuthGuardProps) {
 
     // Authenticated user visiting login page
     if (isAuthenticated && isLoginPage) {
+      router.push(userStatus === 0 ? "/crew/application" : "/crew/home");
+      return;
+    }
+
+    if (
+      isAuthenticated &&
+      userStatus === 0 &&
+      pathname.startsWith("/crew") &&
+      pathname !== "/crew/application"
+    ) {
+      router.push("/crew/application");
+      return;
+    }
+
+    if (isAuthenticated && userStatus === 1 && pathname === "/crew/application") {
       router.push("/crew/home");
       return;
     }
@@ -92,7 +111,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
         router.push("/crew/home");
       }
     }
-  }, [isAuthenticated, pathname, permissions, router]);
+  }, [isAuthenticated, pathname, permissions, router, userStatus]);
 
   if (isAuthenticated === null) {
     return (

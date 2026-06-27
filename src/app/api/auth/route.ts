@@ -82,14 +82,11 @@ async function handleLogin({
     );
   }
 
-  if (pilot.status !== 1) {
+  if (pilot.status !== 0 && pilot.status !== 1) {
     let statusMessage =
       "Login Failed. Your application may still be pending or it may have been denied. Please contact us for more details if you believe this is an error.";
 
-    if (pilot.status === 0) {
-      statusMessage =
-        "Your application is still pending approval. You will be contacted on the IFC to continue with your application. Please contact us for more details if you believe this is an error.";
-    } else if (pilot.status === 2) {
+    if (pilot.status === 2) {
       statusMessage =
         "Your application has been rejected. If you believe this is a mistake, please contact us on the IFC.";
     } else if (pilot.status === 3) {
@@ -125,38 +122,21 @@ async function handleLogin({
     );
   }
 
-  // Store token in database
   try {
-    const tokenString = jwt.sign(
-      { id: pilot.id, email: pilot.email },
-      JWT_SECRET as string,
-      {
-        expiresIn: "7d",
-      },
-    );
+    const tokenString = await createAuthToken(pilot.id, pilot.email);
 
-    // Calculate expiration date (7 days from now)
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7);
-
-    // Create token in database
-    await models.Token.create({
-      pilotId: pilot.id,
-      token: tokenString,
-      expiresAt,
-    });
-
-    // Return token in response body
     const response = NextResponse.json(
       {
         message: "Login successful",
-        token: tokenString, // Include database token in response
+        token: tokenString,
         user: {
           id: pilot.id,
           name: pilot.name,
           email: pilot.email,
           callsign: pilot.callsign,
+          status: pilot.status,
         },
+        redirectTo: pilot.status === 0 ? "/crew/application" : "/crew/home",
       },
       { status: 200 },
     );
@@ -169,6 +149,23 @@ async function handleLogin({
       { status: 500 },
     );
   }
+}
+
+async function createAuthToken(pilotId: number, email: string) {
+  const tokenString = jwt.sign({ id: pilotId, email }, JWT_SECRET as string, {
+    expiresIn: "7d",
+  });
+
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + 7);
+
+  await models.Token.create({
+    pilotId,
+    token: tokenString,
+    expiresAt,
+  });
+
+  return tokenString;
 }
 
 async function generateUniqueCallsign() {
@@ -241,6 +238,11 @@ async function handleSignup({
     status: 0, // Pending approval
   });
 
+  await models.Application.create({
+    pilotid: pilot.id,
+    exam_status: 0,
+  });
+
   const webhookUrl = process.env.DISCORD_WEBHOOK_ADMIN;
   if (webhookUrl) {
     const discordPayload = {
@@ -286,9 +288,21 @@ async function handleSignup({
       body: JSON.stringify(discordPayload),
     });
   }
+
+  const tokenString = await createAuthToken(pilot.id, pilot.email);
+
   return NextResponse.json(
     {
       message: `Your application is sent. Your callsign is assigned to ${pilot.callsign}. Our staff will contact you on the IFC soon, so make sure you keep an eye on it. `,
+      token: tokenString,
+      redirectTo: "/crew/application",
+      user: {
+        id: pilot.id,
+        name: pilot.name,
+        email: pilot.email,
+        callsign: pilot.callsign,
+        status: pilot.status,
+      },
     },
     { status: 201 },
   );
