@@ -16,6 +16,10 @@ export function SignupForm() {
   const [loadingIFC, setLoadingIFC] = useState(false);
   const [validIFC, setValidIFC] = useState(false);
   const [ifUserId, setIfUserId] = useState("");
+  const [ifMetrics, setIfMetrics] = useState<{
+    grade: number | null;
+    violations: number | null;
+  }>({ grade: null, violations: null });
   const [message, setMessage] = useState({ type: "", text: "" });
   const [formData, setFormData] = useState({
     email: "",
@@ -44,10 +48,37 @@ export function SignupForm() {
 
         const data = await response.json();
         const isValid = data.result && data.result.length > 0;
+        const ifUser = isValid ? data.result[0] : null;
         setValidIFC(isValid);
-        setIfUserId(isValid ? data.result[0].userId : "");
+        setIfUserId(isValid ? ifUser.userId : "");
+        setIfMetrics(
+          isValid
+            ? {
+                grade: normalizeInteger(
+                  getNestedValue(ifUser, [
+                    ["grade"],
+                    ["userGrade"],
+                    ["statistics", "grade"],
+                    ["stats", "grade"],
+                  ]),
+                ),
+                violations: normalizeViolations(
+                  getNestedValue(ifUser, [
+                    ["violations"],
+                    ["violationCount"],
+                    ["totalViolations"],
+                    ["statistics", "violations"],
+                    ["statistics", "violationCount"],
+                    ["stats", "violations"],
+                    ["stats", "violationCount"],
+                  ]),
+                ),
+              }
+            : { grade: null, violations: null },
+        );
       } catch (error) {
         setValidIFC(false);
+        setIfMetrics({ grade: null, violations: null });
         setMessage({
           type: "error",
           text: error instanceof Error ? error.message : "IFC check failed",
@@ -107,6 +138,8 @@ export function SignupForm() {
           name: formData.name,
           ifc: formData.ifc,
           ifUserId: ifUserId,
+          ifGrade: ifMetrics.grade,
+          ifViolations: ifMetrics.violations,
         }),
       });
 
@@ -277,4 +310,40 @@ export function SignupForm() {
       )}
     </form>
   );
+}
+
+type UnknownRecord = Record<string, unknown>;
+
+function getNestedValue(record: unknown, paths: string[][]) {
+  if (!record || typeof record !== "object") return null;
+
+  for (const path of paths) {
+    let current: unknown = record;
+
+    for (const part of path) {
+      if (!current || typeof current !== "object" || !(part in current)) {
+        current = undefined;
+        break;
+      }
+
+      current = (current as UnknownRecord)[part];
+    }
+
+    if (current !== undefined && current !== null) return current;
+  }
+
+  return null;
+}
+
+function normalizeInteger(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
+
+  const numberValue =
+    typeof value === "number" ? value : Number(String(value).trim());
+
+  return Number.isFinite(numberValue) ? Math.trunc(numberValue) : null;
+}
+
+function normalizeViolations(value: unknown) {
+  return Array.isArray(value) ? value.length : normalizeInteger(value);
 }

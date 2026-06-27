@@ -189,12 +189,16 @@ async function handleSignup({
   name,
   ifc,
   ifUserId,
+  ifGrade,
+  ifViolations,
 }: {
   email: string;
   password: string;
   name: string;
   ifc: string;
   ifUserId: string;
+  ifGrade?: unknown;
+  ifViolations?: unknown;
 }) {
   const normalizedEmail = email.trim().toLowerCase();
   const existingPilotMail = await models.Pilot.findOne({
@@ -241,6 +245,12 @@ async function handleSignup({
   await models.Application.create({
     pilotid: pilot.id,
     exam_status: 0,
+    if_grade: normalizeInteger(ifGrade),
+    if_violations: normalizeInteger(ifViolations),
+    if_metrics_updated_at:
+      normalizeInteger(ifGrade) !== null || normalizeInteger(ifViolations) !== null
+        ? new Date()
+        : null,
   });
 
   const webhookUrl = process.env.DISCORD_WEBHOOK_ADMIN;
@@ -306,4 +316,13 @@ async function handleSignup({
     },
     { status: 201 },
   );
+}
+
+function normalizeInteger(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
+
+  const numberValue =
+    typeof value === "number" ? value : Number(String(value).trim());
+
+  return Number.isFinite(numberValue) ? Math.trunc(numberValue) : null;
 }

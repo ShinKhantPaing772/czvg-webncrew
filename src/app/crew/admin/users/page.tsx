@@ -14,6 +14,7 @@ import {
   ArrowDown,
   Save,
   Pencil,
+  RefreshCw,
 } from "lucide-react";
 import { CrewHeader } from "@/components/crew-header";
 import { Button } from "@/components/ui/button";
@@ -95,6 +96,15 @@ interface Pilots {
   notes: string | null;
   transhours: number;
   transflights: number;
+  examStatus: number | null;
+  examScore: number | string | null;
+  examCompletedAt: string | null;
+  examResultReceivedAt: string | null;
+  discordInviteUrl: string | null;
+  discordInviteSentAt: string | null;
+  ifGrade: number | null;
+  ifViolations: number | null;
+  ifMetricsUpdatedAt: string | null;
 }
 
 interface UserEditForm {
@@ -102,6 +112,11 @@ interface UserEditForm {
   email: string;
   callsign: string;
   status: string;
+}
+
+interface ApplicationEditForm {
+  examScore: string;
+  discordInviteUrl: string;
 }
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -118,12 +133,17 @@ export default function Users() {
   const [activeTab, setActiveTab] = useState("all");
   const [selectedUser, setSelectedUser] = useState<Pilots | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isRefreshingIF, setIsRefreshingIF] = useState(false);
   const [isEditingUser, setIsEditingUser] = useState(false);
   const [editForm, setEditForm] = useState<UserEditForm>({
     name: "",
     email: "",
     callsign: "",
     status: "0",
+  });
+  const [applicationForm, setApplicationForm] = useState<ApplicationEditForm>({
+    examScore: "",
+    discordInviteUrl: "",
   });
   const [updateError, setUpdateError] = useState("");
   const itemsPerPage = 10;
@@ -248,8 +268,16 @@ export default function Users() {
       callsign: user.callsign,
       status: user.status.toString(),
     });
+    setApplicationForm({
+      examScore:
+        user.examScore === null || user.examScore === undefined
+          ? ""
+          : String(user.examScore),
+      discordInviteUrl: user.discordInviteUrl || "",
+    });
     setUpdateError("");
     setIsEditingUser(false);
+    refreshIFMetrics(user);
   };
 
   const handleEditFormChange = (field: keyof UserEditForm, value: string) => {
@@ -258,6 +286,118 @@ export default function Users() {
       [field]: value,
     }));
     setUpdateError("");
+  };
+
+  const handleApplicationFormChange = (
+    field: keyof ApplicationEditForm,
+    value: string,
+  ) => {
+    setApplicationForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+    setUpdateError("");
+  };
+
+  const refreshIFMetrics = async (user: Pilots) => {
+    setIsRefreshingIF(true);
+    try {
+      const response = await authFetch("/api/admin/users/if-metrics", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ id: user.id }),
+      });
+      const data = await response.json();
+
+      if (data.success) {
+        const updatedUser = {
+          ...user,
+          ifGrade: data.ifGrade,
+          ifViolations: data.ifViolations,
+          ifMetricsUpdatedAt: data.ifMetricsUpdatedAt,
+        };
+
+        setUsers((currentUsers) =>
+          currentUsers.map((currentUser) =>
+            currentUser.id === user.id
+              ? { ...currentUser, ...updatedUser }
+              : currentUser,
+          ),
+        );
+        setSelectedUser((current) =>
+          current?.id === user.id ? { ...current, ...updatedUser } : current,
+        );
+      }
+    } catch (error) {
+      console.error("Error refreshing IF metrics:", error);
+    } finally {
+      setIsRefreshingIF(false);
+    }
+  };
+
+  const handleUpdateApplication = async (user: Pilots) => {
+    const scoreValue = applicationForm.examScore.trim();
+    const inviteUrl = applicationForm.discordInviteUrl.trim();
+
+    if (scoreValue) {
+      const numericScore = Number(scoreValue);
+      if (
+        !Number.isFinite(numericScore) ||
+        numericScore < 0 ||
+        numericScore > 100
+      ) {
+        setUpdateError("Exam score must be between 0 and 100.");
+        return;
+      }
+    }
+
+    setIsUpdating(true);
+    try {
+      const response = await authFetch("/api/admin/users", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: user.id,
+          application: {
+            examScore: scoreValue,
+            discordInviteUrl: inviteUrl,
+          },
+        }),
+      });
+      const data = await response.json();
+
+      if (data.success) {
+        const updatedUser = {
+          ...user,
+          examScore: scoreValue ? Number(scoreValue) : null,
+          examStatus: scoreValue ? 2 : user.examStatus,
+          examResultReceivedAt: scoreValue
+            ? new Date().toISOString()
+            : user.examResultReceivedAt,
+          discordInviteUrl: inviteUrl || null,
+          discordInviteSentAt: inviteUrl ? new Date().toISOString() : null,
+        };
+
+        setUsers((currentUsers) =>
+          currentUsers.map((currentUser) =>
+            currentUser.id === user.id ? updatedUser : currentUser,
+          ),
+        );
+        setSelectedUser(updatedUser);
+        setUpdateError("");
+      } else {
+        setUpdateError(data.message || "Error updating application.");
+      }
+    } catch (error) {
+      console.error("Error updating application:", error);
+      setUpdateError("Error updating application.");
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   const handleUpdateUser = async (user: Pilots) => {
@@ -822,6 +962,152 @@ export default function Users() {
                                               </dd>
                                             </div>
                                           </dl>
+                                        </CardContent>
+                                      </Card>
+
+                                      <Card>
+                                        <CardHeader>
+                                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                            <div>
+                                              <CardTitle className="text-sm font-medium">
+                                                Application Review
+                                              </CardTitle>
+                                              <CardDescription>
+                                                Manage exam results, Discord access,
+                                                and Infinite Flight checks.
+                                              </CardDescription>
+                                            </div>
+                                            <Button
+                                              type="button"
+                                              variant="outline"
+                                              size="sm"
+                                              disabled={isRefreshingIF}
+                                              onClick={() =>
+                                                refreshIFMetrics(
+                                                  selectedUser || user,
+                                                )
+                                              }
+                                            >
+                                              <RefreshCw
+                                                className={`mr-2 h-4 w-4 ${
+                                                  isRefreshingIF
+                                                    ? "animate-spin"
+                                                    : ""
+                                                }`}
+                                              />
+                                              Refresh IF
+                                            </Button>
+                                          </div>
+                                        </CardHeader>
+                                        <CardContent className="space-y-4 pt-0">
+                                          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                            <div className="space-y-2">
+                                              <Label
+                                                htmlFor={`exam-score-${user.id}`}
+                                              >
+                                                Exam Score
+                                              </Label>
+                                              <Input
+                                                id={`exam-score-${user.id}`}
+                                                type="number"
+                                                min="0"
+                                                max="100"
+                                                step="0.01"
+                                                placeholder="Score out of 100"
+                                                value={applicationForm.examScore}
+                                                onChange={(event) =>
+                                                  handleApplicationFormChange(
+                                                    "examScore",
+                                                    event.target.value,
+                                                  )
+                                                }
+                                              />
+                                            </div>
+                                            <div className="space-y-2">
+                                              <Label
+                                                htmlFor={`discord-invite-${user.id}`}
+                                              >
+                                                Discord Invite Link
+                                              </Label>
+                                              <Input
+                                                id={`discord-invite-${user.id}`}
+                                                type="url"
+                                                placeholder="https://discord.gg/..."
+                                                value={
+                                                  applicationForm.discordInviteUrl
+                                                }
+                                                onChange={(event) =>
+                                                  handleApplicationFormChange(
+                                                    "discordInviteUrl",
+                                                    event.target.value,
+                                                  )
+                                                }
+                                              />
+                                            </div>
+                                          </div>
+
+                                          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                                            <div className="rounded-md border bg-slate-50 p-3">
+                                              <p className="text-xs font-medium text-muted-foreground">
+                                                Exam Status
+                                              </p>
+                                              <p className="mt-1 text-sm font-semibold">
+                                                {(selectedUser || user)
+                                                  .examScore !== null &&
+                                                (selectedUser || user)
+                                                  .examScore !== undefined
+                                                  ? "Score recorded"
+                                                  : (selectedUser || user)
+                                                        .examStatus === 1
+                                                    ? "Declared done"
+                                                    : "Not recorded"}
+                                              </p>
+                                            </div>
+                                            <div className="rounded-md border bg-slate-50 p-3">
+                                              <p className="text-xs font-medium text-muted-foreground">
+                                                IF Grade
+                                              </p>
+                                              <p className="mt-1 text-sm font-semibold">
+                                                {(selectedUser || user)
+                                                  .ifGrade ?? "Not available"}
+                                              </p>
+                                            </div>
+                                            <div className="rounded-md border bg-slate-50 p-3">
+                                              <p className="text-xs font-medium text-muted-foreground">
+                                                IF Violations
+                                              </p>
+                                              <p className="mt-1 text-sm font-semibold">
+                                                {(selectedUser || user)
+                                                  .ifViolations ??
+                                                  "Not available"}
+                                              </p>
+                                            </div>
+                                          </div>
+
+                                          {(selectedUser || user)
+                                            .ifMetricsUpdatedAt && (
+                                            <p className="text-xs text-muted-foreground">
+                                              IF metrics refreshed{" "}
+                                              {new Date(
+                                                (selectedUser || user)
+                                                  .ifMetricsUpdatedAt as string,
+                                              ).toLocaleString()}
+                                            </p>
+                                          )}
+
+                                          <div className="flex justify-end">
+                                            <Button
+                                              disabled={isUpdating}
+                                              onClick={() =>
+                                                handleUpdateApplication(
+                                                  selectedUser || user,
+                                                )
+                                              }
+                                            >
+                                              <Save className="mr-2 h-4 w-4" />
+                                              Save Application
+                                            </Button>
+                                          </div>
                                         </CardContent>
                                       </Card>
                                     </div>

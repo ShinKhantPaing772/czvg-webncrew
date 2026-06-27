@@ -159,7 +159,7 @@ export default function ApplicationStatusPage() {
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <CardTitle>Application Progress</CardTitle>
-                <CardDescription>
+                    <CardDescription>
                       Track your application through examination and onboarding.
                     </CardDescription>
                   </div>
@@ -196,6 +196,32 @@ export default function ApplicationStatusPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {applicant.discordInviteUrl && (
+              <Card className="border-green-200 bg-green-50">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-green-900">
+                    <MessageCircle className="h-5 w-5" />
+                    Discord Invite
+                  </CardTitle>
+                  <CardDescription className="text-green-800">
+                    Join the crew Discord server to continue onboarding.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button asChild className="bg-green-700 hover:bg-green-800">
+                    <a
+                      href={applicant.discordInviteUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Open Discord Invite
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
 
             <Card>
               <CardHeader>
@@ -284,29 +310,6 @@ export default function ApplicationStatusPage() {
               </CardContent>
             </Card>
 
-            {applicant.discordInviteUrl && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Discord Invite</CardTitle>
-                  <CardDescription>
-                    Join the crew Discord server to continue onboarding.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Button asChild>
-                    <a
-                      href={applicant.discordInviteUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      <MessageCircle className="h-4 w-4" />
-                      Open Discord Invite
-                      <ExternalLink className="h-4 w-4" />
-                    </a>
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
           </>
         )}
 

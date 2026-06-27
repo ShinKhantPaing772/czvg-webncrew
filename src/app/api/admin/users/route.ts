@@ -25,12 +25,22 @@ export async function GET(request: Request) {
         p.\`notes\`,
         p.\`transhours\`,
         p.\`transflights\`,
+        a.\`exam_status\` AS examStatus,
+        a.\`exam_score\` AS examScore,
+        a.\`exam_completed_at\` AS examCompletedAt,
+        a.\`exam_result_received_at\` AS examResultReceivedAt,
+        a.\`discord_invite_url\` AS discordInviteUrl,
+        a.\`discord_invite_sent_at\` AS discordInviteSentAt,
+        a.\`if_grade\` AS ifGrade,
+        a.\`if_violations\` AS ifViolations,
+        a.\`if_metrics_updated_at\` AS ifMetricsUpdatedAt,
         (
           SELECT MAX(\`date\`)
           FROM \`pireps\`
           WHERE \`pilotid\` = p.\`id\` AND \`status\` = 1
         ) AS lastActivity
       FROM \`pilots\` p
+      LEFT JOIN \`applications\` a ON a.\`pilotid\` = p.\`id\`
     `);
 
     return NextResponse.json(users);
@@ -49,7 +59,7 @@ export async function PUT(request: Request) {
     if (!auth.ok) return auth.response;
 
     const body = await request.json();
-    const { id, name, email, callsign, status, notes } = body;
+    const { id, name, email, callsign, status, notes, application } = body;
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const callsignPattern = /^China Southern \d{3}VG$/;
 
@@ -136,7 +146,54 @@ export async function PUT(request: Request) {
       updateFields.notes = typeof notes === "string" ? notes : "";
     }
 
-    if (Object.keys(updateFields).length === 0) {
+    const applicationUpdates: Record<string, string | number | Date | null> =
+      {};
+
+    if (application !== undefined) {
+      if (!application || typeof application !== "object") {
+        return NextResponse.json(
+          { success: false, message: "Invalid application payload" },
+          { status: 400 },
+        );
+      }
+
+      if ("examScore" in application) {
+        const rawScore = application.examScore;
+        if (rawScore === "" || rawScore === null || rawScore === undefined) {
+          applicationUpdates.exam_score = null;
+        } else {
+          const nextScore = Number(rawScore);
+          if (
+            !Number.isFinite(nextScore) ||
+            nextScore < 0 ||
+            nextScore > 100
+          ) {
+            return NextResponse.json(
+              { success: false, message: "Exam score must be between 0 and 100" },
+              { status: 400 },
+            );
+          }
+          applicationUpdates.exam_score = Number(nextScore.toFixed(2));
+          applicationUpdates.exam_status = 2;
+          applicationUpdates.exam_result_received_at = new Date();
+        }
+      }
+
+      if ("discordInviteUrl" in application) {
+        const inviteUrl =
+          typeof application.discordInviteUrl === "string"
+            ? application.discordInviteUrl.trim()
+            : "";
+
+        applicationUpdates.discord_invite_url = inviteUrl || null;
+        applicationUpdates.discord_invite_sent_at = inviteUrl ? new Date() : null;
+      }
+    }
+
+    if (
+      Object.keys(updateFields).length === 0 &&
+      Object.keys(applicationUpdates).length === 0
+    ) {
       return NextResponse.json(
         { success: false, message: "No fields to update" },
         { status: 400 },
@@ -152,6 +209,19 @@ export async function PUT(request: Request) {
     }
 
     await pilot.update(updateFields);
+
+    if (Object.keys(applicationUpdates).length > 0) {
+      const [applicationRecord] = await models.Application.findOrCreate({
+        where: { pilotid: Number(id) },
+        defaults: {
+          pilotid: Number(id),
+          exam_status: 0,
+        },
+      });
+
+      await applicationRecord.update(applicationUpdates);
+    }
+
     return NextResponse.json({
       success: true,
       message: "Pilot Updated Successfully",

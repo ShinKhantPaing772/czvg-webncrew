@@ -293,6 +293,9 @@ class Application extends Model {
   declare exam_result_received_at: Date | null;
   declare discord_invite_url: string | null;
   declare discord_invite_sent_at: Date | null;
+  declare if_grade: number | null;
+  declare if_violations: number | null;
+  declare if_metrics_updated_at: Date | null;
   declare notes: string | null;
   declare created_at: Date;
   declare updated_at: Date;
@@ -307,6 +310,9 @@ Application.init(
     exam_result_received_at: { type: DataTypes.DATE, allowNull: true },
     discord_invite_url: { type: DataTypes.TEXT, allowNull: true },
     discord_invite_sent_at: { type: DataTypes.DATE, allowNull: true },
+    if_grade: { type: DataTypes.INTEGER, allowNull: true },
+    if_violations: { type: DataTypes.INTEGER, allowNull: true },
+    if_metrics_updated_at: { type: DataTypes.DATE, allowNull: true },
     notes: { type: DataTypes.TEXT, allowNull: true },
     created_at: {
       type: DataTypes.DATE,
