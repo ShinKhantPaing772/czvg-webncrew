@@ -198,11 +198,45 @@ export function discordInviteEmail({
   );
 }
 
-export function getApplicantPortalUrl() {
-  const baseUrl =
+export function pilotApprovedEmail({
+  name,
+  callsign,
+  crewCenterUrl,
+}: {
+  name: string;
+  callsign: string;
+  crewCenterUrl: string;
+}) {
+  const safeName = escapeHtml(name || "Pilot");
+  const safeCallsign = escapeHtml(callsign);
+
+  return emailLayout(
+    "Application Approved",
+    [
+      paragraph(`Hello <strong>${safeName}</strong>,`),
+      paragraph(
+        `Congratulations! Your China Southern Virtual Group application has been approved. Your assigned callsign is <strong>${safeCallsign}</strong>.`,
+      ),
+      paragraph(
+        "You can now sign in to the Crew Center and begin flying with CZVG.",
+      ),
+      button("Open Crew Center", crewCenterUrl),
+    ].join(""),
+  );
+}
+
+function getBaseUrl() {
+  return (
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.APP_URL ||
-    "https://ifczvg.com";
+    "https://ifczvg.com"
+  ).replace(/\/$/, "");
+}
 
-  return `${baseUrl.replace(/\/$/, "")}/crew/application`;
+export function getApplicantPortalUrl() {
+  return `${getBaseUrl()}/crew/application`;
+}
+
+export function getCrewCenterUrl() {
+  return `${getBaseUrl()}/crew/home`;
 }

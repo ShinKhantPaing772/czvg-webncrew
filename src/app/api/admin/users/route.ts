@@ -6,6 +6,8 @@ import {
   discordInviteEmail,
   examGradeEmail,
   getApplicantPortalUrl,
+  getCrewCenterUrl,
+  pilotApprovedEmail,
   sendEmail,
 } from "@/lib/email";
 
@@ -234,7 +236,30 @@ export async function PUT(request: Request) {
       );
     }
 
+    const previousStatus = Number(pilot.get("status"));
+
     await pilot.update(updateFields);
+
+    if (
+      status !== undefined &&
+      Number(status) === 1 &&
+      previousStatus !== 1
+    ) {
+      sendEmail({
+        to: {
+          email: String(pilot.get("email")),
+          name: String(pilot.get("name") || "Pilot"),
+        },
+        subject: "Your CZVG application has been approved",
+        htmlContent: pilotApprovedEmail({
+          name: String(pilot.get("name") || "Pilot"),
+          callsign: String(pilot.get("callsign") || ""),
+          crewCenterUrl: getCrewCenterUrl(),
+        }),
+      }).catch((error) => {
+        console.error("[Admin Users] Failed to send approval email:", error);
+      });
+    }
 
     if (Object.keys(applicationUpdates).length > 0) {
       const [applicationRecord] = await models.Application.findOrCreate({
