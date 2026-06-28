@@ -2,7 +2,7 @@ const BREVO_API_KEY = process.env.BREVO_API_KEY;
 const BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
 const DEFAULT_SENDER = {
   name: "China Southern Virtual Group",
-  email: "noreply-otp@ifczvg.com",
+  email: "noreply@ifczvg.com",
 };
 
 type SendEmailParams = {
@@ -136,21 +136,27 @@ export function examGradeEmail({
   score,
   requiresReplay,
   portalUrl,
+  isUpdate = false,
 }: {
   name: string;
   score: number;
   requiresReplay: boolean;
   portalUrl: string;
+  isUpdate?: boolean;
 }) {
   const safeName = escapeHtml(name || "Pilot");
   const scoreText = escapeHtml(`${score}/100`);
 
   return emailLayout(
-    "Entrance Examination Result",
+    isUpdate
+      ? "Entrance Examination Grade Updated"
+      : "Entrance Examination Result",
     [
       paragraph(`Hello <strong>${safeName}</strong>,`),
       paragraph(
-        `Your entrance examination grade is now available: <strong>${scoreText}</strong>.`,
+        isUpdate
+          ? `Your entrance examination grade has been updated to <strong>${scoreText}</strong>.`
+          : `Your entrance examination grade is now available: <strong>${scoreText}</strong>.`,
       ),
       requiresReplay
         ? paragraph(

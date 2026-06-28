@@ -265,12 +265,16 @@ export async function PUT(request: Request) {
             email: String(pilot.get("email")),
             name: String(pilot.get("name") || "Pilot"),
           },
-          subject: "Your CZVG entrance examination grade is available",
+          subject:
+            previousExamScore === null
+              ? "Your CZVG entrance examination grade is available"
+              : "Your CZVG entrance examination grade has been updated",
           htmlContent: examGradeEmail({
             name: String(pilot.get("name") || "Pilot"),
             score: nextExamScore,
             requiresReplay: nextExamScore < 80,
             portalUrl,
+            isUpdate: previousExamScore !== null,
           }),
         }).catch((error) => {
           console.error("[Admin Users] Failed to send grade email:", error);
