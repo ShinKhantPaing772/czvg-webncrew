@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { models } from "@/lib/db";
 import bcryptjs from "bcryptjs";
 import jwt from "jsonwebtoken";
+import {
+  applicationReceivedEmail,
+  getApplicantPortalUrl,
+  sendEmail,
+} from "@/lib/email";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -298,6 +303,18 @@ async function handleSignup({
       body: JSON.stringify(discordPayload),
     });
   }
+
+  sendEmail({
+    to: { email: pilot.email, name: pilot.name },
+    subject: "Your CZVG application has been received",
+    htmlContent: applicationReceivedEmail({
+      name: pilot.name,
+      callsign: pilot.callsign,
+      portalUrl: getApplicantPortalUrl(),
+    }),
+  }).catch((error) => {
+    console.error("[Signup] Failed to send application received email:", error);
+  });
 
   const tokenString = await createAuthToken(pilot.id, pilot.email);
 

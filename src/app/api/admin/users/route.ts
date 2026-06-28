@@ -2,10 +2,29 @@ import { NextResponse } from "next/server";
 import { models } from "@/lib/models";
 import sequelize from "@/lib/database";
 import { requirePermission } from "@/lib/server-auth";
+import {
+  discordInviteEmail,
+  examGradeEmail,
+  getApplicantPortalUrl,
+  sendEmail,
+} from "@/lib/email";
 
 // Mark this route as dynamic to prevent static optimization
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+function normalizeNullableNumber(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
+
+  const numberValue =
+    typeof value === "number" ? value : Number(String(value).trim());
+
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+function normalizeNullableString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
 
 export async function GET(request: Request) {
   try {
@@ -73,6 +92,8 @@ export async function PUT(request: Request) {
     }
 
     const updateFields: Record<string, string | number> = {};
+    let nextExamScore: number | null | undefined;
+    let nextDiscordInviteUrl: string | null | undefined;
 
     if (name !== undefined) {
       if (typeof name !== "string" || !name.trim()) {
@@ -163,6 +184,7 @@ export async function PUT(request: Request) {
         const rawScore = application.examScore;
         if (rawScore === "" || rawScore === null || rawScore === undefined) {
           applicationUpdates.exam_score = null;
+          nextExamScore = null;
         } else {
           const nextScore = Number(rawScore);
           if (
@@ -175,7 +197,8 @@ export async function PUT(request: Request) {
               { status: 400 },
             );
           }
-          applicationUpdates.exam_score = Number(nextScore.toFixed(2));
+          nextExamScore = Number(nextScore.toFixed(2));
+          applicationUpdates.exam_score = nextExamScore;
           applicationUpdates.exam_status = 2;
           applicationUpdates.exam_result_received_at = new Date();
         }
@@ -189,6 +212,7 @@ export async function PUT(request: Request) {
 
         applicationUpdates.discord_invite_url = inviteUrl || null;
         applicationUpdates.discord_invite_sent_at = inviteUrl ? new Date() : null;
+        nextDiscordInviteUrl = inviteUrl || null;
       }
     }
 
@@ -220,8 +244,62 @@ export async function PUT(request: Request) {
           exam_status: 0,
         },
       });
+      const previousExamScore = normalizeNullableNumber(
+        applicationRecord.get("exam_score"),
+      );
+      const previousDiscordInviteUrl = normalizeNullableString(
+        applicationRecord.get("discord_invite_url"),
+      );
 
       await applicationRecord.update(applicationUpdates);
+
+      const portalUrl = getApplicantPortalUrl();
+
+      if (
+        nextExamScore !== undefined &&
+        nextExamScore !== null &&
+        previousExamScore !== nextExamScore
+      ) {
+        sendEmail({
+          to: {
+            email: String(pilot.get("email")),
+            name: String(pilot.get("name") || "Pilot"),
+          },
+          subject: "Your CZVG entrance examination grade is available",
+          htmlContent: examGradeEmail({
+            name: String(pilot.get("name") || "Pilot"),
+            score: nextExamScore,
+            requiresReplay: nextExamScore < 80,
+            portalUrl,
+          }),
+        }).catch((error) => {
+          console.error("[Admin Users] Failed to send grade email:", error);
+        });
+      }
+
+      if (
+        nextDiscordInviteUrl !== undefined &&
+        nextDiscordInviteUrl &&
+        previousDiscordInviteUrl !== nextDiscordInviteUrl
+      ) {
+        sendEmail({
+          to: {
+            email: String(pilot.get("email")),
+            name: String(pilot.get("name") || "Pilot"),
+          },
+          subject: "Your CZVG Discord invite is available",
+          htmlContent: discordInviteEmail({
+            name: String(pilot.get("name") || "Pilot"),
+            inviteUrl: nextDiscordInviteUrl,
+            portalUrl,
+          }),
+        }).catch((error) => {
+          console.error(
+            "[Admin Users] Failed to send Discord invite email:",
+            error,
+          );
+        });
+      }
     }
 
     return NextResponse.json({
