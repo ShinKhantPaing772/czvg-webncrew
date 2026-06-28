@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowRight, MapPinned, Plane, Route } from "lucide-react";
+import { ArrowRight, Award, MapPinned, Plane, Route } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Header } from "@/components/layout/header";
@@ -15,6 +15,7 @@ const operations = [
     image:
       "https://global.discourse-cdn.com/infiniteflight/original/4X/4/4/9/449f11d44e6be0994c1ac7fd69a0565967bd46ab.png",
     icon: Plane,
+    imageStyle: "aircraft",
   },
   {
     title: "Our Routes",
@@ -33,6 +34,16 @@ const operations = [
     image:
       "https://global.discourse-cdn.com/infiniteflight/optimized/4X/9/0/3/9032d2dcfa32d3d3ebab7f79d3a02c0c833fdd58_2_1640x1138.jpeg",
     icon: MapPinned,
+  },
+  {
+    title: "Pilot Ranks",
+    description:
+      "Review flight-hour rank progression, unlocked aircraft, and CEO rewards.",
+    href: "/operations/ranks",
+    image:
+      "https://global.discourse-cdn.com/infiniteflight/optimized/4X/1/d/4/1d49408bf5b2a652de2fe4feccb091a8a485f6f1_2_1640x418.png",
+    icon: Award,
+    imageStyle: "rank",
   },
 ];
 
@@ -94,7 +105,7 @@ export default function OperationsPage() {
 
         <section className="site-section bg-slate-50">
           <div className="site-container">
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
               {operations.map((operation) => {
                 const Icon = operation.icon;
 
@@ -104,12 +115,31 @@ export default function OperationsPage() {
                     href={operation.href}
                     className="site-card group overflow-hidden transition hover:-translate-y-0.5 hover:shadow-md"
                   >
-                    <div className="relative h-52 bg-slate-100">
+                    <div
+                      className={
+                        operation.imageStyle
+                          ? "relative h-52 overflow-hidden bg-slate-950"
+                          : "relative h-52 bg-slate-100"
+                      }
+                    >
+                      {operation.imageStyle === "rank" ? (
+                        <div className="absolute inset-y-0 left-0 z-10 flex gap-2.5 bg-black px-2">
+                          {[0, 1, 2, 3].map((bar) => (
+                            <span key={bar} className="w-2 bg-amber-400" />
+                          ))}
+                        </div>
+                      ) : null}
                       <Image
                         src={operation.image}
                         alt={operation.title}
                         fill
-                        className="object-cover transition-transform duration-300 group-hover:scale-105"
+                        className={
+                          operation.imageStyle === "rank"
+                            ? "object-contain py-5 pl-20 pr-5 transition-transform duration-300 group-hover:scale-105"
+                            : operation.imageStyle
+                              ? "object-contain p-5 transition-transform duration-300 group-hover:scale-105"
+                            : "object-cover transition-transform duration-300 group-hover:scale-105"
+                        }
                       />
                     </div>
                     <div className="p-6">

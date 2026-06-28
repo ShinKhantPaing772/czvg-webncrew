@@ -19,17 +19,17 @@ const airlines = [
     description: "Based in Xiamen, serving destinations across Asia and beyond.",
   },
   {
-    name: "Chongqing Air",
+    name: "Chongqing Airlines",
     logo: "https://upload.wikimedia.org/wikipedia/commons/0/0f/Chongqing_Airlines_logo.png",
     description: "Operating from Chongqing to cities throughout China.",
   },
   {
-    name: "Chengdu Air",
+    name: "Chengdu Airlines",
     logo: "https://upload.wikimedia.org/wikipedia/en/c/c1/Chengdu_Airlines_logo.png",
     description: "Focused on routes from Chengdu to major Chinese cities.",
   },
   {
-    name: "Hebei Air",
+    name: "Hebei Airlines",
     logo: "https://upload.wikimedia.org/wikipedia/en/0/0b/HebeiAirLogo.png",
     description: "Connecting Hebei province with destinations across China.",
   },

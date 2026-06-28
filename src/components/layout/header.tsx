@@ -27,6 +27,7 @@ export function Header() {
   const operationLinks = [
     { href: "/operations/hubs", label: "Hubs" },
     { href: "/operations/fleet", label: "Fleet" },
+    { href: "/operations/ranks", label: "Ranks" },
     { href: "/operations/routes", label: "Routes" },
   ];
 
