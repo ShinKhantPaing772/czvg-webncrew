@@ -24,6 +24,8 @@ import { DayPicker } from "react-day-picker";
 import { cn } from "@/lib/utils";
 import { authFetch } from "@/lib/utils/api";
 
+const liveMapUrl = "https://map.ifczvg.com/";
+
 export default function AdminDashboard() {
   const [selected, setSelected] = useState<{
     from: Date | undefined;
@@ -320,8 +322,8 @@ export default function AdminDashboard() {
               <CardContent>
                 <div className="w-full h-[600px] rounded-lg overflow-hidden border">
                   <iframe
-                    src="https://ifvarb.com/liveflightmap.php?callsign=CZVG&color=CornflowerBlue&apikey=90e208-368a57-f94a2f-dcfe97-c3b72e"
-                    title="IFVARB Live Flight Map - CZVG"
+                    src={liveMapUrl}
+                    title="CZVG Live Flight Map"
                     width="100%"
                     height="100%"
                     style={{ border: 0 }}

@@ -120,6 +120,8 @@ const featuredRoutes = [
   },
 ];
 
+const liveMapUrl = "https://map.ifczvg.com/";
+
 export default function Home() {
   return (
     <div className="flex min-h-screen flex-col bg-white text-slate-950">
@@ -257,6 +259,26 @@ export default function Home() {
                 </div>
               </div>
               <FeaturedRouteRotator routes={featuredRoutes} />
+            </div>
+          </div>
+        </section>
+
+        <section className="site-section bg-white">
+          <div className="site-container">
+            <div className="mb-8 max-w-3xl">
+              <p className="site-eyebrow">Live map</p>
+              <h2 className="site-heading mt-3">
+                Track CZVG flights across the network.
+              </h2>
+            </div>
+            <div className="h-[520px] overflow-hidden rounded-md border border-slate-200 bg-slate-100 shadow-sm md:h-[680px]">
+              <iframe
+                src={liveMapUrl}
+                title="CZVG Live Flight Map"
+                className="h-full w-full"
+                loading="lazy"
+                allowFullScreen
+              />
             </div>
           </div>
         </section>

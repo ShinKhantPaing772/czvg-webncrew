@@ -7,6 +7,10 @@ export const metadata = {
   title: "China Southern Virtual Group IF",
   description:
     "Official website of China Southern Virtual Group - An IFVARB approved virtual airline.",
+  icons: {
+    icon: "/icon.png",
+    apple: "/icon.png",
+  },
 };
 
 export default function RootLayout({

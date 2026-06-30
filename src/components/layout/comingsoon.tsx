@@ -3,6 +3,8 @@
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 
+const brandLogoSrc = "/brand/czvg-logo-mark.png";
+
 export default function ComingSoonPage() {
   return (
     <div className="min-h-screen flex flex-col">
@@ -13,9 +15,9 @@ export default function ComingSoonPage() {
             <div className="mb-8 flex justify-center">
               <div className="inline-flex items-center p-2 bg-white rounded-full">
                 <img
-                  src="https://sea1.discourse-cdn.com/infiniteflight/user_avatar/community.infiniteflight.com/chinasouthernvg/288/886608_2.png"
+                  src={brandLogoSrc}
                   alt="China Southern Virtual Group Logo"
-                  className="h-6 w-6"
+                  className="h-12 w-12 object-contain"
                 />
               </div>
             </div>

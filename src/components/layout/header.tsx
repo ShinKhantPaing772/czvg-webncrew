@@ -13,6 +13,8 @@ import {
 import { useSession } from "@/hooks/use-session";
 import { logout } from "@/lib/utils/auth";
 
+const brandLogoSrc = "/brand/czvg-logo-horizontal.png";
+
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -52,18 +54,10 @@ export function Header() {
         <div className="flex min-w-0 items-center gap-2">
           <Link href="/" className="flex min-w-0 items-center gap-2">
             <img
-              src="https://sea1.discourse-cdn.com/infiniteflight/user_avatar/community.infiniteflight.com/chinasouthernvg/288/886608_2.png"
+              src={brandLogoSrc}
               alt="China Southern Virtual Group Logo"
-              className="h-8 w-8 shrink-0 rounded-full"
+              className="h-10 w-auto max-w-[190px] shrink-0 object-contain"
             />
-            <div className="flex min-w-0 flex-col">
-              <span className="truncate text-base font-bold leading-tight text-slate-950 md:text-lg">
-                China Southern Virtual Group
-              </span>
-              <span className="text-xs font-medium text-muted-foreground">
-                CZVG
-              </span>
-            </div>
           </Link>
         </div>
         <nav className="hidden items-center gap-1 md:flex">
@@ -179,13 +173,10 @@ export function Header() {
         <div className="flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
             <img
-              src="https://sea1.discourse-cdn.com/infiniteflight/user_avatar/community.infiniteflight.com/chinasouthernvg/288/886608_2.png"
+              src={brandLogoSrc}
               alt="China Southern Virtual Group Logo"
-              className="h-8 w-8 rounded-full"
+              className="h-10 w-auto max-w-[220px] object-contain"
             />
-            <span className="text-lg font-bold leading-tight">
-              China Southern Virtual Group
-            </span>
           </Link>
           <Button
             variant="outline"

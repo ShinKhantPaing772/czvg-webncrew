@@ -23,6 +23,8 @@ const siteLinks = [
   { href: "/crew?type=signup", label: "Join Us" },
 ];
 
+const brandLogoSrc = "/brand/czvg-logo-horizontal-white.png";
+
 export function Footer() {
   return (
     <footer className="border-t border-slate-200 bg-slate-950 text-white">
@@ -31,18 +33,10 @@ export function Footer() {
           <div>
             <Link href="/" className="inline-flex items-center gap-3">
               <img
-                src="https://sea1.discourse-cdn.com/infiniteflight/user_avatar/community.infiniteflight.com/chinasouthernvg/288/886608_2.png"
+                src={brandLogoSrc}
                 alt="China Southern Virtual Group Logo"
-                className="h-9 w-9 rounded-full"
+                className="h-14 w-auto max-w-[240px] object-contain"
               />
-              <div>
-                <span className="block text-lg font-bold">
-                  China Southern Virtual Group
-                </span>
-                <span className="text-sm text-slate-300">
-                  Fly into your dreams
-                </span>
-              </div>
             </Link>
             <p className="mt-5 max-w-xl text-sm leading-6 text-slate-300">
               A China-based virtual airline group for Infinite Flight pilots,
