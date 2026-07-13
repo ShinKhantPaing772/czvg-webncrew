@@ -9,7 +9,7 @@ import { Footer } from "@/components/layout/footer";
 const ranks = [
   {
     title: "Trainee Second Officer",
-    hours: "0-21hr",
+    hours: "00:00–21:00",
     aircraft: "E190",
     bars: 1,
     barTone: "white",
@@ -18,7 +18,7 @@ const ranks = [
   },
   {
     title: "Second Officer",
-    hours: "21-70hr",
+    hours: "21:00–70:00",
     aircraft: "A319, A320, A321",
     bars: 1,
     image:
@@ -26,7 +26,7 @@ const ranks = [
   },
   {
     title: "First Officer",
-    hours: "70-140hr",
+    hours: "70:00–140:00",
     aircraft: "B737",
     bars: 2,
     image:
@@ -34,7 +34,7 @@ const ranks = [
   },
   {
     title: "SR First Officer",
-    hours: "140-230hr",
+    hours: "140:00–230:00",
     aircraft: "A330, B757",
     bars: 3,
     image:
@@ -42,7 +42,7 @@ const ranks = [
   },
   {
     title: "Captain",
-    hours: "230-400hr",
+    hours: "230:00–400:00",
     aircraft: "777F, B777",
     bars: 4,
     image:
@@ -50,7 +50,7 @@ const ranks = [
   },
   {
     title: "SR Captain",
-    hours: "400-800hr",
+    hours: "400:00–800:00",
     aircraft: "B787, A350, A380",
     bars: 4,
     starCount: 1,
@@ -59,7 +59,7 @@ const ranks = [
   },
   {
     title: "Fleet Captain",
-    hours: "800+hr",
+    hours: "800:00+",
     aircraft: "B74F",
     bars: 4,
     starCount: 2,

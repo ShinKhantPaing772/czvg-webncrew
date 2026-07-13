@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import sequelize from "@/lib/database";
 import { formatFlightTime } from "@/lib/utils/time";
-import { formatFlightTimewithcolon } from "@/lib/utils/format-flight-time";
 import { QueryTypes } from "sequelize";
 import { requirePermission } from "@/lib/server-auth";
 
@@ -65,9 +64,7 @@ export async function GET(
       fltnum: (route as any).fltnum,
       dep: (route as any).dep,
       arr: (route as any).arr,
-      duration: formatFlightTimewithcolon(
-        parseFloat(formatFlightTime(parseInt((route as any).duration))),
-      ),
+      duration: formatFlightTime(parseInt((route as any).duration)),
       rawDuration: parseInt((route as any).duration),
       notes: (route as any).notes,
       aircraft: JSON.parse((route as any).aircraft || "[]"),

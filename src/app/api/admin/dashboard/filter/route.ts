@@ -3,6 +3,7 @@ import sequelize from "@/lib/database";
 import { models } from "@/lib/models";
 import { Op, QueryTypes } from "sequelize";
 import { requirePermission } from "@/lib/server-auth";
+import { formatFlightTime } from "@/lib/utils/time";
 
 // Mark this route as dynamic to prevent static optimization
 export const dynamic = "force-dynamic";
@@ -58,7 +59,7 @@ export async function GET(request: Request) {
     );
     const flightHoursSeconds =
       flightHoursResult[0]?.total || 0;
-    const flightHours = flightHoursSeconds / 3600; // Convert seconds to hours
+    const flightHours = formatFlightTime(flightHoursSeconds);
 
     // Compile date range stats
     const dateRangeStats = {

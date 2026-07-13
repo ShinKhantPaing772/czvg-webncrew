@@ -94,7 +94,7 @@ export function useSession() {
           if (isMounted) {
             setUser({
               ...userData,
-              flightTime: pilotData?.statistics?.totalFlightTime ?? "0",
+              flightTime: pilotData?.statistics?.totalFlightTime ?? "00:00",
               pirepsFiled: pilotData?.statistics?.totalPireps ?? 0,
               rank: pilotData?.statistics?.rank ?? userData.rank ?? "Trainee",
             });

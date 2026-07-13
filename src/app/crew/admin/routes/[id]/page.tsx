@@ -157,6 +157,7 @@ export default function EditRoutePage() {
               <div>
                 <Label>Duration (HH:MM)</Label>
                 <Input
+                  placeholder="01:30"
                   value={routeData.duration}
                   onChange={(e) =>
                     setRouteData({ ...routeData, duration: e.target.value })

@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import Link from "next/link";
 import { useSession } from "@/hooks/use-session";
-import { formatFlightTimeHM } from "@/lib/utils/format-flight-time";
+import { formatFlightTime } from "@/lib/utils/time";
 
 interface Route {
   id: number;
@@ -18,6 +18,7 @@ interface Route {
   dep: string;
   arr: string;
   duration: string;
+  durationSeconds: number;
   notes: string;
   aircraft: {
     id: number | null;
@@ -40,6 +41,25 @@ export default function ViewRoute() {
   const [route, setRoute] = useState<Route | null>(null);
   const [loading, setLoading] = useState(true);
 
+  function secondsToInput(seconds: number) {
+    return formatFlightTime(seconds);
+  }
+
+  function filePirepHref(currentRoute: Route) {
+    const params = new URLSearchParams({
+      flightnum: currentRoute.fltnum || "",
+      departure: currentRoute.dep,
+      arrival: currentRoute.arr,
+      flightTime: secondsToInput(currentRoute.durationSeconds),
+    });
+    const firstAircraft = currentRoute.aircraft.find((aircraft) => aircraft.id);
+    if (firstAircraft?.id) {
+      params.set("aircraftId", String(firstAircraft.id));
+    }
+
+    return `/crew/file-pirep?${params}`;
+  }
+
   useEffect(() => {
     const fetchRouteData = async () => {
       try {
@@ -48,12 +68,8 @@ export default function ViewRoute() {
           throw new Error("Failed to fetch route data");
         }
         const data = await response.json();
-        const formattedRoute = {
-          ...data.data,
-          duration: formatFlightTimeHM(data.data.duration),
-        };
         if (data.success) {
-          setRoute(formattedRoute);
+          setRoute(data.data);
         }
       } catch (error) {
         console.error("Error fetching route:", error);
@@ -63,7 +79,7 @@ export default function ViewRoute() {
     };
 
     fetchRouteData();
-  }, [params.id]);
+  }, [routeId]);
 
   if (loading) {
     return (
@@ -122,7 +138,7 @@ export default function ViewRoute() {
           <div className="flex items-end">
             <Button variant="link" className="px-4 py-2">
               <Link
-                href={`/crew/file-pirep?flightnum=${route.fltnum}&departure=${route.dep}&arrival=${route.arr}`}
+                href={filePirepHref(route)}
               >
                 File Pirep
               </Link>
@@ -231,7 +247,7 @@ export default function ViewRoute() {
                           </Badge>
                           <div className="flex gap-3">
                             <Badge variant="outline">
-                              {formatFlightTimeHM(flight.flightTime)}
+                              {flight.flightTime}
                             </Badge>
                             <Badge variant="outline">
                               {new Date(flight.date).toLocaleDateString()}

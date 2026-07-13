@@ -1,18 +1,39 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import {
-  Users,
-  Plane,
-  FileText,
-  Clock,
-  ArrowUp,
-  ArrowDown,
+  Activity,
   CalendarIcon,
-  Check,
+  CheckCircle2,
+  Clock,
+  FileText,
+  KeyRound,
+  MapPinned,
+  Plane,
+  Route,
+  Shield,
+  Users,
 } from "lucide-react";
 import { format } from "date-fns";
+import { DayPicker } from "react-day-picker";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+
 import { CrewHeader } from "@/components/crew-header";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -20,322 +41,795 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { DayPicker } from "react-day-picker";
-import { cn } from "@/lib/utils";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useSession } from "@/hooks/use-session";
 import { authFetch } from "@/lib/utils/api";
+import { formatFlightTime } from "@/lib/utils/time";
 
-const liveMapUrl = "https://map.ifczvg.com/";
+const chartColors = ["#0052a5", "#0f766e", "#b45309", "#be123c", "#4338ca"];
+
+type CountPoint = {
+  label: string;
+  value: number;
+};
+
+type TrendPoint = {
+  label: string;
+  flights?: number;
+  hours?: number;
+  pilots?: number;
+};
+
+type AnalyticsResponse = {
+  success: boolean;
+  message?: string;
+  permissions: string[];
+  range: {
+    startDate: string;
+    endDate: string;
+  };
+  sections: {
+    overview?: {
+      totalPilots: number;
+      totalFlights: number;
+      pendingPireps: number;
+      totalHours: number;
+      totalRoutes: number;
+      activeAircraft: number;
+      liveMapUrl: string;
+      range: {
+        approvedPireps: number;
+        flightHours: number;
+        newPilots: number;
+      };
+    };
+    pireps?: {
+      statusCounts: {
+        pending: number;
+        approved: number;
+        rejected: number;
+      };
+      trends: TrendPoint[];
+      topDepartures: CountPoint[];
+      topArrivals: CountPoint[];
+    };
+    users?: {
+      pilotStatusCounts: {
+        applicants: number;
+        active: number;
+        rejected: number;
+        suspended: number;
+      };
+      applicationPipeline: CountPoint[];
+      growth: TrendPoint[];
+      activity: {
+        recentlyActive: number;
+        inactive: number;
+      };
+    };
+    routes?: {
+      totalRoutes: number;
+      topDepartures: CountPoint[];
+      topArrivals: CountPoint[];
+      durationBuckets: CountPoint[];
+    };
+    aircrafts?: {
+      activeAircraft: number;
+      liveryBreakdown: CountPoint[];
+      usage: CountPoint[];
+    };
+    permissions?: {
+      adminCount: number;
+      distribution: CountPoint[];
+    };
+  };
+};
+
+type DateRange = {
+  from: Date;
+  to: Date;
+};
+
+function toDateInput(value: Date) {
+  return format(value, "yyyy-MM-dd");
+}
+
+function presetRange(days: number): DateRange {
+  const to = new Date();
+  const from = new Date();
+  from.setDate(to.getDate() - (days - 1));
+  return { from, to };
+}
+
+function thisYearRange(): DateRange {
+  const to = new Date();
+  return { from: new Date(to.getFullYear(), 0, 1), to };
+}
+
+function formatHours(value: number) {
+  return formatFlightTime((Number(value) || 0) * 3600);
+}
+
+function compactNumber(value: number) {
+  return new Intl.NumberFormat("en", { maximumFractionDigits: 0 }).format(
+    Number(value) || 0,
+  );
+}
+
+function hasClientPermission(
+  userPermissions: Array<{ name: string }> | undefined,
+  permission: string,
+) {
+  const permissions = userPermissions?.map((item) => item.name) ?? [];
+  return permissions.includes("admin") || permissions.includes(permission);
+}
+
+function statusChartData(statusCounts: Record<string, number>) {
+  return Object.entries(statusCounts).map(([label, value]) => ({
+    label: label.charAt(0).toUpperCase() + label.slice(1),
+    value,
+  }));
+}
+
+function StatCard({
+  title,
+  value,
+  detail,
+  icon: Icon,
+}: {
+  title: string;
+  value: string | number;
+  detail: string;
+  icon: React.ElementType;
+}) {
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        <Icon className="h-4 w-4 text-muted-foreground" />
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">{value}</div>
+        <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function MetricTile({
+  title,
+  value,
+  detail,
+  icon: Icon,
+}: {
+  title: string;
+  value: string | number;
+  detail: string;
+  icon: React.ElementType;
+}) {
+  return (
+    <div className="rounded-md border bg-slate-50 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-medium text-slate-700">{title}</p>
+        <Icon className="h-4 w-4 text-muted-foreground" />
+      </div>
+      <p className="mt-3 text-2xl font-bold text-slate-950">{value}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
+    </div>
+  );
+}
+
+function ChartCard({
+  title,
+  actionHref,
+  actionLabel,
+  children,
+}: {
+  title: string;
+  actionHref?: string;
+  actionLabel?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between gap-3">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        {actionHref && actionLabel ? (
+          <Button asChild variant="outline" size="sm">
+            <Link href={actionHref}>{actionLabel}</Link>
+          </Button>
+        ) : null}
+      </CardHeader>
+      <CardContent>{children}</CardContent>
+    </Card>
+  );
+}
+
+function EmptyChart({ label }: { label: string }) {
+  return (
+    <div className="flex h-[260px] items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
+      {label}
+    </div>
+  );
+}
+
+function BarList({ data }: { data: CountPoint[] }) {
+  const max = Math.max(...data.map((item) => Number(item.value) || 0), 1);
+
+  if (!data.length) return <EmptyChart label="No data for this range" />;
+
+  return (
+    <div className="space-y-3">
+      {data.map((item) => (
+        <div key={item.label} className="grid gap-1">
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span className="truncate font-medium">{item.label}</span>
+            <span className="text-muted-foreground">{compactNumber(item.value)}</span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+            <div
+              className="h-full rounded-full bg-primary"
+              style={{ width: `${Math.max(5, (item.value / max) * 100)}%` }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SimpleBarChart({ data }: { data: CountPoint[] }) {
+  if (!data.length) return <EmptyChart label="No data available" />;
+
+  return (
+    <div className="h-[260px]">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={data}>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+          <XAxis dataKey="label" tick={{ fontSize: 12 }} />
+          <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+          <Tooltip />
+          <Bar dataKey="value" fill="#0052a5" radius={[4, 4, 0, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function TrendChart({
+  data,
+  dataKey,
+  color = "#0052a5",
+}: {
+  data: TrendPoint[];
+  dataKey: "flights" | "hours" | "pilots";
+  color?: string;
+}) {
+  if (!data.length) return <EmptyChart label="No activity in this range" />;
+
+  return (
+    <div className="h-[260px]">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data}>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+          <XAxis dataKey="label" minTickGap={28} tick={{ fontSize: 12 }} />
+          <YAxis
+            allowDecimals
+            tick={{ fontSize: 12 }}
+            tickFormatter={
+              dataKey === "hours"
+                ? (value) => formatHours(Number(value))
+                : undefined
+            }
+          />
+          <Tooltip
+            formatter={(value) =>
+              dataKey === "hours"
+                ? [formatHours(Number(value)), "Flight time"]
+                : [value, dataKey]
+            }
+          />
+          <Line
+            type="monotone"
+            dataKey={dataKey}
+            stroke={color}
+            strokeWidth={2}
+            dot={false}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function DonutChart({ data }: { data: CountPoint[] }) {
+  if (!data.some((item) => item.value > 0)) {
+    return <EmptyChart label="No data available" />;
+  }
+
+  return (
+    <div className="h-[260px]">
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={data}
+            dataKey="value"
+            nameKey="label"
+            innerRadius={58}
+            outerRadius={88}
+            paddingAngle={2}
+          >
+            {data.map((entry, index) => (
+              <Cell
+                key={entry.label}
+                fill={chartColors[index % chartColors.length]}
+              />
+            ))}
+          </Pie>
+          <Tooltip />
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
 
 export default function AdminDashboard() {
+  const { user } = useSession();
+  const [range, setRange] = useState<DateRange>(presetRange(30));
   const [selected, setSelected] = useState<{
     from: Date | undefined;
     to: Date | undefined;
-  }>({
-    from: new Date(new Date().setDate(new Date().getDate() - 30)),
-    to: new Date(),
-  });
-  const [date, setDate] = useState<{
-    from: Date | undefined;
-    to: Date | undefined;
-  }>({
-    from: new Date(new Date().setDate(new Date().getDate() - 30)),
-    to: new Date(),
-  });
-  const [loading, setLoading] = useState(false);
-  const [dashboardStats, setDashboardStats] = useState({
-    totalPilots: 0,
-    totalFlights: 0,
-    pendingPireps: 0,
-    totalHours: 0,
-  });
-  const [filteredStats, setFilteredStats] = useState({
-    pilotsInRange: 0,
-    pirepsInRange: 0,
-    flightHours: 0,
-  });
+  }>({ from: range.from, to: range.to });
+  const [analytics, setAnalytics] = useState<AnalyticsResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Fetch dashboard statistics
   useEffect(() => {
-    const fetchDashboardStats = async () => {
+    let mounted = true;
+
+    async function loadAnalytics() {
+      setLoading(true);
+      setError(null);
+
       try {
-        setLoading(true);
-
-        const response = await authFetch(`/api/admin/dashboard/`);
-        if (!response.ok) {
-          throw new Error("Failed to fetch dashboard statistics");
-        }
+        const params = new URLSearchParams({
+          startDate: toDateInput(range.from),
+          endDate: toDateInput(range.to),
+        });
+        const response = await authFetch(`/api/admin/dashboard/analytics?${params}`);
         const data = await response.json();
-        if (data.success) {
-          setDashboardStats(data.data);
+
+        if (!response.ok || !data.success) {
+          throw new Error(data.message || "Failed to load admin analytics");
         }
-      } catch (error) {
-        console.error("Error fetching dashboard statistics:", error);
+
+        if (mounted) {
+          setAnalytics(data);
+        }
+      } catch (loadError) {
+        if (mounted) {
+          setAnalytics(null);
+          setError(
+            loadError instanceof Error
+              ? loadError.message
+              : "Failed to load admin analytics",
+          );
+        }
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
-    };
-
-    fetchDashboardStats();
-  }, []);
-
-  // Fetch filtered dashboard statistics based on date range
-  useEffect(() => {
-    const fetchFilteredStats = async () => {
-      try {
-        setLoading(true);
-        const params = new URLSearchParams();
-        if (date.from) {
-          params.append("startDate", format(date.from, "yyyy-MM-dd"));
-        }
-        if (date.to) {
-          params.append("endDate", format(date.to, "yyyy-MM-dd"));
-        }
-
-        const response = await authFetch(`/api/admin/dashboard/filter?${params}`);
-        if (!response.ok) {
-          throw new Error("Failed to fetch filtered statistics");
-        }
-        const data = await response.json();
-        if (data.success) {
-          setFilteredStats(data.data);
-        }
-      } catch (error) {
-        console.error("Error fetching filtered statistics:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (date.from && date.to) {
-      fetchFilteredStats();
     }
-  }, [date]);
-  // Format flight time
-  const formatFlightTime = (hours: number) => {
-    const wholeHours = Math.floor(hours);
-    const minutes = Math.round((hours - wholeHours) * 60);
-    return `${wholeHours}h ${minutes}m`;
-  };
 
-  // Get percentage change indicator
-  const getPercentageIndicator = (value: number) => {
-    if (value > 0) {
-      return (
-        <div className="flex items-center text-green-600">
-          <ArrowUp className="mr-1 h-4 w-4" />
-          <span>{value}%</span>
-        </div>
-      );
-    } else if (value < 0) {
-      return (
-        <div className="flex items-center text-red-600">
-          <ArrowDown className="mr-1 h-4 w-4" />
-          <span>{Math.abs(value)}%</span>
-        </div>
-      );
-    } else {
-      return <span>0%</span>;
-    }
-  };
+    loadAnalytics();
+
+    return () => {
+      mounted = false;
+    };
+  }, [range]);
+
+  const allowedSections = useMemo(() => {
+    const sections = analytics?.sections;
+    if (!sections) return [];
+
+    return [
+      {
+        id: "pireps",
+        label: "PIREPs",
+        permission: "pireps",
+        available: Boolean(sections.pireps),
+      },
+      {
+        id: "users",
+        label: "Users",
+        permission: "users",
+        available: Boolean(sections.users),
+      },
+      {
+        id: "routes",
+        label: "Routes",
+        permission: "routes",
+        available: Boolean(sections.routes),
+      },
+      {
+        id: "aircrafts",
+        label: "Aircraft",
+        permission: "aircrafts",
+        available: Boolean(sections.aircrafts),
+      },
+      {
+        id: "permissions",
+        label: "Permissions",
+        permission: "permissions",
+        available: Boolean(sections.permissions),
+      },
+    ].filter(
+      (section) =>
+        section.available && hasClientPermission(user?.Permissions, section.permission),
+    );
+  }, [analytics?.sections, user?.Permissions]);
+
+  const overview = analytics?.sections.overview;
+
+  function applyPreset(nextRange: DateRange) {
+    setRange(nextRange);
+    setSelected({ from: nextRange.from, to: nextRange.to });
+  }
 
   return (
     <CrewHeader>
-      {loading && (
-        <div className="flex items-center justify-center min-h-screen">
-          Loading...
-        </div>
-      )}
-      {!loading && (
-        <main className="flex-1 ">
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-              <h1 className="text-2xl font-bold">Dashboard</h1>
+      <main className="flex flex-1 flex-col gap-6">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-2xl font-bold">Admin Analytics</h1>
+            </div>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Showing operational metrics for{" "}
+              {format(range.from, "LLL dd, y")} to {format(range.to, "LLL dd, y")}.
+            </p>
+          </div>
 
-              <div className="flex items-center gap-2">
-                <Popover>
-                  <PopoverTrigger asChild>
+          <div className="flex flex-wrap gap-2">
+            {[
+              ["7 days", presetRange(7)],
+              ["30 days", presetRange(30)],
+              ["90 days", presetRange(90)],
+              ["This year", thisYearRange()],
+            ].map(([label, nextRange]) => (
+              <Button
+                key={label as string}
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => applyPreset(nextRange as DateRange)}
+              >
+                {label as string}
+              </Button>
+            ))}
+
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  Custom
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto bg-white p-4" align="end">
+                <div className="flex flex-col gap-4">
+                  <DayPicker
+                    mode="range"
+                    today={new Date()}
+                    disabled={{ after: new Date() }}
+                    selected={selected}
+                    onSelect={(nextSelected) => {
+                      setSelected({
+                        from: nextSelected?.from,
+                        to: nextSelected?.to,
+                      });
+                    }}
+                    numberOfMonths={2}
+                  />
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-sm text-muted-foreground">
+                      {selected.from && selected.to
+                        ? `${format(selected.from, "LLL dd, y")} to ${format(
+                            selected.to,
+                            "LLL dd, y",
+                          )}`
+                        : "Select a date range"}
+                    </p>
                     <Button
-                      id="date"
-                      variant={"outline"}
-                      className={cn(
-                        "w-[300px] justify-start text-left font-normal",
-                        !date && "text-muted-foreground"
-                      )}
+                      type="button"
+                      disabled={!selected.from || !selected.to}
+                      onClick={() => {
+                        if (selected.from && selected.to) {
+                          setRange({ from: selected.from, to: selected.to });
+                        }
+                      }}
                     >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {date?.from ? (
-                        date.to ? (
-                          <>
-                            {format(date.from, "LLL dd, y")} -{" "}
-                            {format(date.to, "LLL dd, y")}
-                          </>
-                        ) : (
-                          format(date.from, "LLL dd, y")
-                        )
-                      ) : (
-                        <span>Pick a date range</span>
-                      )}
+                      <CheckCircle2 className="mr-2 h-4 w-4" />
+                      Apply
                     </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-5 bg-white" align="start">
-                    <div className="flex flex-col gap-4">
-                      <DayPicker
-                        mode="range"
-                        today={new Date()}
-                        disabled={{ after: new Date() }}
-                        selected={selected}
-                        onSelect={(range) => {
-                          if (range) {
-                            setSelected({ from: range.from, to: range.to });
-                          } else {
-                            setSelected({ from: undefined, to: undefined });
-                          }
-                        }}
-                        numberOfMonths={2}
-                        classNames={{
-                          caption: "text-blue-800",
-                        }}
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="flex min-h-[360px] items-center justify-center rounded-md border bg-white text-sm text-muted-foreground">
+            Loading admin analytics...
+          </div>
+        ) : error ? (
+          <Card>
+            <CardContent className="py-8">
+              <p className="text-sm font-medium text-red-700">{error}</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Check database access and try again.
+              </p>
+            </CardContent>
+          </Card>
+        ) : overview ? (
+          <>
+            <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <StatCard
+                title="Active Pilots"
+                value={compactNumber(overview.totalPilots)}
+                detail={`${compactNumber(overview.range.newPilots)} joined in range`}
+                icon={Users}
+              />
+              <StatCard
+                title="Approved PIREPs"
+                value={compactNumber(overview.totalFlights)}
+                detail={`${compactNumber(
+                  overview.range.approvedPireps,
+                )} approved in range`}
+                icon={FileText}
+              />
+              <StatCard
+                title="Flight Hours"
+                value={formatHours(overview.totalHours)}
+                detail={`${formatHours(overview.range.flightHours)} in range`}
+                icon={Clock}
+              />
+              <StatCard
+                title="Pending PIREPs"
+                value={compactNumber(overview.pendingPireps)}
+                detail="Awaiting review"
+                icon={Activity}
+              />
+            </section>
+
+            {allowedSections.length === 0 ? (
+              <Card>
+                <CardContent className="flex min-h-[180px] flex-col items-center justify-center text-center">
+                  <Shield className="h-8 w-8 text-muted-foreground" />
+                  <h2 className="mt-3 text-lg font-semibold">
+                    No additional analytics available
+                  </h2>
+                  <p className="mt-1 max-w-md text-sm text-muted-foreground">
+                    Your account has dashboard access, but no section-specific
+                    permissions for PIREPs, users, routes, aircraft, or permissions.
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <Tabs key={allowedSections.map((item) => item.id).join("-")} defaultValue={allowedSections[0].id}>
+                <TabsList className="max-w-full flex-wrap justify-start overflow-x-auto">
+                  {allowedSections.map((section) => (
+                    <TabsTrigger key={section.id} value={section.id}>
+                      {section.label}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+
+                {analytics?.sections.pireps &&
+                hasClientPermission(user?.Permissions, "pireps") ? (
+                  <TabsContent value="pireps" className="grid gap-4 lg:grid-cols-2">
+                    <ChartCard
+                      title="PIREP Status"
+                      actionHref="/crew/admin/pireps"
+                      actionLabel="Review"
+                    >
+                      <DonutChart
+                        data={statusChartData(analytics.sections.pireps.statusCounts)}
                       />
-                      <div className="flex items-center justify-between w-full">
-                        <div className="text-sm text-muted-foreground">
-                          {selected.from && selected.to ? (
-                            <>
-                              {"Date Selected : "}
-                              {format(selected.from, "LLL dd, y")} -{" "}
-                              {format(selected.to, "LLL dd, y")}
-                            </>
-                          ) : (
-                            "Select a date range"
-                          )}
+                    </ChartCard>
+                    <ChartCard title="Approved Flight Time">
+                      <TrendChart
+                        data={analytics.sections.pireps.trends}
+                        dataKey="hours"
+                      />
+                    </ChartCard>
+                    <ChartCard title="PIREP Volume">
+                      <TrendChart
+                        data={analytics.sections.pireps.trends}
+                        dataKey="flights"
+                        color="#0f766e"
+                      />
+                    </ChartCard>
+                    <ChartCard title="Busiest PIREP Airports">
+                      <div className="grid gap-5 sm:grid-cols-2">
+                        <div>
+                          <p className="mb-3 text-sm font-medium">Departures</p>
+                          <BarList data={analytics.sections.pireps.topDepartures} />
                         </div>
-                        <Button onClick={() => setDate(selected)}>
-                          <Check className="h-4 w-4" />
-                          Apply
-                        </Button>
+                        <div>
+                          <p className="mb-3 text-sm font-medium">Arrivals</p>
+                          <BarList data={analytics.sections.pireps.topArrivals} />
+                        </div>
                       </div>
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </div>
+                    </ChartCard>
+                  </TabsContent>
+                ) : null}
 
-            {/* Key Metrics */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium">Pilots</CardTitle>
-                  <Users className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl">
-                    <p className="font-bold">{filteredStats.pilotsInRange}</p>
-                    <p className="text-xs text-muted-foreground">
-                      new pilots between{" "}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {date.from ? format(date.from, "LLL dd, y") : ""} -{" "}
-                      {date.to ? format(date.to, "LLL dd, y") : ""}{" "}
-                    </p>
-                  </div>
-                  <br></br>
-                  <p className="text-xs text-muted-foreground">
-                    Total <b>{dashboardStats.totalPilots}</b> pilots
-                  </p>
-                </CardContent>
-              </Card>
+                {analytics?.sections.users &&
+                hasClientPermission(user?.Permissions, "users") ? (
+                  <TabsContent value="users" className="grid gap-4 lg:grid-cols-2">
+                    <ChartCard
+                      title="Pilot Status"
+                      actionHref="/crew/admin/users"
+                      actionLabel="Manage"
+                    >
+                      <DonutChart
+                        data={statusChartData(analytics.sections.users.pilotStatusCounts)}
+                      />
+                    </ChartCard>
+                    <ChartCard title="Pilot Growth">
+                      <TrendChart
+                        data={analytics.sections.users.growth}
+                        dataKey="pilots"
+                        color="#0f766e"
+                      />
+                    </ChartCard>
+                    <ChartCard title="Application Pipeline">
+                      <SimpleBarChart data={analytics.sections.users.applicationPipeline} />
+                    </ChartCard>
+                    <ChartCard title="Pilot Activity">
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <MetricTile
+                          title="Recently Active"
+                          value={compactNumber(
+                            analytics.sections.users.activity.recentlyActive,
+                          )}
+                          detail="Approved flight in last 30 days"
+                          icon={Activity}
+                        />
+                        <MetricTile
+                          title="Inactive"
+                          value={compactNumber(
+                            analytics.sections.users.activity.inactive,
+                          )}
+                          detail="No approved flight in last 30 days"
+                          icon={Users}
+                        />
+                      </div>
+                    </ChartCard>
+                  </TabsContent>
+                ) : null}
 
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium">PIREPs</CardTitle>
-                  <Plane className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl">
-                    <p className="font-bold">{filteredStats.pirepsInRange}</p>
-                    <p className="text-xs text-muted-foreground">
-                      new PIREPs between{" "}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {date.from ? format(date.from, "LLL dd, y") : ""} -{" "}
-                      {date.to ? format(date.to, "LLL dd, y") : ""}{" "}
-                    </p>
-                  </div>
-                  <br></br>
-                  <p className="text-xs text-muted-foreground">
-                    Total <b>{dashboardStats.totalFlights}</b> PIREPs
-                  </p>
-                </CardContent>
-              </Card>
+                {analytics?.sections.routes &&
+                hasClientPermission(user?.Permissions, "routes") ? (
+                  <TabsContent value="routes" className="grid gap-4 lg:grid-cols-2">
+                    <ChartCard
+                      title="Route Duration Distribution"
+                      actionHref="/crew/admin/routes"
+                      actionLabel="Manage"
+                    >
+                      <SimpleBarChart data={analytics.sections.routes.durationBuckets} />
+                    </ChartCard>
+                    <ChartCard title="Top Departure Airports">
+                      <BarList data={analytics.sections.routes.topDepartures} />
+                    </ChartCard>
+                    <ChartCard title="Top Arrival Airports">
+                      <BarList data={analytics.sections.routes.topArrivals} />
+                    </ChartCard>
+                    <ChartCard title="Route Coverage">
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <MetricTile
+                          title="Routes"
+                          value={compactNumber(analytics.sections.routes.totalRoutes)}
+                          detail="Published route records"
+                          icon={Route}
+                        />
+                        <MetricTile
+                          title="Aircraft"
+                          value={compactNumber(overview.activeAircraft)}
+                          detail="Active aircraft available"
+                          icon={Plane}
+                        />
+                      </div>
+                    </ChartCard>
+                  </TabsContent>
+                ) : null}
 
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium">
-                    Total Hours
-                  </CardTitle>
-                  <Clock className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl">
-                    <p className="font-bold">
-                      {formatFlightTime(filteredStats.flightHours)}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      total flight hours between{" "}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {date.from ? format(date.from, "LLL dd, y") : ""} -{" "}
-                      {date.to ? format(date.to, "LLL dd, y") : ""}{" "}
-                    </p>
-                  </div>
-                  <br></br>
-                  <p className="text-xs text-muted-foreground">
-                    Total <b>{formatFlightTime(dashboardStats.totalHours)}</b>{" "}
-                  </p>
-                  <div className="text-2xl font-bold"></div>{" "}
-                </CardContent>
-              </Card>
+                {analytics?.sections.aircrafts &&
+                hasClientPermission(user?.Permissions, "aircrafts") ? (
+                  <TabsContent value="aircrafts" className="grid gap-4 lg:grid-cols-2">
+                    <ChartCard
+                      title="Most Used Aircraft"
+                      actionHref="/crew/admin/aircrafts"
+                      actionLabel="Manage"
+                    >
+                      <BarList data={analytics.sections.aircrafts.usage} />
+                    </ChartCard>
+                    <ChartCard title="Active Livery Breakdown">
+                      <SimpleBarChart
+                        data={analytics.sections.aircrafts.liveryBreakdown}
+                      />
+                    </ChartCard>
+                    <ChartCard title="Aircraft Inventory">
+                      <MetricTile
+                        title="Active Aircraft"
+                        value={compactNumber(analytics.sections.aircrafts.activeAircraft)}
+                        detail="Available for route and PIREP use"
+                        icon={Plane}
+                      />
+                    </ChartCard>
+                  </TabsContent>
+                ) : null}
 
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium">
-                    Pending PIREPs
-                  </CardTitle>
-                  <FileText className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {dashboardStats.pendingPireps}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Awaiting review
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-            {/* Live Flight Map */}
-            <Card className="mt-6">
-              <CardHeader>
-                <CardTitle className="text-sm font-medium">
+                {analytics?.sections.permissions &&
+                hasClientPermission(user?.Permissions, "permissions") ? (
+                  <TabsContent value="permissions" className="grid gap-4 lg:grid-cols-2">
+                    <ChartCard
+                      title="Admin Permission Distribution"
+                      actionHref="/crew/admin/permissions"
+                      actionLabel="Manage"
+                    >
+                      <SimpleBarChart
+                        data={analytics.sections.permissions.distribution}
+                      />
+                    </ChartCard>
+                    <ChartCard title="Admin Access">
+                      <MetricTile
+                        title="Admin Users"
+                        value={compactNumber(
+                          analytics.sections.permissions.adminCount,
+                        )}
+                        detail="Pilots with at least one admin permission"
+                        icon={KeyRound}
+                      />
+                    </ChartCard>
+                  </TabsContent>
+                ) : null}
+              </Tabs>
+            )}
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                  <MapPinned className="h-4 w-4" />
                   Live Flight Map
                 </CardTitle>
+                <Badge variant="outline">External</Badge>
               </CardHeader>
               <CardContent>
-                <div className="w-full h-[600px] rounded-lg overflow-hidden border">
+                <div className="h-[420px] w-full overflow-hidden rounded-md border bg-slate-50 md:h-[560px]">
                   <iframe
-                    src={liveMapUrl}
+                    src={overview.liveMapUrl}
                     title="CZVG Live Flight Map"
                     width="100%"
                     height="100%"
-                    style={{ border: 0 }}
+                    className="block border-0"
                     loading="lazy"
                     allowFullScreen
-                  ></iframe>
+                  />
                 </div>
               </CardContent>
             </Card>
-          </div>
-        </main>
-      )}
+          </>
+        ) : (
+          <Card>
+            <CardContent className="py-8 text-sm text-muted-foreground">
+              No dashboard data is available.
+            </CardContent>
+          </Card>
+        )}
+      </main>
     </CrewHeader>
   );
 }

@@ -99,7 +99,10 @@ export async function GET(request: Request) {
               'aircraft_id', a.id,
               'aircraft_name', a.name, 
               'livery_name', a.liveryname,
-              'notes', a.notes
+              'notes', a.notes,
+              'rankreq', a.rankreq,
+              'awardreq', a.awardreq,
+              'status', a.status
             )
           ), 
           '[]'
@@ -131,6 +134,7 @@ export async function GET(request: Request) {
             dep: route.dep,
             arr: route.arr,
             duration: formatFlightTime(parseInt(route.duration)),
+            durationSeconds: Number(route.duration) || 0,
             notes: route.notes,
             aircraft: aircraftArray
               .filter(
@@ -142,6 +146,9 @@ export async function GET(request: Request) {
                 name: ac.aircraft_name,
                 liveryname: ac.livery_name,
                 notes: ac.notes || null,
+                rankreq: ac.rankreq || null,
+                awardreq: ac.awardreq || null,
+                status: ac.status || null,
               })),
           };
         })

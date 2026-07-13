@@ -299,6 +299,24 @@ export function SignupForm() {
         {isLoading ? "Sending application..." : "Apply"}
       </ThemedButton>
 
+      <p className="text-center text-xs leading-5 text-slate-500">
+        By applying, you agree to the{" "}
+        <Link
+          href="/terms-of-service"
+          className="font-medium text-blue-600 hover:underline"
+        >
+          Terms of Service
+        </Link>{" "}
+        and acknowledge the{" "}
+        <Link
+          href="/privacy-policy"
+          className="font-medium text-blue-600 hover:underline"
+        >
+          Privacy Policy
+        </Link>
+        .
+      </p>
+
       {message.text && (
         <p
           className={`text-sm ${

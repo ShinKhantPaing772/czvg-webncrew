@@ -49,11 +49,6 @@ function parseFlightTimeToSeconds(value: unknown) {
     return Number(colonMatch[1]) * 3600 + Number(colonMatch[2]) * 60;
   }
 
-  const decimalHours = Number(trimmedValue);
-  if (Number.isFinite(decimalHours) && decimalHours >= 0) {
-    return Math.round(decimalHours * 3600);
-  }
-
   return null;
 }
 
@@ -226,7 +221,7 @@ export async function PUT(request: Request) {
       const parsedFlighttime = parseFlightTimeToSeconds(flighttime);
       if (parsedFlighttime === null || parsedFlighttime < 0) {
         return NextResponse.json(
-          { success: false, error: "Duration must be HH:MM or decimal hours" },
+          { success: false, error: "Duration must be in HH:MM format" },
           { status: 400 },
         );
       }

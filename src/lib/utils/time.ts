@@ -1,8 +1,11 @@
-// Utility function to format seconds to decimal hours
+// Format a duration stored in seconds as HH:MM.
 export function formatFlightTime(seconds: number): string {
-  const totalHours = seconds / 3600;
-  const hours = Math.floor(totalHours);
-  const minutes = (totalHours - hours) * 60;
-  const decimalHours = (minutes / 60).toFixed(2);
-  return `${hours}.${decimalHours.substring(2).padStart(2, "0")}`;
+  const safeSeconds = Math.max(0, Number(seconds) || 0);
+  const totalMinutes = Math.round(safeSeconds / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  return `${hours.toString().padStart(2, "0")}:${minutes
+    .toString()
+    .padStart(2, "0")}`;
 }

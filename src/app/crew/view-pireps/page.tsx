@@ -30,7 +30,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { formatFlightTimeHM } from "@/lib/utils/format-flight-time";
 import {
   Dialog,
   DialogContent,
@@ -77,7 +76,7 @@ interface Pirep {
   flightnum: string;
   departure: string;
   arrival: string;
-  flighttime: number;
+  flighttime: string;
   pilotid: number;
   date: string;
   aircraftid: number;
@@ -341,7 +340,7 @@ export default function ViewPireps() {
                           ")"}
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
-                        {formatFlightTimeHM(pirep.flighttime)}
+                        {pirep.flighttime}
                       </TableCell>
                       <TableCell>{getStatusBadge(pirep.status)}</TableCell>
                       <TableCell className="text-right">
@@ -407,9 +406,7 @@ export default function ViewPireps() {
                                       <dt className="text-muted-foreground">
                                         Duration:
                                       </dt>
-                                      <dd>
-                                        {formatFlightTimeHM(pirep.flighttime)}
-                                      </dd>
+                                      <dd>{pirep.flighttime}</dd>
                                     </div>
                                     <div className="flex justify-between">
                                       <dt className="text-muted-foreground">

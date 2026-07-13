@@ -5,7 +5,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { format, parseISO } from "date-fns";
-import { Loader2, PlaneIcon, RefreshCw } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  Loader2,
+  PlaneIcon,
+  RefreshCw,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -61,7 +67,7 @@ const formSchema = z.object({
   arrival: z.string().length(4, {
     message: "Arrival ICAO must be exactly 4 characters.",
   }),
-  flightTime: z.string().regex(/^\d+:\d{2}$/, {
+  flightTime: z.string().regex(/^\d+:[0-5]\d$/, {
     message: "Flight time must be in format HH:MM.",
   }),
   date: z.string({
@@ -83,11 +89,29 @@ type AcarsResponse = {
   error?: string;
 };
 
+const acarsFieldLabels: Record<keyof FormValues, string> = {
+  flightnum: "Flight number",
+  departure: "Departure",
+  arrival: "Arrival",
+  flightTime: "Flight time",
+  date: "Date",
+  aircraftId: "Aircraft",
+  fuelUsed: "Fuel used",
+  multi: "Multiplier",
+};
+
 export default function FilePirep() {
   const { user } = useSession();
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingAcars, setIsFetchingAcars] = useState(false);
   const [acarsMessage, setAcarsMessage] = useState<string | null>(null);
+  const [acarsFilledFields, setAcarsFilledFields] = useState<
+    Array<keyof FormValues>
+  >([]);
+  const [acarsMissingFields, setAcarsMissingFields] = useState<
+    Array<keyof FormValues>
+  >([]);
+  const [submitMessage, setSubmitMessage] = useState<string | null>(null);
   // State for aircraft data
   const [originalAircraftData, setOriginalAircraftData] = useState<aircraft[]>(
     [],
@@ -143,10 +167,12 @@ export default function FilePirep() {
   // Handle form submission
   async function onSubmit(data: FormValues) {
     setIsLoading(true);
+    setSubmitMessage(null);
 
     if (!user?.id) {
       setIsLoading(false);
-      throw new Error("User not authenticated");
+      setSubmitMessage("User not authenticated.");
+      return;
     }
 
     try {
@@ -162,15 +188,18 @@ export default function FilePirep() {
           pilotcallsign: user?.callsign,
         }),
       });
-      console.log(data);
       if (!response.ok) {
-        throw new Error("Failed to submit PIREP");
+        const responseData = await response.json().catch(() => null);
+        throw new Error(responseData?.error || "Failed to submit PIREP");
       }
 
       form.reset();
       window.location.href = "/crew/view-pireps";
     } catch (error) {
       console.error(error);
+      setSubmitMessage(
+        error instanceof Error ? error.message : "Failed to submit PIREP",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -185,6 +214,8 @@ export default function FilePirep() {
 
     setIsFetchingAcars(true);
     setAcarsMessage(null);
+    setAcarsFilledFields([]);
+    setAcarsMissingFields([]);
 
     try {
       const response = await authFetch(
@@ -199,15 +230,28 @@ export default function FilePirep() {
       const acarsValues = Object.fromEntries(
         Object.entries(data.acars).filter(([, value]) => value),
       ) as Partial<FormValues>;
+      const filledFields = Object.keys(acarsValues) as Array<keyof FormValues>;
+      const expectedFields: Array<keyof FormValues> = [
+        "flightnum",
+        "departure",
+        "arrival",
+        "flightTime",
+        "date",
+        "aircraftId",
+        "fuelUsed",
+      ];
+      const missingFields = expectedFields.filter(
+        (fieldName) => !filledFields.includes(fieldName),
+      );
 
       // Update form with fetched data
       form.reset({
         ...form.getValues(),
         ...acarsValues,
       });
-      setAcarsMessage(
-        "ACARS data loaded from your current Infinite Flight flight.",
-      );
+      setAcarsFilledFields(filledFields);
+      setAcarsMissingFields(missingFields);
+      setAcarsMessage("ACARS data loaded from your current Infinite Flight flight.");
     } catch (error) {
       console.error(error);
       setAcarsMessage(
@@ -216,6 +260,17 @@ export default function FilePirep() {
     } finally {
       setIsFetchingAcars(false);
     }
+  }
+
+  function fieldClass(fieldName: keyof FormValues, baseClassName = "") {
+    return [
+      baseClassName,
+      acarsFilledFields.includes(fieldName)
+        ? "border-green-300 bg-green-50 focus-visible:ring-green-500"
+        : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
   }
 
   return (
@@ -238,14 +293,50 @@ export default function FilePirep() {
               ) : (
                 <RefreshCw className="h-4 w-4" />
               )}
-              Fetch ACARS (Beta,  Use With Caution)
+              Import ACARS
             </Button>
           </div>
         </CardHeader>
         <CardContent>
           {acarsMessage && (
-            <div className="mb-4 rounded-md border px-3 py-2 text-sm text-muted-foreground">
-              {acarsMessage}
+            <div
+              className={
+                acarsFilledFields.length > 0
+                  ? "mb-4 rounded-md border border-green-200 bg-green-50 px-3 py-3 text-sm"
+                  : "mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-3 text-sm"
+              }
+            >
+              <div className="flex items-start gap-2">
+                {acarsFilledFields.length > 0 ? (
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 text-green-600" />
+                ) : (
+                  <AlertCircle className="mt-0.5 h-4 w-4 text-amber-600" />
+                )}
+                <div>
+                  <p className="font-medium">{acarsMessage}</p>
+                  {acarsFilledFields.length > 0 && (
+                    <p className="mt-1 text-muted-foreground">
+                      Filled:{" "}
+                      {acarsFilledFields
+                        .map((fieldName) => acarsFieldLabels[fieldName])
+                        .join(", ")}
+                    </p>
+                  )}
+                  {acarsMissingFields.length > 0 && (
+                    <p className="mt-1 text-muted-foreground">
+                      Still needed:{" "}
+                      {acarsMissingFields
+                        .map((fieldName) => acarsFieldLabels[fieldName])
+                        .join(", ")}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+          {submitMessage && (
+            <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {submitMessage}
             </div>
           )}
           <Form {...form}>
@@ -258,7 +349,11 @@ export default function FilePirep() {
                     <FormItem>
                       <FormLabel>Flight Number (Not Your Callsign)</FormLabel>
                       <FormControl>
-                        <Input placeholder="VA123" {...field} />
+                        <Input
+                          placeholder="VA123"
+                          className={fieldClass("flightnum")}
+                          {...field}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -275,7 +370,10 @@ export default function FilePirep() {
                         <PopoverTrigger asChild>
                           <Button
                             variant="outline"
-                            className="w-full text-left border border-black"
+                            className={fieldClass(
+                              "date",
+                              "w-full border border-black text-left",
+                            )}
                           >
                             {field.value ? field.value : "Pick a date"}
                           </Button>
@@ -309,7 +407,11 @@ export default function FilePirep() {
                     <FormItem>
                       <FormLabel>Departure ICAO</FormLabel>
                       <FormControl>
-                        <Input placeholder="KLAX" {...field} />
+                        <Input
+                          placeholder="KLAX"
+                          className={fieldClass("departure")}
+                          {...field}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -323,7 +425,11 @@ export default function FilePirep() {
                     <FormItem>
                       <FormLabel>Arrival ICAO</FormLabel>
                       <FormControl>
-                        <Input placeholder="KSFO" {...field} />
+                        <Input
+                          placeholder="KSFO"
+                          className={fieldClass("arrival")}
+                          {...field}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -337,7 +443,11 @@ export default function FilePirep() {
                     <FormItem>
                       <FormLabel>Flight Time</FormLabel>
                       <FormControl>
-                        <Input placeholder="1:30" {...field} />
+                        <Input
+                          placeholder="01:30"
+                          className={fieldClass("flightTime")}
+                          {...field}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -356,7 +466,7 @@ export default function FilePirep() {
                       >
                         <FormControl>
                           <div className="flex space-x-2">
-                            <SelectTrigger>
+                            <SelectTrigger className={fieldClass("aircraftId")}>
                               <SelectValue
                                 placeholder={
                                   originalAircraftData.find(
@@ -419,7 +529,11 @@ export default function FilePirep() {
                     <FormItem>
                       <FormLabel>Fuel Used (KG)</FormLabel>
                       <FormControl>
-                        <Input placeholder="1200.5" {...field} />
+                        <Input
+                          placeholder="1200.5"
+                          className={fieldClass("fuelUsed")}
+                          {...field}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -433,7 +547,11 @@ export default function FilePirep() {
                     <FormItem>
                       <FormLabel>Multiplier Code(if available)</FormLabel>
                       <FormControl>
-                        <Input placeholder="888888" {...field} />
+                        <Input
+                          placeholder="888888"
+                          className={fieldClass("multi")}
+                          {...field}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

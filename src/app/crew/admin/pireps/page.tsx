@@ -127,13 +127,10 @@ const secondsToDurationInput = (
   formattedFlighttime?: number | string,
 ) => {
   if (!Number.isFinite(seconds)) {
-    const numericFlighttime = Number(formattedFlighttime);
-    if (Number.isFinite(numericFlighttime)) {
-      const totalMinutes = Math.round(numericFlighttime * 60);
-      const hours = Math.floor(totalMinutes / 60);
-      const minutes = totalMinutes % 60;
-
-      return `${hours}:${minutes.toString().padStart(2, "0")}`;
+    const existingDuration = String(formattedFlighttime ?? "").trim();
+    const colonMatch = existingDuration.match(/^(\d+):([0-5]\d)$/);
+    if (colonMatch) {
+      return `${colonMatch[1].padStart(2, "0")}:${colonMatch[2]}`;
     }
 
     return "";
@@ -143,7 +140,9 @@ const secondsToDurationInput = (
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
 
-  return `${hours}:${minutes.toString().padStart(2, "0")}`;
+  return `${hours.toString().padStart(2, "0")}:${minutes
+    .toString()
+    .padStart(2, "0")}`;
 };
 
 const pirepToEditForm = (pirep: Pirep): PirepEditForm => ({
@@ -489,8 +488,8 @@ export default function AdminPireps() {
       return;
     }
 
-    if (!/^\d+:[0-5]\d$/.test(flighttime) && !/^\d+(\.\d+)?$/.test(flighttime)) {
-      setUpdateError("Duration must be HH:MM or decimal hours.");
+    if (!/^\d+:[0-5]\d$/.test(flighttime)) {
+      setUpdateError("Duration must be in HH:MM format.");
       return;
     }
 
@@ -926,11 +925,11 @@ export default function AdminPireps() {
                                       <Label
                                         htmlFor={`duration-${selectedPirep.id}`}
                                       >
-                                        Duration
+                                        Duration (HH:MM)
                                       </Label>
                                       <Input
                                         id={`duration-${selectedPirep.id}`}
-                                        placeholder="1:30"
+                                        placeholder="01:30"
                                         value={editForm.flighttime}
                                         disabled={!isEditingPirep}
                                         onChange={(event) =>

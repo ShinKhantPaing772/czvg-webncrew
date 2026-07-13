@@ -57,7 +57,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatFlightTimeHM } from "@/lib/utils/format-flight-time";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -78,7 +77,7 @@ const routeSchema = z.object({
     .regex(/^[A-Z]{4}$/, "Must be a 4-letter ICAO code."),
   duration: z
     .string()
-    .regex(/^\d{1,2}:\d{2}$/, "Duration must be in HH:MM format."),
+    .regex(/^\d+:[0-5]\d$/, "Duration must be in HH:MM format."),
   notes: z.string().optional(),
 });
 type RouteFormData = z.infer<typeof routeSchema>;
@@ -88,7 +87,7 @@ interface Route {
   fltnum: string;
   dep: string;
   arr: string;
-  duration: number;
+  duration: string;
   notes: string;
   aircraft: Aircraft[];
 }
@@ -456,10 +455,10 @@ export default function RoutesPage() {
               </SelectTrigger>
               <SelectContent className="bg-white w-full ">
                 <SelectItem value="0">All durations</SelectItem>
-                <SelectItem value="0-3600">&lt;1 hour</SelectItem>
-                <SelectItem value="3600-7200">1-2 hours</SelectItem>
-                <SelectItem value="7200-10800">2-3 hours</SelectItem>
-                <SelectItem value="10800-14400">3-4 hours</SelectItem>
+                <SelectItem value="0-3600">&lt; 01:00</SelectItem>
+                <SelectItem value="3600-7200">01:00–02:00</SelectItem>
+                <SelectItem value="7200-10800">02:00–03:00</SelectItem>
+                <SelectItem value="10800-14400">03:00–04:00</SelectItem>
                 <SelectItem value="14400-18000">4-5 hours</SelectItem>
                 <SelectItem value="18000-21600">5-6 hours</SelectItem>
                 <SelectItem value="21600-25200">6-7 hours</SelectItem>
@@ -556,7 +555,7 @@ export default function RoutesPage() {
                           </div>
                         </TableCell>
                         <TableCell className="hidden md:table-cell">
-                          {formatFlightTimeHM(route.duration)}
+                          {route.duration}
                         </TableCell>
                         <TableCell className="hidden md:table-cell">
                           {route.notes}
@@ -734,7 +733,7 @@ export default function RoutesPage() {
                   <Label htmlFor="duration">Duration (HH:MM) *</Label>
                   <Input
                     id="duration"
-                    placeholder="1:15"
+                    placeholder="01:15"
                     {...register("duration")}
                   />
                   {errors.duration && (

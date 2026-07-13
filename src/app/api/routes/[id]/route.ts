@@ -87,6 +87,7 @@ export async function GET(
       dep: (route as any).dep,
       arr: (route as any).arr,
       duration: formatFlightTime(parseInt((route as any).duration)),
+      durationSeconds: Number((route as any).duration) || 0,
       notes: (route as any).notes,
       aircraft: JSON.parse((route as any).aircraft || "[]"),
       recentFlights: recentFlights.map((flight: any) => ({

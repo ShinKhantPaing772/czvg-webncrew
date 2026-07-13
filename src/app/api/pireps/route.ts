@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Op } from "sequelize";
 import { models } from "@/lib/models";
 import { requireAuth } from "@/lib/server-auth";
 
@@ -181,14 +182,43 @@ export async function POST(request: NextRequest) {
       .toString()
       .padStart(2, "0")}:${adjustedMinutes.toString().padStart(2, "0")}`;
 
+    const duplicateStart = new Date(parsedDate);
+    duplicateStart.setHours(0, 0, 0, 0);
+    const duplicateEnd = new Date(parsedDate);
+    duplicateEnd.setHours(23, 59, 59, 999);
+    const trimmedFlightnum = String(flightnum || "").trim();
+
+    const duplicatePirep = await models.Pirep.findOne({
+      where: {
+        pilotid: auth.user.id,
+        flightnum: trimmedFlightnum,
+        departure: normalizedDeparture,
+        arrival: normalizedArrival,
+        aircraftid: parsedAircraftId,
+        flighttime: Math.round(adjustedSeconds),
+        date: {
+          [Op.between]: [duplicateStart, duplicateEnd],
+        },
+      },
+      attributes: ["id"],
+    });
+
+    if (duplicatePirep) {
+      return NextResponse.json(
+        {
+          error:
+            "This exact PIREP already exists for the same flight, route, aircraft, date, and duration.",
+        },
+        { status: 409 },
+      );
+    }
+
     // --- Create PIREP ---
     const pirep = await models.Pirep.create({
-      flightnum: String(flightnum || "").trim(),
+      flightnum: trimmedFlightnum,
       departure: normalizedDeparture,
       arrival: normalizedArrival,
-      flighttime: multiplier
-        ? totalSeconds * multiplier.multiplier
-        : totalSeconds,
+      flighttime: Math.round(adjustedSeconds),
       pilotid: auth.user.id,
       date: parsedDate,
       aircraftid: parsedAircraftId,

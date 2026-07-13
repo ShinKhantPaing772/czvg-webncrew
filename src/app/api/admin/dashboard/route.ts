@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import sequelize from "@/lib/database";
 import { models } from "@/lib/models";
 import { requirePermission } from "@/lib/server-auth";
+import { formatFlightTime } from "@/lib/utils/time";
 
 // Mark this route as dynamic to prevent static optimization
 export const dynamic = "force-dynamic";
@@ -41,7 +42,7 @@ export async function GET(request: Request) {
     const [totalHoursResult] = await sequelize.query(totalHoursQuery);
     const totalHoursSeconds =
       (totalHoursResult[0] as { total: number | null })?.total || 0;
-    const totalHours = totalHoursSeconds / 3600; // Convert seconds to hours
+    const totalHours = formatFlightTime(totalHoursSeconds);
 
     // Compile all stats
     const dashboardStats = {

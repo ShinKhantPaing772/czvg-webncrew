@@ -93,7 +93,9 @@ function secondsToFlightTime(totalSeconds: number) {
   const hours = Math.floor(safeSeconds / 3600);
   const minutes = Math.floor((safeSeconds % 3600) / 60);
 
-  return `${hours}:${minutes.toString().padStart(2, "0")}`;
+  return `${hours.toString().padStart(2, "0")}:${minutes
+    .toString()
+    .padStart(2, "0")}`;
 }
 
 function dateToSeconds(value: unknown) {

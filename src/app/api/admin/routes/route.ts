@@ -10,12 +10,14 @@ export const runtime = "nodejs";
 
 // Helper function to convert duration format
 function convertDurationToSeconds(duration: string | number): number {
-  if (typeof duration === "number") return duration;
-  if (typeof duration === "string" && duration.includes(":")) {
-    const [hours, minutes] = duration.split(":").map(Number);
-    return hours * 60 * 60 + minutes * 60;
+  if (typeof duration === "number") {
+    return Number.isFinite(duration) && duration >= 0 ? duration : NaN;
   }
-  return Number(duration);
+
+  const match = duration.trim().match(/^(\d+):([0-5]\d)$/);
+  if (!match) return NaN;
+
+  return Number(match[1]) * 3600 + Number(match[2]) * 60;
 }
 
 export async function GET(request: Request) {
@@ -115,6 +117,12 @@ export async function POST(request: Request) {
 
     // Convert duration to seconds
     const durationInSeconds = convertDurationToSeconds(duration);
+    if (!Number.isFinite(durationInSeconds)) {
+      return NextResponse.json(
+        { success: false, message: "Duration must be in HH:MM format" },
+        { status: 400 },
+      );
+    }
 
     // Create the route
     const route = await models.Route.create({
@@ -177,6 +185,12 @@ export async function PUT(request: Request) {
 
     // Convert duration to seconds
     const durationInSeconds = convertDurationToSeconds(duration);
+    if (!Number.isFinite(durationInSeconds)) {
+      return NextResponse.json(
+        { success: false, message: "Duration must be in HH:MM format" },
+        { status: 400 },
+      );
+    }
 
     // Update the route
     await route.update({

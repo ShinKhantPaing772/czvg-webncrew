@@ -1,29 +1,24 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Search, ArrowRight, Route, Loader2 } from "lucide-react";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  ArrowRight,
+  Loader2,
+  PlaneTakeoff,
+  Save,
+  Search,
+  Star,
+  X,
+} from "lucide-react";
+
 import { CrewHeader } from "@/components/crew-header";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { formatFlightTimeHM } from "@/lib/utils/format-flight-time";
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from "@/components/ui/select";
 import {
   Pagination,
   PaginationContent,
@@ -33,498 +28,747 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { useSession } from "@/hooks/use-session";
+import { authFetch } from "@/lib/utils/api";
+import { formatFlightTime } from "@/lib/utils/time";
 
-interface Aircraft {
+const FAVORITES_KEY = "czvg.routeFavorites";
+const SAVED_FILTERS_KEY = "czvg.routeSavedFilters";
+
+type Aircraft = {
   id: string;
   name: string;
-  liveryname: string;
+  liveryname: string | null;
   ifaircraftid?: string;
   ifliveryid?: string;
-  status?: number;
-  notes?: string;
-}
+  status?: number | null;
+  notes?: string | null;
+  rankreq?: number | null;
+  awardreq?: number | null;
+};
 
-interface Route {
+type RouteItem = {
   id: string;
   fltnum: string;
   dep: string;
   arr: string;
   duration: string;
-  notes: string;
+  durationSeconds: number;
+  notes: string | null;
   aircraft: Aircraft[];
+};
+
+type Filters = {
+  searchQuery: string;
+  departureFilter: string;
+  arrivalFilter: string;
+  aircraftFilter: string;
+  durationRange: string;
+  eligibleOnly: boolean;
+};
+
+type SavedFilter = Filters & {
+  id: string;
+  label: string;
+};
+
+type PilotDashboard = {
+  rank: {
+    eligibleRankIds: number[];
+  };
+};
+
+function readStorage<T>(key: string, fallback: T): T {
+  if (typeof window === "undefined") return fallback;
+
+  try {
+    const value = window.localStorage.getItem(key);
+    return value ? (JSON.parse(value) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeStorage<T>(key: string, value: T) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(key, JSON.stringify(value));
+}
+
+function secondsToInput(seconds: number) {
+  return formatFlightTime(seconds);
+}
+
+function secondsToLabel(seconds: number) {
+  return formatFlightTime(seconds);
+}
+
+function filterLabel(filters: Filters) {
+  const parts = [
+    filters.departureFilter && `From ${filters.departureFilter.toUpperCase()}`,
+    filters.arrivalFilter && `To ${filters.arrivalFilter.toUpperCase()}`,
+    filters.searchQuery && `Flight ${filters.searchQuery}`,
+    filters.eligibleOnly && "Eligible",
+  ].filter(Boolean);
+
+  return parts.length ? parts.join(" · ") : "All routes";
+}
+
+function normalizeIcao(value: string) {
+  return value.replace(/[^a-z0-9]/gi, "").slice(0, 4).toUpperCase();
 }
 
 export default function FindRoutes() {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [departureFilter, setDepartureFilter] = useState("");
-  const [arrivalFilter, setArrivalFilter] = useState("");
-  const [aircraftFilter, setAircraftFilter] = useState("");
-  const [durationRange, setDurationRange] = useState<string | undefined>();
-  // Pagination state
+  const { user } = useSession();
+  const [filters, setFilters] = useState<Filters>({
+    searchQuery: "",
+    departureFilter: "",
+    arrivalFilter: "",
+    aircraftFilter: "all",
+    durationRange: "",
+    eligibleOnly: false,
+  });
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
-
-  // State for routes data
-  const [routesData, setRoutesData] = useState<Route[]>([]);
+  const [routesData, setRoutesData] = useState<RouteItem[]>([]);
   const [loading, setLoading] = useState(false);
-
-  // State for aircraft data
+  const [error, setError] = useState<string | null>(null);
   const [aircraftData, setAircraftData] = useState<Aircraft[]>([]);
   const [loadingAircraft, setLoadingAircraft] = useState(false);
-
-  // Sorting state
+  const [eligibleRankIds, setEligibleRankIds] = useState<number[]>([]);
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [savedFilters, setSavedFilters] = useState<SavedFilter[]>([]);
   const [sortConfig, setSortConfig] = useState<{
     key: "fltnum" | "dep" | "arr" | "duration" | "aircraft";
     direction: "ascending" | "descending";
   } | null>(null);
 
-  // Function to fetch aircraft data
-  const fetchAircraft = async () => {
-    try {
-      setLoadingAircraft(true);
-      const response = await fetch("/api/aircraft");
-      if (!response.ok) {
-        throw new Error("Failed to fetch aircraft");
-      }
-      const data = await response.json();
-      setAircraftData(data.aircrafts || []);
-      setLoadingAircraft(false);
-    } catch (err) {
-      console.error("Error fetching aircraft:", err);
-      setLoadingAircraft(false);
-    }
-  };
-
-  // Load aircraft data on component mount
   useEffect(() => {
+    setFavorites(readStorage<string[]>(FAVORITES_KEY, []));
+    setSavedFilters(readStorage<SavedFilter[]>(SAVED_FILTERS_KEY, []));
+  }, []);
+
+  useEffect(() => {
+    async function fetchAircraft() {
+      try {
+        setLoadingAircraft(true);
+        const response = await fetch("/api/aircraft");
+        if (!response.ok) throw new Error("Failed to fetch aircraft");
+        const data = await response.json();
+        setAircraftData(data.aircrafts || []);
+      } catch (fetchError) {
+        console.error("Error fetching aircraft:", fetchError);
+      } finally {
+        setLoadingAircraft(false);
+      }
+    }
+
     fetchAircraft();
   }, []);
 
-  // Function to fetch routes data from API
-  const fetchRoutes = async () => {
-    try {
-      setLoading(true);
-      setCurrentPage(1); // Reset to the first page
-      const url = new URL("/api/routes", window.location.origin);
-      url.searchParams.set("limit", "500");
-      if (searchQuery) url.searchParams.set("fltnum", searchQuery);
-      if (departureFilter) url.searchParams.set("dep", departureFilter);
-      if (arrivalFilter) url.searchParams.set("arr", arrivalFilter);
-      if (aircraftFilter && aircraftFilter !== "all")
-        url.searchParams.set("aircraftId", aircraftFilter);
-      if (durationRange) {
-        const [min, max] = durationRange.split("-").map(Number);
-        if (min !== undefined) url.searchParams.set("minDuration", "" + min);
-        if (max !== undefined && max !== 0)
-          url.searchParams.set("maxDuration", "" + max);
-        if (max === 0) url.searchParams.delete("maxDuration");
-      }
+  useEffect(() => {
+    async function fetchEligibility() {
+      if (!user?.id) return;
 
-      const response = await fetch(url.toString());
-      if (!response.ok) {
-        throw new Error("Failed to fetch routes");
+      try {
+        const response = await authFetch(`/api/pilots/${user.id}/dashboard`);
+        if (!response.ok) return;
+        const data: PilotDashboard = await response.json();
+        setEligibleRankIds(data.rank?.eligibleRankIds || []);
+      } catch (fetchError) {
+        console.error("Failed to load route eligibility:", fetchError);
       }
-      const data = await response.json();
-      if (data.success) {
-        const formatRoutes = data.data.map((route: Route) => ({
-          id: route.id,
-          fltnum: route.fltnum,
-          dep: route.dep,
-          arr: route.arr,
-          duration: formatFlightTimeHM(parseFloat(route.duration)),
-          notes: route.notes,
-          aircraft: route.aircraft,
-        }));
-        setRoutesData(formatRoutes);
-      }
-      setLoading(false);
-    } catch (err) {
-      setLoading(false);
     }
-  };
 
-  // Sort routes if sortConfig exists
-  const sortRoutes = (routes: Route[]) => {
-    if (!sortConfig) return routes;
+    fetchEligibility();
+  }, [user?.id]);
 
-    return [...routes].sort((a, b) => {
-      if (sortConfig.key === "duration") {
-        // Parse duration string into total minutes
-        const parseDuration = (duration: string) => {
-          const parts = duration.split(" ");
-          let totalMinutes = 0;
+  useEffect(() => {
+    const timeout = window.setTimeout(async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        setCurrentPage(1);
 
-          for (let i = 0; i < parts.length; i++) {
-            if (parts[i].endsWith("h")) {
-              totalMinutes += parseFloat(parts[i]) * 60;
-            } else if (parts[i].endsWith("m")) {
-              totalMinutes += parseFloat(parts[i]);
-            }
+        const url = new URL("/api/routes", window.location.origin);
+        url.searchParams.set("limit", "500");
+        if (filters.searchQuery.trim()) {
+          url.searchParams.set("fltnum", filters.searchQuery.trim());
+        }
+        if (filters.departureFilter.trim()) {
+          url.searchParams.set("dep", normalizeIcao(filters.departureFilter));
+        }
+        if (filters.arrivalFilter.trim()) {
+          url.searchParams.set("arr", normalizeIcao(filters.arrivalFilter));
+        }
+        if (filters.aircraftFilter && filters.aircraftFilter !== "all") {
+          url.searchParams.set("aircraftId", filters.aircraftFilter);
+        }
+        if (filters.durationRange) {
+          const [min, max] = filters.durationRange.split("-").map(Number);
+          if (Number.isFinite(min)) url.searchParams.set("minDuration", `${min}`);
+          if (Number.isFinite(max) && max > 0) {
+            url.searchParams.set("maxDuration", `${max}`);
           }
+        }
 
-          return isNaN(totalMinutes) ? 0 : totalMinutes;
-        };
+        const response = await fetch(url.toString());
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+          throw new Error(data.message || "Failed to fetch routes");
+        }
 
-        const durationA = parseDuration(a.duration);
-        const durationB = parseDuration(b.duration);
+        setRoutesData(
+          (data.data || []).map((route: RouteItem) => ({
+            ...route,
+            durationSeconds: Number(route.durationSeconds) || 0,
+            duration: secondsToLabel(Number(route.durationSeconds) || 0),
+            aircraft: route.aircraft || [],
+          })),
+        );
 
+      } catch (fetchError) {
+        setRoutesData([]);
+        setError(
+          fetchError instanceof Error
+            ? fetchError.message
+            : "Failed to fetch routes",
+        );
+      } finally {
+        setLoading(false);
+      }
+    }, 450);
+
+    return () => window.clearTimeout(timeout);
+  }, [filters]);
+
+  const isAircraftEligible = useCallback((aircraft: Aircraft) => {
+    if (aircraft.awardreq) return false;
+    if (!aircraft.rankreq) return true;
+    return eligibleRankIds.includes(Number(aircraft.rankreq));
+  }, [eligibleRankIds]);
+
+  const eligibleAircraft = useCallback(
+    (route: RouteItem) => route.aircraft.filter(isAircraftEligible),
+    [isAircraftEligible],
+  );
+
+  const filteredRoutes = useMemo(() => {
+    const visibleRoutes = filters.eligibleOnly
+      ? routesData
+          .map((route) => ({
+            ...route,
+            aircraft: eligibleAircraft(route),
+          }))
+          .filter((route) => route.aircraft.length > 0)
+      : routesData;
+
+    if (!sortConfig) return visibleRoutes;
+
+    return [...visibleRoutes].sort((a, b) => {
+      if (sortConfig.key === "duration") {
         return sortConfig.direction === "ascending"
-          ? durationA - durationB
-          : durationB - durationA;
-      } else if (sortConfig.key === "aircraft") {
-        // Compare aircraft names case-insensitively
+          ? a.durationSeconds - b.durationSeconds
+          : b.durationSeconds - a.durationSeconds;
+      }
+
+      if (sortConfig.key === "aircraft") {
         const aircraftA = a.aircraft[0]?.name.toLowerCase() || "";
         const aircraftB = b.aircraft[0]?.name.toLowerCase() || "";
         return sortConfig.direction === "ascending"
           ? aircraftA.localeCompare(aircraftB)
           : aircraftB.localeCompare(aircraftA);
-      } else if (sortConfig.key === "fltnum") {
-        // Compare flight numbers numerically if they are numbers, otherwise as strings
-        const isNumA = !isNaN(Number(a.fltnum));
-        const isNumB = !isNaN(Number(b.fltnum));
-
-        if (isNumA && isNumB) {
-          return sortConfig.direction === "ascending"
-            ? Number(a.fltnum) - Number(b.fltnum)
-            : Number(b.fltnum) - Number(a.fltnum);
-        }
-        return sortConfig.direction === "ascending"
-          ? a.fltnum.localeCompare(b.fltnum)
-          : b.fltnum.localeCompare(a.fltnum);
-      } else if (sortConfig.key === "dep" || sortConfig.key === "arr") {
-        // Compare airport codes case-insensitively
-        const valueA = a[sortConfig.key].toLowerCase();
-        const valueB = b[sortConfig.key].toLowerCase();
-        return sortConfig.direction === "ascending"
-          ? valueA.localeCompare(valueB)
-          : valueB.localeCompare(valueA);
       }
-      return 0;
+
+      const valueA = String(a[sortConfig.key] || "").toLowerCase();
+      const valueB = String(b[sortConfig.key] || "").toLowerCase();
+      return sortConfig.direction === "ascending"
+        ? valueA.localeCompare(valueB)
+        : valueB.localeCompare(valueA);
     });
-  };
+  }, [routesData, sortConfig, filters.eligibleOnly, eligibleAircraft]);
 
-  // Filter routes based on search criteria
-  const filteredRoutes = sortRoutes(routesData);
-
-  // Handle sort request
-  const requestSort = (
-    key: "fltnum" | "dep" | "arr" | "duration" | "aircraft",
-  ) => {
-    let direction: "ascending" | "descending" = "ascending";
-    if (
-      sortConfig &&
-      sortConfig.key === key &&
-      sortConfig.direction === "ascending"
-    ) {
-      direction = "descending";
-    }
-    setSortConfig({ key, direction });
-  };
-
-  // Calculate paginated routes
   const totalPages = Math.ceil(filteredRoutes.length / itemsPerPage);
   const paginatedRoutes = filteredRoutes.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage,
   );
 
+  function updateFilters(next: Partial<Filters>) {
+    setFilters((current) => ({ ...current, ...next }));
+  }
+
+  function requestSort(key: "fltnum" | "dep" | "arr" | "duration" | "aircraft") {
+    setSortConfig((current) => ({
+      key,
+      direction:
+        current?.key === key && current.direction === "ascending"
+          ? "descending"
+          : "ascending",
+    }));
+  }
+
+  function toggleFavorite(routeId: string) {
+    setFavorites((current) => {
+      const next = current.includes(routeId)
+        ? current.filter((item) => item !== routeId)
+        : [...current, routeId];
+      writeStorage(FAVORITES_KEY, next);
+      return next;
+    });
+  }
+
+  function saveCurrentFilter() {
+    const saved: SavedFilter = {
+      ...filters,
+      id: `${Date.now()}`,
+      label: filterLabel(filters),
+    };
+    setSavedFilters((current) => {
+      const next = [saved, ...current.filter((item) => item.label !== saved.label)]
+        .slice(0, 6);
+      writeStorage(SAVED_FILTERS_KEY, next);
+      return next;
+    });
+  }
+
+  function removeSavedFilter(id: string) {
+    setSavedFilters((current) => {
+      const next = current.filter((item) => item.id !== id);
+      writeStorage(SAVED_FILTERS_KEY, next);
+      return next;
+    });
+  }
+
+  function applyFilter(saved: Filters) {
+    setFilters(saved);
+  }
+
+  function filePirepHref(route: RouteItem) {
+    const aircraft =
+      eligibleAircraft(route)[0] ||
+      route.aircraft.find((item) => String(item.id) === filters.aircraftFilter) ||
+      route.aircraft[0];
+    const params = new URLSearchParams({
+      flightnum: route.fltnum || "",
+      departure: route.dep,
+      arrival: route.arr,
+      flightTime: secondsToInput(route.durationSeconds),
+    });
+
+    if (aircraft?.id) params.set("aircraftId", String(aircraft.id));
+
+    return `/crew/file-pirep?${params}`;
+  }
+
   return (
     <CrewHeader>
-      <main className="flex flex-1 flex-col gap-4  md:gap-8">
-        <div className="flex flex-col gap-4">
-          <h1 className="text-2xl font-bold">Find Routes</h1>
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-            <div className="space-y-2">
-              <Label>Departure</Label>
-              <Input
-                placeholder="ICAO code"
-                value={departureFilter}
-                onChange={(e) => setDepartureFilter(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Arrival</Label>
-              <Input
-                placeholder="ICAO code"
-                value={arrivalFilter}
-                onChange={(e) => setArrivalFilter(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2 w-full">
-              <Label>Aircraft</Label>
-              <Select value={aircraftFilter} onValueChange={setAircraftFilter}>
-                <SelectTrigger className="w-full">
-                  {loadingAircraft ? (
-                    <div className="flex items-center gap-2">
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                      Loading...
-                    </div>
-                  ) : (
-                    <SelectValue placeholder="Select aircraft" />
-                  )}
-                </SelectTrigger>
-                <SelectContent className="bg-white max-h-[200px] overflow-y-auto w-full">
-                  {loadingAircraft && (
-                    <div className="flex items-center justify-center h-10">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    </div>
-                  )}
-                  {aircraftData.map((aircraft) => (
-                    <SelectItem key={aircraft.id} value={aircraft.id}>
-                      {aircraft.name}
-                      {aircraft.liveryname && `(${aircraft.liveryname})`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2 w-full">
-              <Label>Duration</Label>
-              <Select onValueChange={(val) => setDurationRange(val)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select duration range" />
-                </SelectTrigger>
-                <SelectContent className="bg-white w-full ">
-                  <SelectItem value="0-3600">&lt;1 hour</SelectItem>
-                  <SelectItem value="3600-7200">1-2 hours</SelectItem>
-                  <SelectItem value="7200-10800">2-3 hours</SelectItem>
-                  <SelectItem value="10800-14400">3-4 hours</SelectItem>
-                  <SelectItem value="14400-18000">4-5 hours</SelectItem>
-                  <SelectItem value="18000-21600">5-6 hours</SelectItem>
-                  <SelectItem value="21600-25200">6-7 hours</SelectItem>
-                  <SelectItem value="25200-28800">7-8 hours</SelectItem>
-                  <SelectItem value="28800-32400">8-9 hours</SelectItem>
-                  <SelectItem value="32400-36000">9-10 hours</SelectItem>
-                  <SelectItem value="36000-">10+ hours</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+      <main className="flex flex-1 flex-col gap-5 md:gap-7">
+        <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Find Routes</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Search updates automatically. Save filters and favorite routes for
+              this browser.
+            </p>
           </div>
+          <Button type="button" variant="outline" onClick={saveCurrentFilter}>
+            <Save className="mr-2 h-4 w-4" />
+            Save Filter
+          </Button>
+        </div>
 
-          <div className="flex flex-col gap-4 md:flex-row md:items-end">
-            <div className="flex-1 space-y-2">
-              <Label htmlFor="search">Search by Flight Number</Label>
-              <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Filters</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-4">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+              <div className="space-y-2">
+                <Label htmlFor="departure">Departure</Label>
                 <Input
-                  id="search"
-                  placeholder="Search by flight number"
-                  className="pl-8"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  id="departure"
+                  placeholder="ICAO"
+                  value={filters.departureFilter}
+                  onChange={(event) =>
+                    updateFilters({
+                      departureFilter: normalizeIcao(event.target.value),
+                    })
+                  }
                 />
               </div>
-            </div>
-            <Button onClick={fetchRoutes} variant="default" size="sm">
-              Search
-            </Button>
-          </div>
-
-          <div className="rounded-lg bg-card">
-            <Card>
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead
-                        className="cursor-pointer hover:bg-muted"
-                        onClick={() => requestSort("fltnum")}
-                      >
-                        Flight
-                        {sortConfig?.key === "fltnum" && (
-                          <span>
-                            {sortConfig.direction === "ascending" ? " ↑" : " ↓"}
-                          </span>
-                        )}
-                      </TableHead>
-                      <TableHead
-                        className="cursor-pointer hover:bg-muted"
-                        onClick={() => requestSort("dep")}
-                      >
-                        Route
-                        {sortConfig?.key === "dep" && (
-                          <span>
-                            {sortConfig.direction === "ascending" ? " ↑" : " ↓"}
-                          </span>
-                        )}
-                      </TableHead>
-                      <TableHead
-                        className="cursor-pointer hover:bg-muted"
-                        onClick={() => requestSort("duration")}
-                      >
-                        Duration
-                        {sortConfig?.key === "duration" && (
-                          <span>
-                            {sortConfig.direction === "ascending" ? " ↑" : " ↓"}
-                          </span>
-                        )}
-                      </TableHead>
-                      <TableHead
-                        className="cursor-pointer hover:bg-muted"
-                        onClick={() => requestSort("aircraft")}
-                      >
-                        Aircraft
-                        {sortConfig?.key === "aircraft" && (
-                          <span>
-                            {sortConfig.direction === "ascending" ? " ↑" : " ↓"}
-                          </span>
-                        )}
-                      </TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {loading ? (
-                      <TableRow>
-                        <TableCell
-                          colSpan={6}
-                          className="text-center text-muted-foreground"
-                        >
-                          <div className="flex items-center justify-center gap-2">
-                            <Loader2 className="h-5 w-5 animate-spin" />
-                            <span>Loading...</span>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ) : paginatedRoutes.length === 0 ? (
-                      <TableRow>
-                        <TableCell
-                          colSpan={6}
-                          className="text-center text-muted-foreground"
-                        >
-                          {searchQuery ||
-                          departureFilter ||
-                          arrivalFilter ||
-                          aircraftFilter ||
-                          durationRange
-                            ? "No routes found matching your criteria"
-                            : "Apply filters to search for routes"}
-                        </TableCell>
-                      </TableRow>
+              <div className="space-y-2">
+                <Label htmlFor="arrival">Arrival</Label>
+                <Input
+                  id="arrival"
+                  placeholder="ICAO"
+                  value={filters.arrivalFilter}
+                  onChange={(event) =>
+                    updateFilters({
+                      arrivalFilter: normalizeIcao(event.target.value),
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Aircraft</Label>
+                <Select
+                  value={filters.aircraftFilter}
+                  onValueChange={(value) => updateFilters({ aircraftFilter: value })}
+                >
+                  <SelectTrigger className="w-full">
+                    {loadingAircraft ? (
+                      <span className="flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Loading
+                      </span>
                     ) : (
-                      paginatedRoutes.map((route) => (
-                        <TableRow key={route.id}>
-                          <TableCell className="font-medium">
-                            {route.fltnum}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1">
-                              <span>{route.dep}</span>
-                              <ArrowRight className="h-3 w-3" />
-                              <span>{route.arr}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell>{route.duration}</TableCell>
-                          <TableCell className="w-[30%]">
-                            {route.aircraft.length !== 0 ? (
-                              <div className="flex flex-wrap items-center gap-1">
-                                {route.aircraft.map((aircraft) => (
-                                  <Badge key={aircraft.id} variant="outline">
-                                    {aircraft.name}{" "}
-                                    {aircraft.liveryname && aircraft.liveryname}
-                                  </Badge>
-                                ))}
-                              </div>
-                            ) : (
-                              <></>
-                            )}
-                          </TableCell>
-
-                          <TableCell className="w-[10%] text-right">
-                            <Button variant="ghost" size="sm" asChild>
-                              <a href={`/crew/route/${route.id}`}>View</a>
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))
+                      <SelectValue placeholder="Any aircraft" />
                     )}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </div>
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[240px] bg-white">
+                    <SelectItem value="all">Any aircraft</SelectItem>
+                    {aircraftData.map((aircraft) => (
+                      <SelectItem key={aircraft.id} value={String(aircraft.id)}>
+                        {aircraft.name}
+                        {aircraft.liveryname ? ` (${aircraft.liveryname})` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Duration</Label>
+                <Select
+                  value={filters.durationRange || "all"}
+                  onValueChange={(value) =>
+                    updateFilters({ durationRange: value === "all" ? "" : value })
+                  }
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Any duration" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white">
+                    <SelectItem value="all">Any duration</SelectItem>
+                    <SelectItem value="0-3600">&lt; 01:00</SelectItem>
+                    <SelectItem value="3600-7200">01:00–02:00</SelectItem>
+                    <SelectItem value="7200-14400">02:00–04:00</SelectItem>
+                    <SelectItem value="14400-28800">04:00–08:00</SelectItem>
+                    <SelectItem value="28800-">08:00+</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="search">Flight Number</Label>
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="search"
+                    placeholder="CZ123"
+                    className="pl-8"
+                    value={filters.searchQuery}
+                    onChange={(event) =>
+                      updateFilters({ searchQuery: event.target.value })
+                    }
+                  />
+                </div>
+              </div>
+            </div>
 
-          {/* Pagination controls */}
-          <div className="flex justify-center mt-4">
-            {totalPages > 1 && (
-              <Pagination>
-                <PaginationContent>
-                  <PaginationItem>
-                    <PaginationPrevious
-                      href="#"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setCurrentPage((prev) => Math.max(prev - 1, 1));
-                      }}
-                      aria-disabled={currentPage === 1}
-                      className={
-                        currentPage === 1
-                          ? "pointer-events-none opacity-50"
-                          : ""
-                      }
-                    />
-                  </PaginationItem>
+            <div className="flex flex-wrap items-center gap-4">
+              <label className="flex items-center gap-2 text-sm">
+                <Checkbox
+                  checked={filters.eligibleOnly}
+                  onCheckedChange={(checked) =>
+                    updateFilters({ eligibleOnly: checked === true })
+                  }
+                />
+                Eligible aircraft only
+              </label>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  setFilters({
+                    searchQuery: "",
+                    departureFilter: "",
+                    arrivalFilter: "",
+                    aircraftFilter: "all",
+                    durationRange: "",
+                    eligibleOnly: false,
+                  })
+                }
+              >
+                <X className="mr-2 h-4 w-4" />
+                Clear
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
-                  {Array.from({ length: totalPages }).map((_, i) => {
-                    const page = i + 1;
-                    // Show first page, last page, and pages around current page
-                    if (
-                      page === 1 ||
-                      page === totalPages ||
-                      (page >= currentPage - 1 && page <= currentPage + 1)
-                    ) {
-                      return (
-                        <PaginationItem key={page}>
-                          <PaginationLink
-                            href="#"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              setCurrentPage(page);
-                            }}
-                            isActive={page === currentPage}
+        {savedFilters.length > 0 && (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Saved Filters</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-2">
+              {savedFilters.map((saved) => (
+                <span key={saved.id} className="inline-flex items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => applyFilter(saved)}
+                  >
+                    {saved.label}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => removeSavedFilter(saved.id)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </span>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead
+                    className="cursor-pointer hover:bg-muted"
+                    onClick={() => requestSort("fltnum")}
+                  >
+                    Flight
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer hover:bg-muted"
+                    onClick={() => requestSort("dep")}
+                  >
+                    Route
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer hover:bg-muted"
+                    onClick={() => requestSort("duration")}
+                  >
+                    Duration
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer hover:bg-muted"
+                    onClick={() => requestSort("aircraft")}
+                  >
+                    Aircraft
+                  </TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center">
+                      <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground">
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        Loading routes...
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : error ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={5}
+                      className="py-6 text-center text-red-700"
+                    >
+                      {error}
+                    </TableCell>
+                  </TableRow>
+                ) : paginatedRoutes.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={5}
+                      className="py-6 text-center text-muted-foreground"
+                    >
+                      No routes found matching your criteria.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  paginatedRoutes.map((route) => (
+                    <TableRow key={route.id}>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => toggleFavorite(route.id)}
                           >
-                            {page}
-                          </PaginationLink>
-                        </PaginationItem>
-                      );
+                            <Star
+                              className={
+                                favorites.includes(route.id)
+                                  ? "h-4 w-4 fill-amber-400 text-amber-500"
+                                  : "h-4 w-4 text-muted-foreground"
+                              }
+                            />
+                          </Button>
+                          {route.fltnum}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <span>{route.dep}</span>
+                          <ArrowRight className="h-3 w-3" />
+                          <span>{route.arr}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>{route.duration}</TableCell>
+                      <TableCell className="max-w-[360px]">
+                        <div className="flex flex-wrap gap-1">
+                          {route.aircraft.length > 0 ? (
+                            route.aircraft.map((aircraft) => (
+                              <Badge
+                                key={aircraft.id}
+                                variant="outline"
+                                className={
+                                  filters.eligibleOnly || isAircraftEligible(aircraft)
+                                    ? ""
+                                    : "opacity-60"
+                                }
+                              >
+                                {aircraft.name}
+                                {aircraft.liveryname
+                                  ? ` ${aircraft.liveryname}`
+                                  : ""}
+                              </Badge>
+                            ))
+                          ) : (
+                            <span className="text-sm text-muted-foreground">
+                              No eligible aircraft
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button variant="outline" size="sm" asChild>
+                            <Link href={`/crew/route/${route.id}`}>View</Link>
+                          </Button>
+                          <Button
+                            size="sm"
+                            asChild
+                            disabled={filters.eligibleOnly && route.aircraft.length === 0}
+                          >
+                            <Link href={filePirepHref(route)}>
+                              <PlaneTakeoff className="mr-2 h-4 w-4" />
+                              File
+                            </Link>
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+
+        <div className="flex justify-center">
+          {totalPages > 1 && (
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    href="#"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      setCurrentPage((current) => Math.max(current - 1, 1));
+                    }}
+                    aria-disabled={currentPage === 1}
+                    className={
+                      currentPage === 1 ? "pointer-events-none opacity-50" : ""
                     }
+                  />
+                </PaginationItem>
 
-                    // Show ellipsis for gaps
-                    if (
-                      (page === 2 && currentPage > 3) ||
-                      (page === totalPages - 1 && currentPage < totalPages - 2)
-                    ) {
-                      return (
-                        <PaginationItem key={page}>
-                          <PaginationEllipsis />
-                        </PaginationItem>
+                {Array.from({ length: totalPages }).map((_, index) => {
+                  const page = index + 1;
+                  if (
+                    page === 1 ||
+                    page === totalPages ||
+                    (page >= currentPage - 1 && page <= currentPage + 1)
+                  ) {
+                    return (
+                      <PaginationItem key={page}>
+                        <PaginationLink
+                          href="#"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            setCurrentPage(page);
+                          }}
+                          isActive={page === currentPage}
+                        >
+                          {page}
+                        </PaginationLink>
+                      </PaginationItem>
+                    );
+                  }
+
+                  if (
+                    (page === 2 && currentPage > 3) ||
+                    (page === totalPages - 1 && currentPage < totalPages - 2)
+                  ) {
+                    return (
+                      <PaginationItem key={page}>
+                        <PaginationEllipsis />
+                      </PaginationItem>
+                    );
+                  }
+
+                  return null;
+                })}
+
+                <PaginationItem>
+                  <PaginationNext
+                    href="#"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      setCurrentPage((current) =>
+                        Math.min(current + 1, totalPages),
                       );
+                    }}
+                    aria-disabled={currentPage === totalPages}
+                    className={
+                      currentPage === totalPages
+                        ? "pointer-events-none opacity-50"
+                        : ""
                     }
-
-                    return null;
-                  })}
-
-                  <PaginationItem>
-                    <PaginationNext
-                      href="#"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setCurrentPage((prev) =>
-                          Math.min(prev + 1, totalPages),
-                        );
-                      }}
-                      aria-disabled={currentPage === totalPages}
-                      className={
-                        currentPage === totalPages
-                          ? "pointer-events-none opacity-50"
-                          : ""
-                      }
-                    />
-                  </PaginationItem>
-                </PaginationContent>
-              </Pagination>
-            )}
-          </div>
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          )}
         </div>
       </main>
     </CrewHeader>

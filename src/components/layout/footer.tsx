@@ -23,13 +23,18 @@ const siteLinks = [
   { href: "/crew?type=signup", label: "Join Us" },
 ];
 
+const legalLinks = [
+  { href: "/privacy-policy", label: "Privacy Policy" },
+  { href: "/terms-of-service", label: "Terms of Service" },
+];
+
 const brandLogoSrc = "/brand/czvg-logo-horizontal-white.png";
 
 export function Footer() {
   return (
     <footer className="border-t border-slate-200 bg-slate-950 text-white">
       <div className="site-container py-10">
-        <div className="grid gap-10 md:grid-cols-[1.3fr_1fr_1fr]">
+        <div className="grid gap-10 md:grid-cols-[1.3fr_1fr_1fr_1fr]">
           <div>
             <Link href="/" className="inline-flex items-center gap-3">
               <img
@@ -92,6 +97,23 @@ export function Footer() {
             </h2>
             <div className="mt-4 space-y-3">
               {siteLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="block text-sm text-slate-300 transition-colors hover:text-white"
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h2 className="text-sm font-semibold uppercase text-slate-400">
+              Legal
+            </h2>
+            <div className="mt-4 space-y-3">
+              {legalLinks.map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}
