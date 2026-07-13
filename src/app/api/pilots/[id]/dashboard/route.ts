@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
-import { QueryTypes } from "sequelize";
 
-import sequelize from "@/lib/database";
 import { models } from "@/lib/models";
 import { formatFlightTime } from "@/lib/utils/time";
 import { hasPermission, requireAuth } from "@/lib/server-auth";
@@ -13,20 +11,6 @@ type RankRecord = {
   id: number;
   name: string;
   timereq: number;
-};
-
-type SuggestionRow = {
-  id: number;
-  fltnum: string;
-  dep: string;
-  arr: string;
-  duration: number;
-  notes: string | null;
-  aircraftId: number;
-  aircraftName: string;
-  liveryname: string | null;
-  rankreq: number | null;
-  awardreq: number | null;
 };
 
 function secondsToDurationInput(seconds: number) {
@@ -79,7 +63,6 @@ export async function GET(
       rejectedCount,
       recentPireps,
       ranks,
-      recentRouteRows,
     ] = await Promise.all([
       models.Pirep.sum("flighttime", { where: { pilotid: pilotId, status: 1 } }),
       models.Pirep.count({ where: { pilotid: pilotId, status: 1 } }),
@@ -112,16 +95,6 @@ export async function GET(
         order: [["timereq", "ASC"]],
         raw: true,
       }) as Promise<RankRecord[]>,
-      sequelize.query<{ dep: string; arr: string }>(
-        `
-          SELECT departure AS dep, arrival AS arr
-          FROM pireps
-          WHERE pilotid = :pilotId
-          ORDER BY date DESC, id DESC
-          LIMIT 12
-        `,
-        { replacements: { pilotId }, type: QueryTypes.SELECT },
-      ),
     ]);
 
     const totalSeconds = Number(approvedSeconds || 0);
@@ -153,62 +126,6 @@ export async function GET(
     const eligibleRankIds = rankRows
       .filter((rank) => totalSeconds >= rank.timereq)
       .map((rank) => rank.id);
-    const recentRouteKeys = new Set(
-      recentRouteRows.map((route) => `${route.dep}-${route.arr}`),
-    );
-
-    const suggestionRows = await sequelize.query<SuggestionRow>(
-      `
-        SELECT
-          r.id,
-          r.fltnum,
-          r.dep,
-          r.arr,
-          r.duration,
-          r.notes,
-          a.id AS aircraftId,
-          a.name AS aircraftName,
-          a.liveryname,
-          a.rankreq,
-          a.awardreq
-        FROM routes r
-        INNER JOIN route_aircraft ra ON ra.routeid = r.id
-        INNER JOIN aircraft a ON a.id = ra.aircraftid
-        LEFT JOIN ranks rk ON rk.id = a.rankreq
-        WHERE a.status = 1
-          AND a.awardreq IS NULL
-          AND (a.rankreq IS NULL OR rk.timereq <= :totalSeconds)
-        ORDER BY
-          CASE
-            WHEN r.duration < 5400 THEN 1
-            WHEN r.duration < 14400 THEN 2
-            ELSE 3
-          END ASC,
-          r.duration ASC,
-          r.fltnum ASC
-        LIMIT 60
-      `,
-      { replacements: { totalSeconds }, type: QueryTypes.SELECT },
-    );
-
-    const suggestions: SuggestionRow[] = [];
-    const selectedBuckets = new Set<number>();
-    for (const route of suggestionRows) {
-      const routeKey = `${route.dep}-${route.arr}`;
-      if (recentRouteKeys.has(routeKey)) continue;
-      const bucket = route.duration < 5400 ? 1 : route.duration < 14400 ? 2 : 3;
-      if (selectedBuckets.has(bucket) && suggestions.length < 3) continue;
-      suggestions.push(route);
-      selectedBuckets.add(bucket);
-      if (suggestions.length >= 6) break;
-    }
-
-    for (const route of suggestionRows) {
-      if (suggestions.length >= 6) break;
-      if (!suggestions.some((item) => item.id === route.id)) {
-        suggestions.push(route);
-      }
-    }
 
     return NextResponse.json({
       pilot,
@@ -268,23 +185,6 @@ export async function GET(
               liveryname: pirep.Aircraft.liveryname,
             }
           : null,
-      })),
-      routeSuggestions: suggestions.map((route) => ({
-        id: route.id,
-        fltnum: route.fltnum,
-        dep: route.dep,
-        arr: route.arr,
-        duration: formatHours(route.duration),
-        durationSeconds: route.duration,
-        flightTimeInput: secondsToDurationInput(route.duration),
-        notes: route.notes,
-        aircraft: {
-          id: route.aircraftId,
-          name: route.aircraftName,
-          liveryname: route.liveryname,
-          rankreq: route.rankreq,
-          awardreq: route.awardreq,
-        },
       })),
     });
   } catch (error) {

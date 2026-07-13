@@ -8,7 +8,6 @@ import {
   PlaneTakeoff,
   Save,
   Search,
-  Star,
   X,
 } from "lucide-react";
 
@@ -47,7 +46,6 @@ import { useSession } from "@/hooks/use-session";
 import { authFetch } from "@/lib/utils/api";
 import { formatFlightTime } from "@/lib/utils/time";
 
-const FAVORITES_KEY = "czvg.routeFavorites";
 const SAVED_FILTERS_KEY = "czvg.routeSavedFilters";
 
 type Aircraft = {
@@ -150,7 +148,6 @@ export default function FindRoutes() {
   const [aircraftData, setAircraftData] = useState<Aircraft[]>([]);
   const [loadingAircraft, setLoadingAircraft] = useState(false);
   const [eligibleRankIds, setEligibleRankIds] = useState<number[]>([]);
-  const [favorites, setFavorites] = useState<string[]>([]);
   const [savedFilters, setSavedFilters] = useState<SavedFilter[]>([]);
   const [sortConfig, setSortConfig] = useState<{
     key: "fltnum" | "dep" | "arr" | "duration" | "aircraft";
@@ -158,7 +155,6 @@ export default function FindRoutes() {
   } | null>(null);
 
   useEffect(() => {
-    setFavorites(readStorage<string[]>(FAVORITES_KEY, []));
     setSavedFilters(readStorage<SavedFilter[]>(SAVED_FILTERS_KEY, []));
   }, []);
 
@@ -322,16 +318,6 @@ export default function FindRoutes() {
     }));
   }
 
-  function toggleFavorite(routeId: string) {
-    setFavorites((current) => {
-      const next = current.includes(routeId)
-        ? current.filter((item) => item !== routeId)
-        : [...current, routeId];
-      writeStorage(FAVORITES_KEY, next);
-      return next;
-    });
-  }
-
   function saveCurrentFilter() {
     const saved: SavedFilter = {
       ...filters,
@@ -382,8 +368,7 @@ export default function FindRoutes() {
           <div>
             <h1 className="text-2xl font-bold">Find Routes</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Search updates automatically. Save filters and favorite routes for
-              this browser.
+              Search updates automatically. Save filters for this browser.
             </p>
           </div>
           <Button type="button" variant="outline" onClick={saveCurrentFilter}>
@@ -616,24 +601,7 @@ export default function FindRoutes() {
                   paginatedRoutes.map((route) => (
                     <TableRow key={route.id}>
                       <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => toggleFavorite(route.id)}
-                          >
-                            <Star
-                              className={
-                                favorites.includes(route.id)
-                                  ? "h-4 w-4 fill-amber-400 text-amber-500"
-                                  : "h-4 w-4 text-muted-foreground"
-                              }
-                            />
-                          </Button>
-                          {route.fltnum}
-                        </div>
+                        {route.fltnum}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">

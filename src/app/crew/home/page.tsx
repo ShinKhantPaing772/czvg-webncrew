@@ -4,13 +4,10 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   AlertCircle,
-  ArrowRight,
-  Award,
   Clock,
   FileText,
   Loader2,
   Plane,
-  Route,
   Search,
   UserIcon,
 } from "lucide-react";
@@ -54,24 +51,6 @@ type RecentPirep = {
   } | null;
 };
 
-type RouteSuggestion = {
-  id: number;
-  fltnum: string;
-  dep: string;
-  arr: string;
-  duration: string;
-  durationSeconds: number;
-  flightTimeInput: string;
-  notes: string | null;
-  aircraft: {
-    id: number;
-    name: string;
-    liveryname: string | null;
-    rankreq: number | null;
-    awardreq: number | null;
-  };
-};
-
 type DashboardData = {
   standing: {
     status: number;
@@ -98,7 +77,6 @@ type DashboardData = {
     rejectedPireps: number;
   };
   recentPireps: RecentPirep[];
-  routeSuggestions: RouteSuggestion[];
 };
 
 function statusBadge(status: number) {
@@ -115,18 +93,6 @@ function statusLabel(status: number) {
   if (status === 0) return "Pending";
   if (status === 1) return "Accepted";
   return "Rejected";
-}
-
-function pirepHref(route: RouteSuggestion) {
-  const params = new URLSearchParams({
-    flightnum: route.fltnum || "",
-    departure: route.dep,
-    arrival: route.arr,
-    flightTime: route.flightTimeInput,
-    aircraftId: String(route.aircraft.id),
-  });
-
-  return `/crew/file-pirep?${params}`;
 }
 
 export default function UserDashboard() {
@@ -352,57 +318,7 @@ export default function UserDashboard() {
             </Card>
           )}
 
-          <section className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
-            <Card>
-              <CardHeader>
-                <CardTitle>Suggested Routes</CardTitle>
-                <CardDescription>
-                  Rank-eligible routes with a mix of flight lengths.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {dashboard.routeSuggestions.length === 0 ? (
-                  <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-                    No eligible route suggestions yet.
-                  </div>
-                ) : (
-                  dashboard.routeSuggestions.map((route) => (
-                    <div
-                      key={route.id}
-                      className="rounded-md border p-4 transition hover:bg-slate-50"
-                    >
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="font-semibold">{route.fltnum}</p>
-                            <Badge variant="outline">
-                              {route.dep} <ArrowRight className="h-3 w-3" />{" "}
-                              {route.arr}
-                            </Badge>
-                            <Badge variant="outline">{route.duration}</Badge>
-                          </div>
-                          <p className="mt-2 text-sm text-muted-foreground">
-                            {route.aircraft.name}
-                            {route.aircraft.liveryname
-                              ? ` · ${route.aircraft.liveryname}`
-                              : ""}
-                          </p>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button asChild variant="outline" size="sm">
-                            <Link href={`/crew/route/${route.id}`}>View</Link>
-                          </Button>
-                          <Button asChild size="sm">
-                            <Link href={pirepHref(route)}>File</Link>
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
-
+          <section>
             <Card>
               <CardHeader>
                 <CardTitle>Recent Flights</CardTitle>
