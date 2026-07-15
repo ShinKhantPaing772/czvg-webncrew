@@ -72,7 +72,7 @@ const rolesData = [
   {
     id: "admin",
     name: "Admin",
-    permissions: ["home", "pireps", "routes", "users", "aircrafts"],
+    permissions: ["home", "pireps", "routes", "users", "aircrafts", "ranks", "awards"],
   },
   {
     id: "pirep_manager",
@@ -93,6 +93,16 @@ const rolesData = [
     id: "aircraft_manager",
     name: "Aircraft Manager",
     permissions: ["home", "aircrafts"],
+  },
+  {
+    id: "rank_manager",
+    name: "Rank Manager",
+    permissions: ["home", "ranks"],
+  },
+  {
+    id: "award_manager",
+    name: "Award Manager",
+    permissions: ["home", "awards"],
   },
   {
     id: "permissions_manager",
@@ -126,6 +136,16 @@ const availablePermissions = [
     id: "aircrafts",
     name: "Manage Aircrafts",
     description: "Manage aircraft records",
+  },
+  {
+    id: "ranks",
+    name: "Manage Ranks",
+    description: "Create and edit pilot ranks and public rank presentation",
+  },
+  {
+    id: "awards",
+    name: "Manage Awards",
+    description: "Manage award definitions and pilot award assignments",
   },
   {
     id: "permissions",

@@ -11,6 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import Link from "next/link";
 import { useSession } from "@/hooks/use-session";
 import { formatFlightTime } from "@/lib/utils/time";
+import { authFetch } from "@/lib/utils/api";
 
 interface Route {
   id: number;
@@ -40,6 +41,9 @@ export default function ViewRoute() {
   const routeId = params.id as string;
   const [route, setRoute] = useState<Route | null>(null);
   const [loading, setLoading] = useState(true);
+  const [eligibleRankIds, setEligibleRankIds] = useState<number[]>([]);
+  const [ownedAwardIds, setOwnedAwardIds] = useState<number[]>([]);
+  const [loadingEligibility, setLoadingEligibility] = useState(true);
 
   function secondsToInput(seconds: number) {
     return formatFlightTime(seconds);
@@ -52,12 +56,23 @@ export default function ViewRoute() {
       arrival: currentRoute.arr,
       flightTime: secondsToInput(currentRoute.durationSeconds),
     });
-    const firstAircraft = currentRoute.aircraft.find((aircraft) => aircraft.id);
+    const firstAircraft = currentRoute.aircraft.find(isAircraftEligible);
     if (firstAircraft?.id) {
       params.set("aircraftId", String(firstAircraft.id));
     }
 
     return `/crew/file-pirep?${params}`;
+  }
+
+  function isAircraftEligible(aircraft: Route["aircraft"][number]) {
+    if (Number(aircraft.status) !== 1) return false;
+    const rankRequirement = Number(aircraft.rankreq) || null;
+    const awardRequirement = Number(aircraft.awardreq) || null;
+    if (!rankRequirement && !awardRequirement) return false;
+    return Boolean(
+      (rankRequirement && eligibleRankIds.includes(rankRequirement)) ||
+        (awardRequirement && ownedAwardIds.includes(awardRequirement)),
+    );
   }
 
   useEffect(() => {
@@ -80,6 +95,22 @@ export default function ViewRoute() {
 
     fetchRouteData();
   }, [routeId]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    authFetch(`/api/pilots/${user.id}/dashboard`)
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Failed to load aircraft eligibility");
+        return response.json();
+      })
+      .then((data) => {
+        setEligibleRankIds(data.rank?.eligibleRankIds || []);
+        setOwnedAwardIds(data.awards?.ownedAwardIds || []);
+      })
+      .catch((error) => console.error("Failed to load aircraft eligibility:", error))
+      .finally(() => setLoadingEligibility(false));
+  }, [user?.id]);
 
   if (loading) {
     return (
@@ -136,13 +167,20 @@ export default function ViewRoute() {
           </Button>
           <h1 className="text-2xl font-bold">Flight {route.fltnum}</h1>
           <div className="flex items-end">
-            <Button variant="link" className="px-4 py-2">
-              <Link
-                href={filePirepHref(route)}
+            {route.aircraft.some(isAircraftEligible) && !loadingEligibility ? (
+              <Button variant="link" className="px-4 py-2" asChild>
+                <Link href={filePirepHref(route)}>File Pirep</Link>
+              </Button>
+            ) : (
+              <Button
+                variant="link"
+                className="px-4 py-2"
+                disabled
+                title="You do not meet an aircraft requirement for this route"
               >
                 File Pirep
-              </Link>
-            </Button>
+              </Button>
+            )}
           </div>
         </div>
 
@@ -218,7 +256,17 @@ export default function ViewRoute() {
             <CardContent>
               <div className="grid gap-4 grid-cols-1 ">
                 {route.aircraft.map((ac) => (
-                  <div key={ac.id} className="rounded-lg border p-4">
+                  <div
+                    key={ac.id}
+                    className={`rounded-lg border p-4 ${
+                      isAircraftEligible(ac) ? "" : "opacity-60"
+                    }`}
+                    title={
+                      isAircraftEligible(ac)
+                        ? undefined
+                        : "Rank or award requirement not met"
+                    }
+                  >
                     <div className="flex items-center justify-between">
                       <div className="font-medium">{ac.name}</div>
                       <Badge variant="outline">

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Op } from "sequelize";
 import { models } from "@/lib/models";
 import { requireAuth } from "@/lib/server-auth";
+import { canPilotUseAircraft } from "@/lib/aircraft-eligibility";
 
 function normalizeIcao(value: unknown) {
   return typeof value === "string" ? value.trim().toUpperCase() : "";
@@ -115,6 +116,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "Selected aircraft is not available" },
         { status: 400 }
+      );
+    }
+
+    if (!(await canPilotUseAircraft(auth.user.id, aircraft))) {
+      return NextResponse.json(
+        { error: "You do not meet this aircraft's rank or award requirement" },
+        { status: 403 },
       );
     }
 

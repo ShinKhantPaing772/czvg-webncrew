@@ -37,7 +37,7 @@ export async function GET(
         ) AS aircraft
       FROM routes r
       LEFT JOIN route_aircraft ra ON r.id = ra.routeid
-      LEFT JOIN aircraft a ON ra.aircraftid = a.id
+      LEFT JOIN aircraft a ON ra.aircraftid = a.id AND a.status = 1
       WHERE r.id = :routeId
       GROUP BY r.id
     `;
@@ -89,7 +89,9 @@ export async function GET(
       duration: formatFlightTime(parseInt((route as any).duration)),
       durationSeconds: Number((route as any).duration) || 0,
       notes: (route as any).notes,
-      aircraft: JSON.parse((route as any).aircraft || "[]"),
+      aircraft: JSON.parse((route as any).aircraft || "[]").filter(
+        (aircraft: any) => aircraft.id && aircraft.name && aircraft.status === 1,
+      ),
       recentFlights: recentFlights.map((flight: any) => ({
         id: flight.id,
         date: flight.date,

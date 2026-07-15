@@ -4,19 +4,19 @@ import sequelize from "../database";
 class Aircraft extends Model {
   declare id: number;
   declare name: string;
-  declare ifaircraftid: string;
-  declare liveryname: string;
-  declare ifliveryid: string;
-  declare notes: string;
-  declare rankreq: number;
-  declare awardreq: number;
+  declare ifaircraftid: string | null;
+  declare liveryname: string | null;
+  declare ifliveryid: string | null;
+  declare notes: string | null;
+  declare rankreq: number | null;
+  declare awardreq: number | null;
   declare status: number;
 }
 Aircraft.init(
   {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     name: { type: DataTypes.TEXT, allowNull: false },
-    ifaircraftid: { type: DataTypes.TEXT, allowNull: false },
+    ifaircraftid: { type: DataTypes.TEXT, allowNull: true },
     liveryname: { type: DataTypes.TEXT },
     ifliveryid: { type: DataTypes.TEXT },
     notes: { type: DataTypes.STRING(12) },
@@ -36,12 +36,20 @@ class Rank extends Model {
   declare id: number;
   declare name: string;
   declare timereq: number;
+  declare imageurl: string | null;
+  declare barcount: number;
+  declare bartone: "gold" | "white";
+  declare starcount: number;
 }
 Rank.init(
   {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     name: { type: DataTypes.STRING(120), allowNull: false },
     timereq: { type: DataTypes.INTEGER, allowNull: false },
+    imageurl: { type: DataTypes.TEXT, allowNull: true },
+    barcount: { type: DataTypes.TINYINT.UNSIGNED, allowNull: false, defaultValue: 1 },
+    bartone: { type: DataTypes.STRING(10), allowNull: false, defaultValue: "gold" },
+    starcount: { type: DataTypes.TINYINT.UNSIGNED, allowNull: false, defaultValue: 0 },
   },
   { sequelize, modelName: "Rank", tableName: "ranks", timestamps: false },
 );
@@ -51,6 +59,7 @@ class Award extends Model {
   declare name: string;
   declare description: string;
   declare imageurl: string;
+  declare featured: number | null;
 }
 Award.init(
   {
@@ -58,6 +67,7 @@ Award.init(
     name: { type: DataTypes.TEXT, allowNull: false },
     description: { type: DataTypes.TEXT },
     imageurl: { type: DataTypes.TEXT, allowNull: false },
+    featured: { type: DataTypes.TINYINT, allowNull: true, defaultValue: null },
   },
   { sequelize, modelName: "Award", tableName: "awards", timestamps: false },
 );

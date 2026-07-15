@@ -89,6 +89,9 @@ type PilotDashboard = {
   rank: {
     eligibleRankIds: number[];
   };
+  awards: {
+    ownedAwardIds: number[];
+  };
 };
 
 function readStorage<T>(key: string, fallback: T): T {
@@ -148,6 +151,8 @@ export default function FindRoutes() {
   const [aircraftData, setAircraftData] = useState<Aircraft[]>([]);
   const [loadingAircraft, setLoadingAircraft] = useState(false);
   const [eligibleRankIds, setEligibleRankIds] = useState<number[]>([]);
+  const [ownedAwardIds, setOwnedAwardIds] = useState<number[]>([]);
+  const [loadingEligibility, setLoadingEligibility] = useState(true);
   const [savedFilters, setSavedFilters] = useState<SavedFilter[]>([]);
   const [sortConfig, setSortConfig] = useState<{
     key: "fltnum" | "dep" | "arr" | "duration" | "aircraft";
@@ -185,8 +190,11 @@ export default function FindRoutes() {
         if (!response.ok) return;
         const data: PilotDashboard = await response.json();
         setEligibleRankIds(data.rank?.eligibleRankIds || []);
+        setOwnedAwardIds(data.awards?.ownedAwardIds || []);
       } catch (fetchError) {
         console.error("Failed to load route eligibility:", fetchError);
+      } finally {
+        setLoadingEligibility(false);
       }
     }
 
@@ -253,10 +261,15 @@ export default function FindRoutes() {
   }, [filters]);
 
   const isAircraftEligible = useCallback((aircraft: Aircraft) => {
-    if (aircraft.awardreq) return false;
-    if (!aircraft.rankreq) return true;
-    return eligibleRankIds.includes(Number(aircraft.rankreq));
-  }, [eligibleRankIds]);
+    const rankRequirement = Number(aircraft.rankreq) || null;
+    const awardRequirement = Number(aircraft.awardreq) || null;
+    if (!rankRequirement && !awardRequirement) return false;
+
+    return Boolean(
+      (rankRequirement && eligibleRankIds.includes(rankRequirement)) ||
+        (awardRequirement && ownedAwardIds.includes(awardRequirement)),
+    );
+  }, [eligibleRankIds, ownedAwardIds]);
 
   const eligibleAircraft = useCallback(
     (route: RouteItem) => route.aircraft.filter(isAircraftEligible),
@@ -345,10 +358,9 @@ export default function FindRoutes() {
   }
 
   function filePirepHref(route: RouteItem) {
-    const aircraft =
-      eligibleAircraft(route)[0] ||
-      route.aircraft.find((item) => String(item.id) === filters.aircraftFilter) ||
-      route.aircraft[0];
+    const aircraft = eligibleAircraft(route).find(
+      (item) => String(item.id) === filters.aircraftFilter,
+    ) || eligibleAircraft(route)[0];
     const params = new URLSearchParams({
       flightnum: route.fltnum || "",
       departure: route.dep,
@@ -428,9 +440,14 @@ export default function FindRoutes() {
                   <SelectContent className="max-h-[240px] bg-white">
                     <SelectItem value="all">Any aircraft</SelectItem>
                     {aircraftData.map((aircraft) => (
-                      <SelectItem key={aircraft.id} value={String(aircraft.id)}>
+                      <SelectItem
+                        key={aircraft.id}
+                        value={String(aircraft.id)}
+                        disabled={!isAircraftEligible(aircraft)}
+                      >
                         {aircraft.name}
                         {aircraft.liveryname ? ` (${aircraft.liveryname})` : ""}
+                        {!isAircraftEligible(aircraft) ? " — Locked" : ""}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -623,6 +640,11 @@ export default function FindRoutes() {
                                     ? ""
                                     : "opacity-60"
                                 }
+                                title={
+                                  isAircraftEligible(aircraft)
+                                    ? undefined
+                                    : "Rank or award requirement not met"
+                                }
                               >
                                 {aircraft.name}
                                 {aircraft.liveryname
@@ -642,16 +664,23 @@ export default function FindRoutes() {
                           <Button variant="outline" size="sm" asChild>
                             <Link href={`/crew/route/${route.id}`}>View</Link>
                           </Button>
-                          <Button
-                            size="sm"
-                            asChild
-                            disabled={filters.eligibleOnly && route.aircraft.length === 0}
-                          >
-                            <Link href={filePirepHref(route)}>
+                          {eligibleAircraft(route).length > 0 && !loadingEligibility ? (
+                            <Button size="sm" asChild>
+                              <Link href={filePirepHref(route)}>
+                                <PlaneTakeoff className="mr-2 h-4 w-4" />
+                                File
+                              </Link>
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              disabled
+                              title="You do not meet an aircraft requirement for this route"
+                            >
                               <PlaneTakeoff className="mr-2 h-4 w-4" />
                               File
-                            </Link>
-                          </Button>
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

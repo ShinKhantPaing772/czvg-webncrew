@@ -63,6 +63,7 @@ export async function GET(
       rejectedCount,
       recentPireps,
       ranks,
+      awardGrants,
     ] = await Promise.all([
       models.Pirep.sum("flighttime", { where: { pilotid: pilotId, status: 1 } }),
       models.Pirep.count({ where: { pilotid: pilotId, status: 1 } }),
@@ -95,6 +96,11 @@ export async function GET(
         order: [["timereq", "ASC"]],
         raw: true,
       }) as Promise<RankRecord[]>,
+      models.AwardGranted.findAll({
+        where: { pilotid: pilotId },
+        attributes: ["awardid"],
+        raw: true,
+      }),
     ]);
 
     const totalSeconds = Number(approvedSeconds || 0);
@@ -161,6 +167,9 @@ export async function GET(
           : null,
         progressToNextRank: Number(progressToNextRank.toFixed(2)),
         eligibleRankIds,
+      },
+      awards: {
+        ownedAwardIds: awardGrants.map((grant: any) => Number(grant.awardid)),
       },
       statistics: {
         approvedFlightSeconds: totalSeconds,

@@ -11,6 +11,9 @@ import {
   Shield,
   FileStack,
   PlaneIcon,
+  Award,
+  Medal,
+  Trophy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -59,6 +62,17 @@ export function CrewHeader({ children }: CrewHeaderProps) {
         title: "Manage Aircrafts",
         href: "/crew/admin/aircrafts",
         icon: PlaneIcon,
+      },
+    ],
+    ranks: [
+      { title: "Manage Ranks", href: "/crew/admin/ranks", icon: Medal },
+    ],
+    awards: [
+      { title: "Manage Awards", href: "/crew/admin/awards", icon: Trophy },
+      {
+        title: "Pilot Awards",
+        href: "/crew/admin/pilot-awards",
+        icon: Award,
       },
     ],
     permissions: [

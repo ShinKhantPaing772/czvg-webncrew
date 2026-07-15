@@ -1,187 +1,407 @@
-// Next.js App Router structure
-// File: app/aircraft/page.tsx
 "use client";
-import { useEffect, useState } from "react";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Edit, Loader2, Plus, Trash2 } from "lucide-react";
+
+import { CrewHeader } from "@/components/crew-header";
 import {
-  Table,
-  TableHeader,
-  TableRow,
-  TableHead,
-  TableBody,
-  TableCell,
-} from "@/components/ui/table";
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Plus, Edit } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
+  DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogContent,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
-  SelectTrigger,
-  SelectValue,
   SelectContent,
   SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { CrewHeader } from "@/components/crew-header";
-import { Card, CardContent } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { authFetch } from "@/lib/utils/api";
 
-interface Aircraft {
+type AircraftSource = "infinite-flight" | "manual";
+
+type Aircraft = {
   id: number;
   name: string;
-  liveryname: string;
-  notes: string;
-  rankreq: string;
-  awardreq: string;
+  liveryname: string | null;
+  notes: string | null;
+  rankreq: number | null;
+  awardreq: number | null;
+  ifaircraftid: string | null;
+  ifliveryid: string | null;
+};
+
+type IfAircraft = { id: string; name: string };
+type IfLivery = { id: string; liveryName: string };
+type Rank = { id: number; name: string; timereq: number };
+type Award = { id: number; name: string };
+
+type AircraftForm = {
+  source: AircraftSource;
+  name: string;
+  liveryName: string;
   ifAircraftId: string;
   ifLiveryId: string;
-}
+  notes: string;
+  rankReq: string;
+  awardReq: string;
+};
 
-interface IfAircraft {
-  id: string;
-  name: string;
-}
+const emptyForm: AircraftForm = {
+  source: "infinite-flight",
+  name: "",
+  liveryName: "",
+  ifAircraftId: "",
+  ifLiveryId: "",
+  notes: "",
+  rankReq: "",
+  awardReq: "",
+};
 
-interface IfLivery {
-  id: string;
-  liveryName: string;
+async function responseMessage(response: Response, fallback: string) {
+  const data = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(data?.message || data?.error || fallback);
+  return data;
 }
 
 export default function AircraftPage() {
   const [aircraft, setAircraft] = useState<Aircraft[]>([]);
-  const [open, setOpen] = useState(false);
-  const [ifAircraftList, setIfAircraftList] = useState<IfAircraft[]>([]);
-  const [selectedAircraft, setSelectedAircraft] = useState(null);
-  const [ifLiveryList, setIfLiveryList] = useState<IfLivery[]>([]);
-  const [isloadingaircraft, setIsloadingaircraft] = useState(false);
-  const [isloadingaircraftif, setIsloadingaircraftif] = useState(false);
-  const [isloadingliveryif, setIsloadingliveryif] = useState(false);
-  const [isloading, setIsloading] = useState(false);
-  const [form, setForm] = useState({
-    notes: "",
-    rankReq: 3,
-    awardReq: "",
-    ifAircraftName: "",
-    ifAircraftId: "",
-    ifLiveryName: "",
-    ifLiveryId: "",
-  });
+  const [ranks, setRanks] = useState<Rank[]>([]);
+  const [awards, setAwards] = useState<Award[]>([]);
+  const [ifAircraft, setIfAircraft] = useState<IfAircraft[]>([]);
+  const [ifLiveries, setIfLiveries] = useState<IfLivery[]>([]);
+  const [selected, setSelected] = useState<Aircraft | null>(null);
+  const [form, setForm] = useState<AircraftForm>(emptyForm);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadingReference, setLoadingReference] = useState(false);
+  const [loadingLiveries, setLoadingLiveries] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
 
-  const fetchAircraft = async () => {
-    setIsloadingaircraft(true);
-    const res = await authFetch("/api/aircraft");
-    const data = await res.json();
-    setAircraft(data.aircrafts);
-    setIsloadingaircraft(false);
-  };
-
-  useEffect(() => {
-    fetchAircraft();
+  const fetchAircraft = useCallback(async () => {
+    const response = await authFetch("/api/aircraft");
+    const data = await responseMessage(response, "Failed to load aircraft");
+    setAircraft(Array.isArray(data.aircrafts) ? data.aircrafts : []);
   }, []);
 
-  const openAddModal = async () => {
-    setOpen(true);
-    setIsloadingaircraftif(true);
-    const res = await authFetch("/api/aircraft/if/aircraft");
-    const data = await res.json();
-    setIfAircraftList(data.result);
-    setIsloadingaircraftif(false);
-  };
+  const fetchRequirements = useCallback(async () => {
+    const response = await authFetch("/api/aircraft/requirements");
+    const data = await responseMessage(response, "Failed to load requirements");
+    const rankOptions = Array.isArray(data.ranks) ? data.ranks : [];
+    setRanks(rankOptions);
+    setAwards(Array.isArray(data.awards) ? data.awards : []);
+    return rankOptions as Rank[];
+  }, []);
 
-  const handleSelectAircraft = async (id: string) => {
-    const aircraftObj = ifAircraftList.find((a) => a.id === id);
+  useEffect(() => {
+    Promise.all([fetchAircraft(), fetchRequirements()])
+      .catch((loadError) =>
+        setError(loadError instanceof Error ? loadError.message : "Failed to load page"),
+      )
+      .finally(() => setLoading(false));
+  }, [fetchAircraft, fetchRequirements]);
 
-    setSelectedAircraft(id as any);
+  const rankNames = useMemo(
+    () => new Map(ranks.map((rank) => [rank.id, rank.name])),
+    [ranks],
+  );
+  const awardNames = useMemo(
+    () => new Map(awards.map((award) => [award.id, award.name])),
+    [awards],
+  );
 
-    setForm({
-      ...form,
-      ifAircraftId: id,
-      ifAircraftName: aircraftObj?.name || "",
-    });
-
-    setIsloadingliveryif(true);
-    const res = await authFetch(`/api/aircraft/if/liveries/${id}`);
-    const data = await res.json();
-    setIfLiveryList(data.result);
-    setIsloadingliveryif(false);
-  };
-
-  const handleSubmit = async () => {
-    if (!form.ifAircraftId || !form.ifLiveryId) return;
-    setIsloading(true);
-    const res = await authFetch("/api/aircraft", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
-    const data = await res.json();
-    console.log("API response:", data);
-    if (res.ok) {
-      setIsloading(false);
-      setOpen(false);
-      fetchAircraft();
-      //reset form values
-      setForm({
-        notes: "",
-        rankReq: 3,
-        awardReq: "",
-        ifAircraftName: "",
-        ifAircraftId: "",
-        ifLiveryName: "",
-        ifLiveryId: "",
-      });
+  async function loadIfAircraft() {
+    setLoadingReference(true);
+    try {
+      const response = await authFetch("/api/aircraft/if/aircraft");
+      const data = await responseMessage(
+        response,
+        "Failed to load Infinite Flight aircraft",
+      );
+      setIfAircraft(Array.isArray(data.result) ? data.result : []);
+    } finally {
+      setLoadingReference(false);
     }
-  };
+  }
 
-  const canSubmit =
-    form.ifAircraftId.trim() !== "" && form.ifLiveryId.trim() !== "";
+  async function loadLiveries(aircraftId: string) {
+    setLoadingLiveries(true);
+    try {
+      const response = await authFetch(
+        `/api/aircraft/if/liveries/${encodeURIComponent(aircraftId)}`,
+      );
+      const data = await responseMessage(
+        response,
+        "Failed to load Infinite Flight liveries",
+      );
+      setIfLiveries(Array.isArray(data.result) ? data.result : []);
+    } finally {
+      setLoadingLiveries(false);
+    }
+  }
+
+  async function openAddDialog() {
+    setSelected(null);
+    setFormError(null);
+    setIfLiveries([]);
+    const defaultRank = ranks.find((rank) => rank.id === 3) || ranks[0];
+    setForm({ ...emptyForm, rankReq: defaultRank ? String(defaultRank.id) : "" });
+    setDialogOpen(true);
+    try {
+      await loadIfAircraft();
+    } catch (loadError) {
+      setFormError(loadError instanceof Error ? loadError.message : "Failed to load aircraft");
+    }
+  }
+
+  async function openEditDialog(item: Aircraft) {
+    const source: AircraftSource = item.ifaircraftid ? "infinite-flight" : "manual";
+    setSelected(item);
+    setFormError(null);
+    setIfLiveries([]);
+    setForm({
+      source,
+      name: item.name,
+      liveryName: item.liveryname || "",
+      ifAircraftId: item.ifaircraftid || "",
+      ifLiveryId: item.ifliveryid || "",
+      notes: item.notes || "",
+      rankReq: item.rankreq ? String(item.rankreq) : "",
+      awardReq: item.awardreq ? String(item.awardreq) : "",
+    });
+    setDialogOpen(true);
+
+    if (source === "infinite-flight") {
+      try {
+        await Promise.all([loadIfAircraft(), loadLiveries(item.ifaircraftid!)]);
+      } catch (loadError) {
+        setFormError(
+          loadError instanceof Error ? loadError.message : "Failed to load aircraft",
+        );
+      }
+    }
+  }
+
+  async function changeSource(source: AircraftSource) {
+    setFormError(null);
+    setIfLiveries([]);
+    setForm((current) => ({
+      ...current,
+      source,
+      name: "",
+      liveryName: "",
+      ifAircraftId: "",
+      ifLiveryId: "",
+    }));
+    if (source === "infinite-flight" && ifAircraft.length === 0) {
+      try {
+        await loadIfAircraft();
+      } catch (loadError) {
+        setFormError(
+          loadError instanceof Error ? loadError.message : "Failed to load aircraft",
+        );
+      }
+    }
+  }
+
+  async function selectIfAircraft(id: string) {
+    const option = ifAircraft.find((item) => item.id === id);
+    setIfLiveries([]);
+    setForm((current) => ({
+      ...current,
+      name: option?.name || "",
+      ifAircraftId: id,
+      liveryName: "",
+      ifLiveryId: "",
+    }));
+    try {
+      await loadLiveries(id);
+    } catch (loadError) {
+      setFormError(
+        loadError instanceof Error ? loadError.message : "Failed to load liveries",
+      );
+    }
+  }
+
+  const canSave = Boolean(
+    form.name.trim() &&
+      (form.rankReq || form.awardReq) &&
+      (form.source === "manual" ||
+        (form.ifAircraftId && form.ifLiveryId && form.liveryName)),
+  );
+
+  async function saveAircraft() {
+    if (!canSave) return;
+    setSaving(true);
+    setFormError(null);
+    try {
+      const response = await authFetch("/api/aircraft", {
+        method: selected ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...(selected ? { id: selected.id } : {}),
+          ...form,
+          rankReq: form.rankReq || null,
+          awardReq: form.awardReq || null,
+        }),
+      });
+      await responseMessage(response, `Failed to ${selected ? "update" : "add"} aircraft`);
+      await fetchAircraft();
+      setDialogOpen(false);
+    } catch (saveError) {
+      setFormError(saveError instanceof Error ? saveError.message : "Failed to save aircraft");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteAircraft(item: Aircraft) {
+    setDeletingId(item.id);
+    setError(null);
+    try {
+      const response = await authFetch(`/api/aircraft?id=${item.id}`, {
+        method: "DELETE",
+      });
+      await responseMessage(response, "Failed to deactivate aircraft");
+      await fetchAircraft();
+    } catch (deleteError) {
+      setError(
+        deleteError instanceof Error ? deleteError.message : "Failed to deactivate aircraft",
+      );
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   return (
     <CrewHeader>
-      <main className="flex-1 ">
+      <main className="flex-1">
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <h1 className="text-2xl font-bold">Aircrafts</h1>
-            <Button onClick={openAddModal}>
-              <Plus className="mr-2" /> Add Aircraft
+            <div>
+              <h1 className="text-2xl font-bold">Aircraft</h1>
+              <p className="text-sm text-muted-foreground">
+                Manage fleet records and pilot access requirements.
+              </p>
+            </div>
+            <Button onClick={openAddDialog} disabled={loading}>
+              <Plus className="mr-2 h-4 w-4" /> Add Aircraft
             </Button>
           </div>
 
+          {error && (
+            <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+              {error}
+            </div>
+          )}
+
           <Card>
             <CardContent className="p-0">
-              {" "}
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>Livery</TableHead>
+                    <TableHead>Source</TableHead>
                     <TableHead>Notes</TableHead>
-                    <TableHead>Rank Req</TableHead>
-                    <TableHead>Award Req</TableHead>
-                    <TableHead>Edit</TableHead>
+                    <TableHead>Rank</TableHead>
+                    <TableHead>Award</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {isloadingaircraft ? (
+                  {loading ? (
                     <TableRow>
-                      <TableCell colSpan={6}>Loading...</TableCell>
+                      <TableCell colSpan={7} className="py-8 text-center">
+                        <Loader2 className="mx-auto h-5 w-5 animate-spin" />
+                      </TableCell>
+                    </TableRow>
+                  ) : aircraft.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+                        No active aircraft found.
+                      </TableCell>
                     </TableRow>
                   ) : (
-                    aircraft.map((a) => (
-                      <TableRow key={a.id}>
-                        <TableCell>{a.name}</TableCell>
-                        <TableCell>{a.liveryname}</TableCell>
-                        <TableCell>{a.notes}</TableCell>
-                        <TableCell>{a.rankreq}</TableCell>
-                        <TableCell>{a.awardreq}</TableCell>
+                    aircraft.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell className="font-medium">{item.name}</TableCell>
+                        <TableCell>{item.liveryname || "—"}</TableCell>
                         <TableCell>
-                          <Button size="sm" disabled={true}>
-                            <Edit />
-                          </Button>
+                          <Badge variant="secondary">
+                            {item.ifaircraftid ? "Infinite Flight" : "Manual"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{item.notes || "—"}</TableCell>
+                        <TableCell>
+                          {item.rankreq ? rankNames.get(item.rankreq) || `#${item.rankreq}` : "—"}
+                        </TableCell>
+                        <TableCell>
+                          {item.awardreq
+                            ? awardNames.get(item.awardreq) || `#${item.awardreq}`
+                            : "—"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button variant="ghost" size="icon" onClick={() => openEditDialog(item)}>
+                              <Edit className="h-4 w-4" />
+                              <span className="sr-only">Edit {item.name}</span>
+                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="icon" disabled={deletingId === item.id}>
+                                  {deletingId === item.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="h-4 w-4" />
+                                  )}
+                                  <span className="sr-only">Delete {item.name}</span>
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Deactivate aircraft?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    {item.name} will be hidden from active lists. Its database record and historical references will be preserved.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => deleteAircraft(item)}>
+                                    Deactivate
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))
@@ -190,103 +410,152 @@ export default function AircraftPage() {
               </Table>
             </CardContent>
           </Card>
+        </div>
 
-          {/* Add Aircraft Modal */}
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogContent className="bg-white">
-              <DialogHeader>
-                <DialogTitle>Add Aircraft</DialogTitle>
-              </DialogHeader>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogContent className="max-h-[90vh] overflow-y-auto bg-white sm:max-w-xl">
+            <DialogHeader>
+              <DialogTitle>{selected ? "Edit Aircraft" : "Add Aircraft"}</DialogTitle>
+            </DialogHeader>
 
-              <div className="grid gap-4 py-4">
-                <div>
-                  <p>Select Aircraft</p>
-                  <Select
-                    onValueChange={handleSelectAircraft}
-                    disabled={isloadingaircraftif}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Choose aircraft" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-white max-h-[200px] overflow-y-auto">
-                      {ifAircraftList.map((a) => (
-                        <SelectItem
-                          value={(a as { id: string; name: string }).id}
-                          key={(a as { id: string; name: string }).id}
-                        >
-                          {(a as { id: string; name: string }).name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+            <div className="grid gap-4 py-2">
+              {formError && (
+                <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                  {formError}
                 </div>
+              )}
 
-                {selectedAircraft && (
-                  <div>
-                    <p>Select Livery</p>
-                    <Select
-                      onValueChange={(v) => {
-                        const liveryObj = ifLiveryList.find(
-                          (l: { id: string; liveryName: string }) => l.id === v,
-                        );
+              <div className="grid gap-2">
+                <Label>Aircraft source</Label>
+                <Select value={form.source} onValueChange={(value) => changeSource(value as AircraftSource)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-white">
+                    <SelectItem value="infinite-flight">Infinite Flight</SelectItem>
+                    <SelectItem value="manual">Manual</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-                        setForm({
-                          ...form,
-                          ifLiveryId: v,
-                          ifLiveryName: liveryObj?.liveryName || "",
-                        });
-                      }}
-                      disabled={isloadingliveryif}
-                    >
+              {form.source === "infinite-flight" ? (
+                <>
+                  <div className="grid gap-2">
+                    <Label>Aircraft</Label>
+                    <Select value={form.ifAircraftId} onValueChange={selectIfAircraft} disabled={loadingReference}>
                       <SelectTrigger>
-                        <SelectValue placeholder="Choose livery" />
+                        <SelectValue placeholder={loadingReference ? "Loading aircraft…" : "Choose aircraft"} />
                       </SelectTrigger>
-                      <SelectContent className="bg-white max-h-[200px] overflow-y-auto">
-                        {ifLiveryList.map((l) => (
-                          <SelectItem
-                            value={(l as { id: string; liveryName: string }).id}
-                            key={(l as { id: string; liveryName: string }).id}
-                          >
-                            {
-                              (l as { id: string; liveryName: string })
-                                .liveryName
-                            }
-                          </SelectItem>
+                      <SelectContent className="max-h-[240px] bg-white">
+                        {ifAircraft.map((item) => (
+                          <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
-                )}
+                  <div className="grid gap-2">
+                    <Label>Livery</Label>
+                    <Select
+                      value={form.ifLiveryId}
+                      onValueChange={(id) => {
+                        const livery = ifLiveries.find((item) => item.id === id);
+                        setForm((current) => ({
+                          ...current,
+                          ifLiveryId: id,
+                          liveryName: livery?.liveryName || "",
+                        }));
+                      }}
+                      disabled={!form.ifAircraftId || loadingLiveries}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={loadingLiveries ? "Loading liveries…" : "Choose livery"} />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-[240px] bg-white">
+                        {ifLiveries.map((item) => (
+                          <SelectItem key={item.id} value={item.id}>{item.liveryName}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="grid gap-2">
+                    <Label htmlFor="aircraft-name">Aircraft name</Label>
+                    <Input
+                      id="aircraft-name"
+                      value={form.name}
+                      onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+                      placeholder="Aircraft name"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="livery-name">Livery name (optional)</Label>
+                    <Input
+                      id="livery-name"
+                      value={form.liveryName}
+                      onChange={(event) => setForm((current) => ({ ...current, liveryName: event.target.value }))}
+                      placeholder="Livery name"
+                    />
+                  </div>
+                </>
+              )}
 
+              <div className="grid gap-2">
+                <Label htmlFor="aircraft-notes">Notes (optional)</Label>
                 <Input
-                  placeholder="Notes"
-                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                  id="aircraft-notes"
+                  maxLength={12}
+                  value={form.notes}
+                  onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}
+                  placeholder="Up to 12 characters"
                 />
-                <Input
-                  placeholder="3"
-                  disabled={true}
-                  onChange={(e) =>
-                    setForm({ ...form, rankReq: Number(e.target.value) })
-                  }
-                />
-                <Input
-                  placeholder="Award Required"
-                  disabled={true}
-                  onChange={(e) =>
-                    setForm({ ...form, awardReq: e.target.value })
-                  }
-                />
-
-                <Button
-                  onClick={handleSubmit}
-                  disabled={!canSubmit || isloading}
-                >
-                  Add
-                </Button>
               </div>
-            </DialogContent>
-          </Dialog>
-        </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label>Minimum rank (optional)</Label>
+                  <Select
+                    value={form.rankReq || "none"}
+                    onValueChange={(value) => setForm((current) => ({ ...current, rankReq: value === "none" ? "" : value }))}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent className="bg-white">
+                      <SelectItem value="none">No rank requirement</SelectItem>
+                      {ranks.map((rank) => (
+                        <SelectItem key={rank.id} value={String(rank.id)}>{rank.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <Label>Required award (optional)</Label>
+                  <Select
+                    value={form.awardReq || "none"}
+                    onValueChange={(value) => setForm((current) => ({ ...current, awardReq: value === "none" ? "" : value }))}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent className="bg-white">
+                      <SelectItem value="none">No award requirement</SelectItem>
+                      {awards.map((award) => (
+                        <SelectItem key={award.id} value={String(award.id)}>{award.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              {!form.rankReq && !form.awardReq && (
+                <p className="text-sm text-destructive">Select at least a rank or an award.</p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                If both are selected, pilots can unlock the aircraft by meeting either requirement.
+              </p>
+
+              <Button onClick={saveAircraft} disabled={!canSave || saving}>
+                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {selected ? "Save Changes" : "Add Aircraft"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </main>
     </CrewHeader>
   );

@@ -49,11 +49,17 @@ import { authFetch } from "@/lib/utils/api";
 interface aircraft {
   id: string;
   name: string;
-  liveryname: string;
-  ifaircraftid: string;
-  ifliveryid: string;
-  notes: string;
+  liveryname: string | null;
+  ifaircraftid: string | null;
+  ifliveryid: string | null;
+  notes: string | null;
+  rankreq: number | null;
+  awardreq: number | null;
 }
+type PilotEligibility = {
+  rank?: { eligibleRankIds?: number[] };
+  awards?: { ownedAwardIds?: number[] };
+};
 import { useSession } from "@/hooks/use-session";
 
 // Form schema with validation
@@ -119,7 +125,7 @@ export default function FilePirep() {
   const [filteredAircraftData, setFilteredAircraftData] = useState<aircraft[]>(
     [],
   );
-  const [isLoadingAircraft, setIsLoadingAircraft] = useState(false);
+  const [isLoadingAircraft, setIsLoadingAircraft] = useState(true);
   const searchParams = useSearchParams();
 
   const initialValues = {
@@ -138,31 +144,66 @@ export default function FilePirep() {
   // Fetch aircraft data from API
   useEffect(() => {
     const fetchAircraft = async () => {
+      if (!user?.id) return;
       setIsLoadingAircraft(true);
       try {
-        const response = await fetch("/api/aircraft");
+        const [response, eligibilityResponse] = await Promise.all([
+          fetch("/api/aircraft"),
+          authFetch(`/api/pilots/${user.id}/dashboard`),
+        ]);
 
         if (!response.ok) {
           throw new Error("Failed to fetch aircraft data");
         }
+        if (!eligibilityResponse.ok) {
+          throw new Error("Failed to fetch aircraft eligibility");
+        }
         const data = await response.json();
-        setOriginalAircraftData(data.aircrafts);
-        setFilteredAircraftData(data.aircrafts);
+        const eligibility: PilotEligibility = await eligibilityResponse.json();
+        const eligibleRankIds = eligibility.rank?.eligibleRankIds || [];
+        const ownedAwardIds = eligibility.awards?.ownedAwardIds || [];
+        const eligibleAircraft = (data.aircrafts || [])
+          .map((item: aircraft) => ({ ...item, id: String(item.id) }))
+          .filter((item: aircraft) => {
+            const rankRequirement = Number(item.rankreq) || null;
+            const awardRequirement = Number(item.awardreq) || null;
+            if (!rankRequirement && !awardRequirement) return false;
+            return Boolean(
+              (rankRequirement && eligibleRankIds.includes(rankRequirement)) ||
+                (awardRequirement && ownedAwardIds.includes(awardRequirement)),
+            );
+          });
+        setOriginalAircraftData(eligibleAircraft);
+        setFilteredAircraftData(eligibleAircraft);
       } catch (error) {
         console.error("Error fetching aircraft:", error);
+        setSubmitMessage(
+          error instanceof Error ? error.message : "Failed to load aircraft",
+        );
       } finally {
         setIsLoadingAircraft(false);
       }
     };
 
     fetchAircraft();
-  }, []);
+  }, [user?.id]);
 
   // Initialize form with default values
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: initialValues,
   });
+
+  useEffect(() => {
+    if (isLoadingAircraft) return;
+    const selectedId = form.getValues("aircraftId");
+    if (
+      selectedId &&
+      !originalAircraftData.some((aircraft) => aircraft.id === selectedId)
+    ) {
+      form.setValue("aircraftId", "", { shouldValidate: false });
+    }
+  }, [form, isLoadingAircraft, originalAircraftData]);
 
   // Handle form submission
   async function onSubmit(data: FormValues) {
@@ -230,6 +271,14 @@ export default function FilePirep() {
       const acarsValues = Object.fromEntries(
         Object.entries(data.acars).filter(([, value]) => value),
       ) as Partial<FormValues>;
+      if (
+        acarsValues.aircraftId &&
+        !originalAircraftData.some(
+          (aircraft) => aircraft.id === acarsValues.aircraftId,
+        )
+      ) {
+        delete acarsValues.aircraftId;
+      }
       const filledFields = Object.keys(acarsValues) as Array<keyof FormValues>;
       const expectedFields: Array<keyof FormValues> = [
         "flightnum",
@@ -488,7 +537,7 @@ export default function FilePirep() {
                                       .toLowerCase()
                                       .includes(searchTerm) ||
                                     aircraft.liveryname
-                                      .toLowerCase()
+                                      ?.toLowerCase()
                                       .includes(searchTerm),
                                 );
                                 setFilteredAircraftData(filtered);
@@ -515,6 +564,11 @@ export default function FilePirep() {
                               )}
                             </SelectItem>
                           ))}
+                          {!isLoadingAircraft && filteredAircraftData.length === 0 && (
+                            <div className="p-3 text-sm text-muted-foreground">
+                              No aircraft are available for your rank or awards.
+                            </div>
+                          )}
                         </SelectContent>
                       </Select>
                       <FormMessage />

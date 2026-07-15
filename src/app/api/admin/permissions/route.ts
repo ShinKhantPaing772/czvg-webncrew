@@ -13,17 +13,21 @@ const availablePermissionIds = [
   "routes",
   "users",
   "aircrafts",
+  "ranks",
+  "awards",
   "permissions",
   "admin",
 ] as const;
 
 const rolePermissionMap: Record<string, string[]> = {
   super_admin: ["admin"],
-  admin: ["home", "pireps", "routes", "users", "aircrafts"],
+  admin: ["home", "pireps", "routes", "users", "aircrafts", "ranks", "awards"],
   pirep_manager: ["home", "pireps"],
   route_manager: ["home", "routes"],
   user_manager: ["home", "users"],
   aircraft_manager: ["home", "aircrafts"],
+  rank_manager: ["home", "ranks"],
+  award_manager: ["home", "awards"],
   permissions_manager: ["home", "permissions"],
 };
 

@@ -68,7 +68,7 @@ export async function GET(request: Request) {
     const fromAndWhere = `
       FROM routes r
       LEFT JOIN route_aircraft ra ON r.id = ra.routeid
-      LEFT JOIN aircraft a ON ra.aircraftid = a.id
+      LEFT JOIN aircraft a ON ra.aircraftid = a.id AND a.status = 1
       WHERE ${whereClauses.join(" AND ")}
     `;
 
@@ -138,8 +138,7 @@ export async function GET(request: Request) {
             notes: route.notes,
             aircraft: aircraftArray
               .filter(
-                (ac: any) =>
-                  ac.aircraft_id && ac.aircraft_name && ac.livery_name,
+                (ac: any) => ac.aircraft_id && ac.aircraft_name,
               )
               .map((ac: any) => ({
                 id: ac.aircraft_id,
@@ -148,7 +147,7 @@ export async function GET(request: Request) {
                 notes: ac.notes || null,
                 rankreq: ac.rankreq || null,
                 awardreq: ac.awardreq || null,
-                status: ac.status || null,
+                status: ac.status ?? null,
               })),
           };
         })

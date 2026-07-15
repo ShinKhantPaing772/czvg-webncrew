@@ -1,7 +1,7 @@
 CREATE TABLE `aircraft` (
   `id` int PRIMARY KEY NOT NULL AUTO_INCREMENT,
   `name` text NOT NULL,
-  `ifaircraftid` text NOT NULL,
+  `ifaircraftid` text DEFAULT null,
   `liveryname` text DEFAULT null,
   `ifliveryid` text DEFAULT null,
   `notes` varchar(12) DEFAULT null,
@@ -14,14 +14,17 @@ CREATE TABLE `awards` (
   `id` int PRIMARY KEY NOT NULL AUTO_INCREMENT,
   `name` text NOT NULL,
   `description` text NOT NULL,
-  `imageurl` text NOT NULL
+  `imageurl` text NOT NULL,
+  `featured` tinyint DEFAULT null,
+  UNIQUE KEY `awards_one_featured` (`featured`)
 );
 
 CREATE TABLE `awards_granted` (
   `id` int PRIMARY KEY NOT NULL AUTO_INCREMENT,
   `awardid` int NOT NULL,
   `pilotid` int NOT NULL,
-  `dateawarded` date NOT NULL
+`dateawarded` date NOT NULL,
+UNIQUE KEY `awards_granted_pilot_award` (`pilotid`, `awardid`)
 );
 
 CREATE TABLE `multipliers` (
@@ -94,7 +97,11 @@ CREATE TABLE `pireps_comments` (
 CREATE TABLE `ranks` (
   `id` int PRIMARY KEY NOT NULL AUTO_INCREMENT,
   `name` varchar(120) NOT NULL,
-  `timereq` int NOT NULL
+  `timereq` int NOT NULL,
+  `imageurl` text DEFAULT null,
+  `barcount` tinyint unsigned NOT NULL DEFAULT 1,
+  `bartone` varchar(10) NOT NULL DEFAULT 'gold',
+  `starcount` tinyint unsigned NOT NULL DEFAULT 0
 );
 
 CREATE TABLE `routes` (
