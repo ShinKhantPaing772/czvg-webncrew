@@ -44,7 +44,14 @@ async function validateAward(
   if (!imageurl) return { error: "Award image must be a valid HTTPS URL" };
 
   const awards = await models.Award.findAll({ attributes: ["id", "name"], raw: true });
-  if (awards.some((award: any) => award.id !== currentId && award.name.trim().toLowerCase() === name.toLowerCase())) {
+  if (
+    awards.some(
+      (award: any) =>
+        award.id !== currentId &&
+        typeof award.name === "string" &&
+        award.name.trim().toLowerCase() === name.toLowerCase(),
+    )
+  ) {
     return { error: "An award with this name already exists" };
   }
 
