@@ -7,6 +7,7 @@ import {
   getApplicantPortalUrl,
   sendEmail,
 } from "@/lib/email";
+import { isValidSignupName } from "@/lib/utils/signup-name";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -205,6 +206,16 @@ async function handleSignup({
   ifGrade?: unknown;
   ifViolations?: unknown;
 }) {
+  if (!isValidSignupName(name)) {
+    return NextResponse.json(
+      {
+        error: "Name can only contain English letters, numbers, and spaces.",
+      },
+      { status: 400 },
+    );
+  }
+
+  const normalizedName = name.trim();
   const normalizedEmail = email.trim().toLowerCase();
   const existingPilotMail = await models.Pilot.findOne({
     where: { email: normalizedEmail },
@@ -240,7 +251,7 @@ async function handleSignup({
   const pilot = await models.Pilot.create({
     email: normalizedEmail,
     password: hashedPassword,
-    name: name.trim(),
+    name: normalizedName,
     callsign,
     ifc: ifc.trim(),
     ifuserid: ifUserId,
@@ -268,7 +279,7 @@ async function handleSignup({
           fields: [
             {
               name: "Pilot",
-              value: `${name} (${callsign})`,
+              value: `${normalizedName} (${callsign})`,
               inline: false,
             },
             {

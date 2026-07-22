@@ -9,6 +9,11 @@ import { Input } from "@/components/ui/input";
 import SimpleField from "@/components/system/SimpleField";
 import { CheckCircle2, AlertCircle, Loader2, XCircle } from "lucide-react";
 import { setToken } from "@/lib/utils/auth";
+import {
+  isValidSignupName,
+  sanitizeSignupName,
+  SIGNUP_NAME_INPUT_PATTERN,
+} from "@/lib/utils/signup-name";
 
 export function SignupForm() {
   const router = useRouter();
@@ -32,7 +37,10 @@ export function SignupForm() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target;
-    setFormData((prev) => ({ ...prev, [id]: value }));
+    setFormData((prev) => ({
+      ...prev,
+      [id]: id === "name" ? sanitizeSignupName(value) : value,
+    }));
   };
 
   useEffect(() => {
@@ -109,6 +117,14 @@ export function SignupForm() {
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
+    if (!isValidSignupName(formData.name)) {
+      setMessage({
+        type: "error",
+        text: "Name can only contain English letters, numbers, and spaces.",
+      });
+      return;
+    }
+
     if (!validatePassword()) {
       setMessage({
         type: "error",
@@ -171,11 +187,18 @@ export function SignupForm() {
 
   return (
     <form onSubmit={onSubmit} className="space-y-5">
-      <SimpleField id="name" label="Preferred Name">
+      <SimpleField
+        id="name"
+        label="Preferred Name"
+        description="Use English letters, numbers, and spaces only."
+      >
         <Input
           id="name"
           placeholder="John Doe"
           required
+          autoComplete="name"
+          pattern={SIGNUP_NAME_INPUT_PATTERN}
+          title="Use English letters, numbers, and spaces only."
           className="border-blue-200 focus-visible:ring-blue-500"
           value={formData.name}
           onChange={handleChange}
