@@ -44,17 +44,33 @@ export function SignupForm() {
   };
 
   useEffect(() => {
-    if (!formData.ifc) return;
+    const username = formData.ifc.trim();
+    if (!username) {
+      setValidIFC(false);
+      setIfUserId("");
+      setIfMetrics({ grade: null, violations: null });
+      setLoadingIFC(false);
+      return;
+    }
+
+    let active = true;
+    const controller = new AbortController();
 
     const timeout = setTimeout(async () => {
       try {
         setLoadingIFC(true);
         setMessage({ type: "", text: "" });
 
-        const response = await fetch(`/api/auth/ifc/${formData.ifc}`);
-        if (!response.ok) throw new Error("IFC check failed");
-
+        const response = await fetch(
+          `/api/auth/ifc/${encodeURIComponent(username)}`,
+          { signal: controller.signal },
+        );
         const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data?.error || "IFC check failed");
+        }
+        if (!active) return;
+
         const isValid = data.result && data.result.length > 0;
         const ifUser = isValid ? data.result[0] : null;
         setValidIFC(isValid);
@@ -85,18 +101,24 @@ export function SignupForm() {
             : { grade: null, violations: null },
         );
       } catch (error) {
+        if (!active || controller.signal.aborted) return;
         setValidIFC(false);
+        setIfUserId("");
         setIfMetrics({ grade: null, violations: null });
         setMessage({
           type: "error",
           text: error instanceof Error ? error.message : "IFC check failed",
         });
       } finally {
-        setLoadingIFC(false);
+        if (active) setLoadingIFC(false);
       }
     }, 600); // debounce delay in ms
 
-    return () => clearTimeout(timeout);
+    return () => {
+      active = false;
+      clearTimeout(timeout);
+      controller.abort();
+    };
   }, [formData.ifc]);
 
   function validatePassword() {

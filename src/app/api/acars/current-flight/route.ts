@@ -1,4 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  findInfiniteFlightUser,
+  getInfiniteFlightFlightPlan,
+  getInfiniteFlightFlights,
+  getInfiniteFlightSessions,
+  getInfiniteFlightUser,
+  InfiniteFlightApiError,
+  isInfiniteFlightId,
+  normalizeInfiniteFlightId,
+} from "@/lib/infinite-flight-api";
 import { models } from "@/lib/models";
 import { hasPermission, requireAuth } from "@/lib/server-auth";
 
@@ -148,7 +158,10 @@ function extractFlightTime(flight: UnknownRecord) {
 }
 
 async function findLocalAircraft(aircraftId: string, liveryId: string) {
-  if (!aircraftId) return null;
+  const normalizedAircraftId = normalizeInfiniteFlightId(aircraftId);
+  const normalizedLiveryId = normalizeInfiniteFlightId(liveryId);
+  if (!isInfiniteFlightId(normalizedAircraftId)) return null;
+  if (normalizedLiveryId && !isInfiniteFlightId(normalizedLiveryId)) return null;
 
   const aircraft = await models.Aircraft.findAll({
     attributes: ["id", "ifaircraftid", "ifliveryid"],
@@ -158,15 +171,19 @@ async function findLocalAircraft(aircraftId: string, liveryId: string) {
   const aircraftRecords = aircraft as unknown as UnknownRecord[];
   const exactAircraftAndLivery = aircraftRecords.find(
     (item) =>
-      getString(item, ["ifaircraftid"]) === aircraftId &&
-      getString(item, ["ifliveryid"]) === liveryId,
+      normalizeInfiniteFlightId(getString(item, ["ifaircraftid"])) ===
+        normalizedAircraftId &&
+      normalizeInfiniteFlightId(getString(item, ["ifliveryid"])) ===
+        normalizedLiveryId,
   );
 
-  if (liveryId) return exactAircraftAndLivery ?? null;
+  if (normalizedLiveryId) return exactAircraftAndLivery ?? null;
 
   return (
     aircraftRecords.find(
-      (item) => getString(item, ["ifaircraftid"]) === aircraftId,
+      (item) =>
+        normalizeInfiniteFlightId(getString(item, ["ifaircraftid"])) ===
+        normalizedAircraftId,
     ) ?? null
   );
 }
@@ -223,28 +240,6 @@ function extractAirportFromFlightPlan(plan: UnknownRecord, index: 0 | -1) {
   ]);
 }
 
-async function fetchInfiniteFlight(path: string, init?: RequestInit) {
-  const response = await fetch(
-    `https://api.infiniteflight.com/public/v2${path}`,
-    {
-      ...init,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.IF_API}`,
-        ...(init?.headers ?? {}),
-      },
-    },
-  );
-
-  if (!response.ok) {
-    throw new Error(
-      `Infinite Flight API returned ${response.status} for ${path}`,
-    );
-  }
-
-  return response.json();
-}
-
 async function resolveInfiniteFlightUserId(pilot: UnknownRecord) {
   const storedUserId = getString(pilot, ["ifuserid"]);
   if (storedUserId) return storedUserId;
@@ -252,12 +247,9 @@ async function resolveInfiniteFlightUserId(pilot: UnknownRecord) {
   const ifc = getString(pilot, ["ifc"]);
   if (!ifc) return "";
 
-  const data = await fetchInfiniteFlight("/users", {
-    method: "POST",
-    body: JSON.stringify({ discourseNames: [ifc] }),
-  });
-  const users = getArray(data);
-  const userId = getString(users[0] ?? {}, ["userId", "id"]);
+  const { data } = await getInfiniteFlightUser(ifc);
+  const user = findInfiniteFlightUser(data.result, ifc);
+  const userId = getString(user ?? {}, ["userId"]);
 
   if (userId) {
     await models.Pilot.update(
@@ -270,16 +262,14 @@ async function resolveInfiniteFlightUserId(pilot: UnknownRecord) {
 }
 
 async function findCurrentFlight(ifUserId: string) {
-  const sessionsData = await fetchInfiniteFlight("/sessions");
+  const { data: sessionsData } = await getInfiniteFlightSessions();
   const sessions = getArray(sessionsData);
 
   for (const session of sessions) {
     const sessionId = getString(session, ["id", "sessionId"]);
-    if (!sessionId) continue;
+    if (!isInfiniteFlightId(sessionId)) continue;
 
-    const flightsData = await fetchInfiniteFlight(
-      `/sessions/${sessionId}/flights`,
-    );
+    const { data: flightsData } = await getInfiniteFlightFlights(sessionId);
     const flights = getArray(flightsData);
     const flight = flights.find(
       (item) =>
@@ -316,13 +306,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  if (!process.env.IF_API) {
-    return NextResponse.json(
-      { error: "Infinite Flight API key is not configured" },
-      { status: 500 },
-    );
-  }
-
   try {
     const pilot = await models.Pilot.findByPk(pilotId, {
       attributes: ["id", "ifc", "ifuserid"],
@@ -356,9 +339,11 @@ export async function GET(request: NextRequest) {
 
     if (flightId) {
       try {
-        flightPlan = await fetchInfiniteFlight(
-          `/sessions/${sessionId}/flights/${flightId}/flightplan`,
+        const { data } = await getInfiniteFlightFlightPlan(
+          sessionId,
+          flightId,
         );
+        flightPlan = data;
       } catch (error) {
         console.warn("[ACARS] Unable to fetch flight plan:", error);
       }
@@ -428,9 +413,14 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error("[ACARS] Error:", error);
+    const status = error instanceof InfiniteFlightApiError ? error.status : 500;
+    const message =
+      error instanceof InfiniteFlightApiError
+        ? error.message
+        : "Failed to fetch ACARS data from Infinite Flight";
     return NextResponse.json(
-      { error: "Failed to fetch ACARS data from Infinite Flight" },
-      { status: 500 },
+      { error: message },
+      { status },
     );
   }
 }

@@ -1,4 +1,11 @@
 import { NextResponse } from "next/server";
+import {
+  getInfiniteFlightAircraft,
+  getInfiniteFlightAircraftLiveries,
+  InfiniteFlightApiError,
+  isInfiniteFlightId,
+  normalizeInfiniteFlightId,
+} from "@/lib/infinite-flight-api";
 import { models } from "@/lib/models";
 import { requirePermission } from "@/lib/server-auth";
 
@@ -11,6 +18,69 @@ function optionalId(value: unknown) {
   if (value === null || value === undefined || value === "") return null;
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : Number.NaN;
+}
+
+async function validateInfiniteFlightSelection(
+  aircraftIdValue: string,
+  liveryIdValue: string,
+) {
+  if (!isInfiniteFlightId(aircraftIdValue)) {
+    return { error: "Selected Infinite Flight aircraft ID is invalid" } as const;
+  }
+  if (!isInfiniteFlightId(liveryIdValue)) {
+    return { error: "Selected Infinite Flight livery ID is invalid" } as const;
+  }
+
+  const aircraftId = normalizeInfiniteFlightId(aircraftIdValue);
+  const liveryId = normalizeInfiniteFlightId(liveryIdValue);
+  const [{ data: aircraftData }, { data: liveryData }] = await Promise.all([
+    getInfiniteFlightAircraft(),
+    getInfiniteFlightAircraftLiveries(aircraftId),
+  ]);
+
+  const aircraft = Array.isArray(aircraftData.result)
+    ? aircraftData.result.find(
+        (item) =>
+          item &&
+          normalizeInfiniteFlightId(item.id) === aircraftId &&
+          typeof item.name === "string" &&
+          item.name.trim(),
+      )
+    : null;
+
+  if (!aircraft) {
+    return {
+      error: "Selected aircraft no longer exists in Infinite Flight",
+    } as const;
+  }
+
+  const livery = Array.isArray(liveryData.result)
+    ? liveryData.result.find(
+        (item) =>
+          item &&
+          normalizeInfiniteFlightId(item.id) === liveryId &&
+          normalizeInfiniteFlightId(item.aircraftID ?? item.aircraftId) ===
+            aircraftId &&
+          typeof item.liveryName === "string" &&
+          item.liveryName.trim(),
+      )
+    : null;
+
+  if (!livery) {
+    return {
+      error:
+        "Selected livery does not exist or does not belong to the selected aircraft",
+    } as const;
+  }
+
+  return {
+    value: {
+      name: aircraft.name.trim(),
+      liveryname: livery.liveryName.trim(),
+      ifaircraftid: aircraftId,
+      ifliveryid: liveryId,
+    },
+  } as const;
 }
 
 async function validatePayload(body: Record<string, unknown>) {
@@ -29,7 +99,6 @@ async function validatePayload(body: Record<string, unknown>) {
   if (source !== "infinite-flight" && source !== "manual") {
     return { error: "Aircraft source is required" } as const;
   }
-  if (!name) return { error: "Aircraft name is required" } as const;
   if (notes.length > 12) {
     return { error: "Notes cannot exceed 12 characters" } as const;
   }
@@ -39,27 +108,41 @@ async function validatePayload(body: Record<string, unknown>) {
   if (!rankReq && !awardReq) {
     return { error: "Select at least a rank or an award requirement" } as const;
   }
-  if (source === "infinite-flight" && (!ifAircraftId || !ifLiveryId || !liveryName)) {
+  if (source === "manual" && !name) {
+    return { error: "Aircraft name is required" } as const;
+  }
+  if (source === "infinite-flight" && (!ifAircraftId || !ifLiveryId)) {
     return {
       error: "Infinite Flight aircraft and livery selections are required",
     } as const;
   }
 
-  const [rank, award] = await Promise.all([
+  const [rank, award, infiniteFlightSelection] = await Promise.all([
     rankReq ? models.Rank.findByPk(rankReq, { attributes: ["id"] }) : null,
     awardReq ? models.Award.findByPk(awardReq, { attributes: ["id"] }) : null,
+    source === "infinite-flight"
+      ? validateInfiniteFlightSelection(ifAircraftId, ifLiveryId)
+      : null,
   ]);
   if (rankReq && !rank) return { error: "Selected rank was not found" } as const;
   if (awardReq && !award) {
     return { error: "Selected award was not found" } as const;
   }
+  if (infiniteFlightSelection && "error" in infiniteFlightSelection) {
+    return infiniteFlightSelection;
+  }
+
+  const infiniteFlightValues =
+    infiniteFlightSelection && "value" in infiniteFlightSelection
+      ? infiniteFlightSelection.value
+      : null;
 
   return {
     value: {
-      name,
-      liveryname: liveryName || null,
-      ifaircraftid: source === "infinite-flight" ? ifAircraftId : null,
-      ifliveryid: source === "infinite-flight" ? ifLiveryId : null,
+      name: infiniteFlightValues?.name ?? name,
+      liveryname: infiniteFlightValues?.liveryname ?? (liveryName || null),
+      ifaircraftid: infiniteFlightValues?.ifaircraftid ?? null,
+      ifliveryid: infiniteFlightValues?.ifliveryid ?? null,
       notes: notes || null,
       rankreq: rankReq,
       awardreq: awardReq,
@@ -116,10 +199,12 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("[Aircraft] Create error:", error);
-    return NextResponse.json(
-      { success: false, message: "Failed to create aircraft" },
-      { status: 500 },
-    );
+    const status = error instanceof InfiniteFlightApiError ? error.status : 500;
+    const message =
+      error instanceof InfiniteFlightApiError
+        ? error.message
+        : "Failed to create aircraft";
+    return NextResponse.json({ success: false, message }, { status });
   }
 }
 
@@ -161,10 +246,12 @@ export async function PUT(request: Request) {
     });
   } catch (error) {
     console.error("[Aircraft] Update error:", error);
-    return NextResponse.json(
-      { success: false, message: "Failed to update aircraft" },
-      { status: 500 },
-    );
+    const status = error instanceof InfiniteFlightApiError ? error.status : 500;
+    const message =
+      error instanceof InfiniteFlightApiError
+        ? error.message
+        : "Failed to update aircraft";
+    return NextResponse.json({ success: false, message }, { status });
   }
 }
 

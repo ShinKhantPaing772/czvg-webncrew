@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Edit, Loader2, Plus, Trash2 } from "lucide-react";
 
 import { CrewHeader } from "@/components/crew-header";
@@ -57,9 +57,19 @@ type Aircraft = {
 };
 
 type IfAircraft = { id: string; name: string };
-type IfLivery = { id: string; liveryName: string };
+type IfLivery = {
+  id: string;
+  aircraftID: string;
+  aircraftName: string;
+  liveryName: string;
+};
 type Rank = { id: number; name: string; timereq: number };
 type Award = { id: number; name: string };
+type IfMappingValidation = {
+  id: number;
+  status: "valid" | "stale" | "invalid";
+  message: string;
+};
 
 type AircraftForm = {
   source: AircraftSource;
@@ -83,6 +93,60 @@ const emptyForm: AircraftForm = {
   awardReq: "",
 };
 
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function normalizeIfId(value: unknown) {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+function parseIfAircraft(value: unknown): IfAircraft[] {
+  if (!Array.isArray(value)) return [];
+
+  const options = value.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const record = item as Record<string, unknown>;
+    const id = normalizeIfId(record.id);
+    const name = typeof record.name === "string" ? record.name.trim() : "";
+    return UUID_PATTERN.test(id) && name ? [{ id, name }] : [];
+  });
+
+  return [...new Map(options.map((item) => [item.id, item])).values()];
+}
+
+function parseIfLiveries(value: unknown, aircraftId: string): IfLivery[] {
+  if (!Array.isArray(value)) return [];
+
+  const normalizedAircraftId = normalizeIfId(aircraftId);
+  const options = value.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const record = item as Record<string, unknown>;
+    const id = normalizeIfId(record.id);
+    const linkedAircraftId = normalizeIfId(
+      record.aircraftID ?? record.aircraftId,
+    );
+    const aircraftName =
+      typeof record.aircraftName === "string" ? record.aircraftName.trim() : "";
+    const liveryName =
+      typeof record.liveryName === "string" ? record.liveryName.trim() : "";
+
+    return UUID_PATTERN.test(id) &&
+      linkedAircraftId === normalizedAircraftId &&
+      liveryName
+      ? [
+          {
+            id,
+            aircraftID: linkedAircraftId,
+            aircraftName,
+            liveryName,
+          },
+        ]
+      : [];
+  });
+
+  return [...new Map(options.map((item) => [item.id, item])).values()];
+}
+
 async function responseMessage(response: Response, fallback: string) {
   const data = await response.json().catch(() => null);
   if (!response.ok) throw new Error(data?.message || data?.error || fallback);
@@ -105,6 +169,13 @@ export default function AircraftPage() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [ifMappings, setIfMappings] = useState<
+    Record<number, IfMappingValidation>
+  >({});
+  const [mappingLoading, setMappingLoading] = useState(true);
+  const [mappingError, setMappingError] = useState<string | null>(null);
+  const liveryRequestId = useRef(0);
+  const mappingRequestId = useRef(0);
 
   const fetchAircraft = useCallback(async () => {
     const response = await authFetch("/api/aircraft");
@@ -121,13 +192,45 @@ export default function AircraftPage() {
     return rankOptions as Rank[];
   }, []);
 
+  const fetchMappingValidation = useCallback(async () => {
+    const requestId = ++mappingRequestId.current;
+    setMappingLoading(true);
+    setMappingError(null);
+    try {
+      const response = await authFetch("/api/aircraft/if/validate");
+      const data = await responseMessage(
+        response,
+        "Failed to validate Infinite Flight aircraft mappings",
+      );
+      const mappings = Array.isArray(data.mappings)
+        ? (data.mappings as IfMappingValidation[])
+        : [];
+      if (requestId !== mappingRequestId.current) return;
+      setIfMappings(
+        Object.fromEntries(mappings.map((mapping) => [mapping.id, mapping])),
+      );
+    } catch (validationError) {
+      if (requestId !== mappingRequestId.current) return;
+      setMappingError(
+        validationError instanceof Error
+          ? validationError.message
+          : "Failed to validate Infinite Flight aircraft mappings",
+      );
+    } finally {
+      if (requestId === mappingRequestId.current) {
+        setMappingLoading(false);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     Promise.all([fetchAircraft(), fetchRequirements()])
       .catch((loadError) =>
         setError(loadError instanceof Error ? loadError.message : "Failed to load page"),
       )
       .finally(() => setLoading(false));
-  }, [fetchAircraft, fetchRequirements]);
+    void fetchMappingValidation();
+  }, [fetchAircraft, fetchMappingValidation, fetchRequirements]);
 
   const rankNames = useMemo(
     () => new Map(ranks.map((rank) => [rank.id, rank.name])),
@@ -136,6 +239,17 @@ export default function AircraftPage() {
   const awardNames = useMemo(
     () => new Map(awards.map((award) => [award.id, award.name])),
     [awards],
+  );
+  const mappingSummary = useMemo(
+    () =>
+      Object.values(ifMappings).reduce(
+        (summary, mapping) => {
+          summary[mapping.status] += 1;
+          return summary;
+        },
+        { valid: 0, stale: 0, invalid: 0 },
+      ),
+    [ifMappings],
   );
 
   async function loadIfAircraft() {
@@ -146,29 +260,47 @@ export default function AircraftPage() {
         response,
         "Failed to load Infinite Flight aircraft",
       );
-      setIfAircraft(Array.isArray(data.result) ? data.result : []);
+      const options = parseIfAircraft(data.result);
+      if (options.length === 0) {
+        throw new Error("Infinite Flight returned no valid aircraft");
+      }
+      setIfAircraft(options);
+      return options;
     } finally {
       setLoadingReference(false);
     }
   }
 
   async function loadLiveries(aircraftId: string) {
+    const normalizedAircraftId = normalizeIfId(aircraftId);
+    if (!UUID_PATTERN.test(normalizedAircraftId)) {
+      throw new Error("The selected Infinite Flight aircraft ID is invalid");
+    }
+
+    const requestId = ++liveryRequestId.current;
     setLoadingLiveries(true);
     try {
       const response = await authFetch(
-        `/api/aircraft/if/liveries/${encodeURIComponent(aircraftId)}`,
+        `/api/aircraft/if/liveries/${encodeURIComponent(normalizedAircraftId)}`,
       );
       const data = await responseMessage(
         response,
         "Failed to load Infinite Flight liveries",
       );
-      setIfLiveries(Array.isArray(data.result) ? data.result : []);
+      const options = parseIfLiveries(data.result, normalizedAircraftId);
+      if (requestId !== liveryRequestId.current) return null;
+      setIfLiveries(options);
+      return options;
     } finally {
-      setLoadingLiveries(false);
+      if (requestId === liveryRequestId.current) {
+        setLoadingLiveries(false);
+      }
     }
   }
 
   async function openAddDialog() {
+    liveryRequestId.current += 1;
+    setLoadingLiveries(false);
     setSelected(null);
     setFormError(null);
     setIfLiveries([]);
@@ -183,6 +315,8 @@ export default function AircraftPage() {
   }
 
   async function openEditDialog(item: Aircraft) {
+    liveryRequestId.current += 1;
+    setLoadingLiveries(false);
     const source: AircraftSource = item.ifaircraftid ? "infinite-flight" : "manual";
     setSelected(item);
     setFormError(null);
@@ -201,7 +335,47 @@ export default function AircraftPage() {
 
     if (source === "infinite-flight") {
       try {
-        await Promise.all([loadIfAircraft(), loadLiveries(item.ifaircraftid!)]);
+        const aircraftOptions = await loadIfAircraft();
+        const storedAircraftId = normalizeIfId(item.ifaircraftid);
+        const officialAircraft = aircraftOptions.find(
+          (option) => option.id === storedAircraftId,
+        );
+
+        if (!officialAircraft) {
+          setForm((current) => ({
+            ...current,
+            name: "",
+            liveryName: "",
+            ifAircraftId: "",
+            ifLiveryId: "",
+          }));
+          setFormError(
+            "The stored aircraft ID is not valid in Infinite Flight. Select the aircraft and livery again before saving.",
+          );
+          return;
+        }
+
+        const liveryOptions = await loadLiveries(officialAircraft.id);
+        if (!liveryOptions) return;
+
+        const storedLiveryId = normalizeIfId(item.ifliveryid);
+        const officialLivery = liveryOptions.find(
+          (option) => option.id === storedLiveryId,
+        );
+
+        setForm((current) => ({
+          ...current,
+          name: officialAircraft.name,
+          ifAircraftId: officialAircraft.id,
+          liveryName: officialLivery?.liveryName || "",
+          ifLiveryId: officialLivery?.id || "",
+        }));
+
+        if (!officialLivery) {
+          setFormError(
+            "The stored livery ID is not valid for this aircraft. Select a livery again before saving.",
+          );
+        }
       } catch (loadError) {
         setFormError(
           loadError instanceof Error ? loadError.message : "Failed to load aircraft",
@@ -211,6 +385,8 @@ export default function AircraftPage() {
   }
 
   async function changeSource(source: AircraftSource) {
+    liveryRequestId.current += 1;
+    setLoadingLiveries(false);
     setFormError(null);
     setIfLiveries([]);
     setForm((current) => ({
@@ -233,17 +409,24 @@ export default function AircraftPage() {
   }
 
   async function selectIfAircraft(id: string) {
-    const option = ifAircraft.find((item) => item.id === id);
+    const normalizedId = normalizeIfId(id);
+    const option = ifAircraft.find((item) => item.id === normalizedId);
+    if (!option) {
+      setFormError("The selected Infinite Flight aircraft is invalid");
+      return;
+    }
+
+    setFormError(null);
     setIfLiveries([]);
     setForm((current) => ({
       ...current,
-      name: option?.name || "",
-      ifAircraftId: id,
+      name: option.name,
+      ifAircraftId: option.id,
       liveryName: "",
       ifLiveryId: "",
     }));
     try {
-      await loadLiveries(id);
+      await loadLiveries(option.id);
     } catch (loadError) {
       setFormError(
         loadError instanceof Error ? loadError.message : "Failed to load liveries",
@@ -251,12 +434,54 @@ export default function AircraftPage() {
     }
   }
 
+  const selectedIfAircraft = ifAircraft.find(
+    (item) => item.id === normalizeIfId(form.ifAircraftId),
+  );
+  const selectedIfLivery = ifLiveries.find(
+    (item) =>
+      item.id === normalizeIfId(form.ifLiveryId) &&
+      item.aircraftID === selectedIfAircraft?.id,
+  );
   const canSave = Boolean(
     form.name.trim() &&
       (form.rankReq || form.awardReq) &&
       (form.source === "manual" ||
-        (form.ifAircraftId && form.ifLiveryId && form.liveryName)),
+        (selectedIfAircraft && selectedIfLivery && form.liveryName)),
   );
+
+  function renderSource(item: Aircraft) {
+    if (!item.ifaircraftid) {
+      return <Badge variant="secondary">Manual</Badge>;
+    }
+
+    const mapping = ifMappings[item.id];
+    if (!mapping) {
+      return (
+        <Badge variant="outline">
+          {mappingLoading ? "Checking…" : "Unverified"}
+        </Badge>
+      );
+    }
+
+    return (
+      <div className="flex max-w-48 flex-col items-start gap-1">
+        <Badge
+          variant={mapping.status === "invalid" ? "destructive" : "outline"}
+        >
+          {mapping.status === "valid"
+            ? "IF verified"
+            : mapping.status === "stale"
+              ? "Names outdated"
+              : "Invalid mapping"}
+        </Badge>
+        {mapping.status !== "valid" && (
+          <span className="text-xs text-muted-foreground">
+            {mapping.message}
+          </span>
+        )}
+      </div>
+    );
+  }
 
   async function saveAircraft() {
     if (!canSave) return;
@@ -274,7 +499,7 @@ export default function AircraftPage() {
         }),
       });
       await responseMessage(response, `Failed to ${selected ? "update" : "add"} aircraft`);
-      await fetchAircraft();
+      await Promise.all([fetchAircraft(), fetchMappingValidation()]);
       setDialogOpen(false);
     } catch (saveError) {
       setFormError(saveError instanceof Error ? saveError.message : "Failed to save aircraft");
@@ -291,7 +516,7 @@ export default function AircraftPage() {
         method: "DELETE",
       });
       await responseMessage(response, "Failed to deactivate aircraft");
-      await fetchAircraft();
+      await Promise.all([fetchAircraft(), fetchMappingValidation()]);
     } catch (deleteError) {
       setError(
         deleteError instanceof Error ? deleteError.message : "Failed to deactivate aircraft",
@@ -311,6 +536,16 @@ export default function AircraftPage() {
               <p className="text-sm text-muted-foreground">
                 Manage fleet records and pilot access requirements.
               </p>
+              {!mappingLoading && !mappingError &&
+                (mappingSummary.invalid > 0 || mappingSummary.stale > 0) && (
+                  <p className="mt-1 text-xs text-amber-700">
+                    {mappingSummary.invalid} invalid mapping
+                    {mappingSummary.invalid === 1 ? "" : "s"} and{" "}
+                    {mappingSummary.stale} record
+                    {mappingSummary.stale === 1 ? "" : "s"} with outdated
+                    names need attention.
+                  </p>
+                )}
             </div>
             <Button onClick={openAddDialog} disabled={loading}>
               <Plus className="mr-2 h-4 w-4" /> Add Aircraft
@@ -320,6 +555,13 @@ export default function AircraftPage() {
           {error && (
             <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
               {error}
+            </div>
+          )}
+
+          {mappingError && (
+            <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+              Aircraft records loaded, but their Infinite Flight IDs could not
+              be verified: {mappingError}
             </div>
           )}
 
@@ -356,9 +598,7 @@ export default function AircraftPage() {
                         <TableCell className="font-medium">{item.name}</TableCell>
                         <TableCell>{item.liveryname || "—"}</TableCell>
                         <TableCell>
-                          <Badge variant="secondary">
-                            {item.ifaircraftid ? "Infinite Flight" : "Manual"}
-                          </Badge>
+                          {renderSource(item)}
                         </TableCell>
                         <TableCell>{item.notes || "—"}</TableCell>
                         <TableCell>

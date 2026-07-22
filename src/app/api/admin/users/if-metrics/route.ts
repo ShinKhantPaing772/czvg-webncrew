@@ -1,4 +1,9 @@
 import { NextResponse } from "next/server";
+import {
+  findInfiniteFlightUser,
+  getInfiniteFlightUser,
+  InfiniteFlightApiError,
+} from "@/lib/infinite-flight-api";
 import { models } from "@/lib/models";
 import { requirePermission } from "@/lib/server-auth";
 
@@ -67,13 +72,6 @@ export async function POST(request: Request) {
     const auth = await requirePermission(request, "users");
     if (!auth.ok) return auth.response;
 
-    if (!process.env.IF_API) {
-      return NextResponse.json(
-        { success: false, message: "Infinite Flight API key is not configured" },
-        { status: 500 },
-      );
-    }
-
     const body = await request.json();
     const id = Number(body.id);
 
@@ -103,29 +101,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const ifResponse = await fetch(
-      "https://api.infiniteflight.com/public/v2/users",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.IF_API}`,
-        },
-        body: JSON.stringify({
-          discourseNames: [ifc],
-        }),
-      },
-    );
-
-    if (!ifResponse.ok) {
-      return NextResponse.json(
-        { success: false, message: "Infinite Flight user lookup failed" },
-        { status: ifResponse.status },
-      );
-    }
-
-    const ifData = await ifResponse.json();
-    const ifUser = Array.isArray(ifData?.result) ? ifData.result[0] : null;
+    const { data: ifData, cacheStatus } = await getInfiniteFlightUser(ifc);
+    const ifUser = findInfiniteFlightUser(ifData.result, ifc);
 
     if (!ifUser || typeof ifUser !== "object") {
       return NextResponse.json(
@@ -151,17 +128,30 @@ export async function POST(request: Request) {
       if_metrics_updated_at: updatedAt,
     });
 
-    return NextResponse.json({
-      success: true,
-      ifGrade: metrics.grade,
-      ifViolations: metrics.violations,
-      ifMetricsUpdatedAt: updatedAt,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        ifGrade: metrics.grade,
+        ifViolations: metrics.violations,
+        ifMetricsUpdatedAt: updatedAt,
+      },
+      {
+        headers: {
+          "Cache-Control": "private, no-store",
+          "X-Infinite-Flight-Cache": cacheStatus,
+        },
+      },
+    );
   } catch (error) {
     console.error("Error refreshing Infinite Flight metrics", error);
+    const status = error instanceof InfiniteFlightApiError ? error.status : 500;
+    const message =
+      error instanceof InfiniteFlightApiError
+        ? error.message
+        : "Failed to refresh Infinite Flight metrics";
     return NextResponse.json(
-      { success: false, message: "Failed to refresh Infinite Flight metrics" },
-      { status: 500 },
+      { success: false, message },
+      { status },
     );
   }
 }

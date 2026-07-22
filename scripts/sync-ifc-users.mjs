@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { createHash } from "node:crypto";
 import process from "node:process";
 
 import nextEnv from "@next/env";
@@ -17,6 +18,8 @@ const IF_BATCH_SIZE = 25;
 const IF_REQUEST_INTERVAL_MS = 2_100;
 const IF_REQUEST_TIMEOUT_MS = 20_000;
 const IF_MAX_ATTEMPTS = 3;
+const IF_USER_CACHE_TTL_MS = 5 * 60 * 1_000;
+const IF_CACHE_TABLE = "api_cache";
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -97,6 +100,97 @@ function isUuid(value) {
   return UUID_PATTERN.test(stringValue(value));
 }
 
+function userSearchCacheKey(search) {
+  const canonicalSearch = Object.fromEntries(
+    Object.entries(search)
+      .filter(([, values]) => Array.isArray(values))
+      .map(([key, values]) => [
+        key,
+        values
+          .map((value) =>
+            key === "userHashes"
+              ? stringValue(value).toUpperCase()
+              : normalized(value),
+          )
+          .filter(Boolean)
+          .sort(),
+      ])
+      .sort(([left], [right]) => left.localeCompare(right)),
+  );
+  const digest = createHash("sha256")
+    .update(JSON.stringify(canonicalSearch))
+    .digest("hex");
+  return `if-users-batch-${digest}`;
+}
+
+function unwrapCachedPayload(value, expiresAt) {
+  const parsed = JSON.parse(value);
+  if (
+    parsed &&
+    typeof parsed === "object" &&
+    Object.hasOwn(parsed, "data") &&
+    Object.hasOwn(parsed, "expiresAt") &&
+    Number(parsed.expiresAt) === expiresAt
+  ) {
+    return parsed.data;
+  }
+  return parsed;
+}
+
+async function ensureApiCacheTable(connection) {
+  await connection.query(`
+    CREATE TABLE IF NOT EXISTS ${IF_CACHE_TABLE} (
+      cache_key VARCHAR(255) NOT NULL PRIMARY KEY,
+      value LONGTEXT NOT NULL,
+      expires_at BIGINT NOT NULL,
+      KEY idx_api_cache_expires_at (expires_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  await connection.execute(
+    `DELETE FROM ${IF_CACHE_TABLE} WHERE expires_at <= ?`,
+    [Date.now()],
+  );
+}
+
+async function getCachedUserPayload(connection, cacheKey) {
+  const now = Date.now();
+  const [rows] = await connection.execute(
+    `
+      SELECT value, expires_at
+      FROM ${IF_CACHE_TABLE}
+      WHERE cache_key = ? AND expires_at > ?
+      LIMIT 1
+    `,
+    [cacheKey, now],
+  );
+  const row = rows[0];
+  if (!row) return null;
+
+  try {
+    return unwrapCachedPayload(row.value, Number(row.expires_at));
+  } catch (error) {
+    await connection.execute(
+      `DELETE FROM ${IF_CACHE_TABLE} WHERE cache_key = ?`,
+      [cacheKey],
+    );
+    return null;
+  }
+}
+
+async function setCachedUserPayload(connection, cacheKey, payload) {
+  const expiresAt = Date.now() + IF_USER_CACHE_TTL_MS;
+  await connection.execute(
+    `
+      INSERT INTO ${IF_CACHE_TABLE} (cache_key, value, expires_at)
+      VALUES (?, ?, ?)
+      ON DUPLICATE KEY UPDATE
+        value = VALUES(value),
+        expires_at = VALUES(expires_at)
+    `,
+    [cacheKey, JSON.stringify(payload), expiresAt],
+  );
+}
+
 function chunk(values, size) {
   const chunks = [];
   for (let index = 0; index < values.length; index += size) {
@@ -128,7 +222,13 @@ async function throttleInfiniteFlightRequest() {
   lastInfiniteFlightRequestAt = Date.now();
 }
 
-async function fetchInfiniteFlightUsers(search, apiKey) {
+async function fetchInfiniteFlightUsers(search, apiKey, connection) {
+  const cacheKey = userSearchCacheKey(search);
+  const cachedPayload = await getCachedUserPayload(connection, cacheKey);
+  if (cachedPayload !== null) {
+    return parseInfiniteFlightUsers(cachedPayload);
+  }
+
   for (let attempt = 1; attempt <= IF_MAX_ATTEMPTS; attempt += 1) {
     await throttleInfiniteFlightRequest();
 
@@ -170,30 +270,39 @@ async function fetchInfiniteFlightUsers(search, apiKey) {
     }
 
     const payload = await response.json();
-    if (Number(payload?.errorCode) !== 0) {
-      throw new Error(
-        `Infinite Flight user lookup returned error code ${String(payload?.errorCode)}`,
-      );
-    }
-
-    if (!Array.isArray(payload.result)) {
-      throw new Error("Infinite Flight user lookup returned an invalid result");
-    }
-
-    return payload.result
-      .filter((user) => user && typeof user === "object")
-      .map((user) => ({
-        userId: stringValue(user.userId),
-        discourseUsername: stringValue(user.discourseUsername),
-        errorCode: Number(user.errorCode ?? 0),
-      }))
-      .filter((user) => user.userId && user.errorCode === 0);
+    const users = parseInfiniteFlightUsers(payload);
+    await setCachedUserPayload(connection, cacheKey, payload);
+    return users;
   }
 
   return [];
 }
 
-async function fetchUsersInBatches(searchKey, values, apiKey) {
+function parseInfiniteFlightUsers(payload) {
+  if (
+    typeof payload?.errorCode !== "number" ||
+    payload.errorCode !== 0
+  ) {
+    throw new Error(
+      `Infinite Flight user lookup returned error code ${String(payload?.errorCode)}`,
+    );
+  }
+
+  if (!Array.isArray(payload.result)) {
+    throw new Error("Infinite Flight user lookup returned an invalid result");
+  }
+
+  return payload.result
+    .filter((user) => user && typeof user === "object")
+    .map((user) => ({
+      userId: stringValue(user.userId),
+      discourseUsername: stringValue(user.discourseUsername),
+      errorCode: Number(user.errorCode ?? 0),
+    }))
+    .filter((user) => user.userId && user.errorCode === 0);
+}
+
+async function fetchUsersInBatches(searchKey, values, apiKey, connection) {
   const users = [];
   const uniqueValues = [
     ...new Map(values.map((value) => [normalized(value), value])).values(),
@@ -204,6 +313,7 @@ async function fetchUsersInBatches(searchKey, values, apiKey) {
       ...(await fetchInfiniteFlightUsers(
         { [searchKey]: valuesBatch },
         apiKey,
+        connection,
       )),
     );
   }
@@ -415,6 +525,7 @@ async function main() {
   const connection = await mysql.createConnection(databaseConfiguration());
 
   try {
+    await ensureApiCacheTable(connection);
     const allPilots = await loadPilots(connection);
     const pilots = options.pilotId
       ? allPilots.filter((pilot) => pilot.id === options.pilotId)
@@ -439,6 +550,7 @@ async function main() {
       "userIds",
       storedIds,
       apiKey,
+      connection,
     );
     const usersById = new Map(
       usersFromIds.map((user) => [normalized(user.userId), user]),
@@ -454,6 +566,7 @@ async function main() {
       "discourseNames",
       fallbackUsernames,
       apiKey,
+      connection,
     );
     const usersByUsername = new Map(
       usersFromUsernames
