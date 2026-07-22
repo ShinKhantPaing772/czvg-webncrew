@@ -1,289 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  findInfiniteFlightUser,
+  findCurrentFlight,
+  findLocalAircraft,
+  resolveInfiniteFlightUserId,
+} from "@/lib/acars/current-flight";
+import {
+  extractAirportFromFlightPlan,
+  extractAirportFromRecord,
+  extractFlightTime,
+  getNestedString,
+  getString,
+  type UnknownRecord,
+} from "@/lib/acars/infinite-flight-data";
+import {
   getInfiniteFlightFlightPlan,
-  getInfiniteFlightFlights,
-  getInfiniteFlightSessions,
-  getInfiniteFlightUser,
   InfiniteFlightApiError,
-  isInfiniteFlightId,
-  normalizeInfiniteFlightId,
 } from "@/lib/infinite-flight-api";
 import { models } from "@/lib/models";
 import { hasPermission, requireAuth } from "@/lib/server-auth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-type UnknownRecord = Record<string, unknown>;
-
-function asRecord(value: unknown): UnknownRecord {
-  return value && typeof value === "object" ? (value as UnknownRecord) : {};
-}
-
-function getArray(value: unknown): UnknownRecord[] {
-  if (Array.isArray(value)) {
-    return value.filter(
-      (item): item is UnknownRecord => typeof item === "object",
-    );
-  }
-
-  const record = asRecord(value);
-  const result = record.result;
-
-  if (Array.isArray(result)) {
-    return result.filter(
-      (item): item is UnknownRecord => typeof item === "object",
-    );
-  }
-
-  if (result && typeof result === "object") {
-    const resultRecord = result as UnknownRecord;
-    const nestedArrays = ["flights", "sessions", "items", "data"];
-    for (const key of nestedArrays) {
-      if (Array.isArray(resultRecord[key])) {
-        return (resultRecord[key] as unknown[]).filter(
-          (item): item is UnknownRecord => typeof item === "object",
-        );
-      }
-    }
-  }
-
-  return [];
-}
-
-function getString(record: UnknownRecord, keys: string[]): string {
-  for (const key of keys) {
-    const value = record[key];
-    if (typeof value === "string" && value.trim()) {
-      return value.trim();
-    }
-    if (typeof value === "number") {
-      return String(value);
-    }
-  }
-
-  return "";
-}
-
-function getNestedString(record: UnknownRecord, paths: string[]): string {
-  for (const path of paths) {
-    const value = path
-      .split(".")
-      .reduce<unknown>((current, key) => asRecord(current)[key], record);
-
-    if (typeof value === "string" && value.trim()) {
-      return value.trim();
-    }
-    if (typeof value === "number") {
-      return String(value);
-    }
-  }
-
-  return "";
-}
-
-function normalizeIcao(value: string) {
-  return value.replace(/[^a-z0-9]/gi, "").slice(0, 4).toUpperCase();
-}
-
-function normalizeDurationSeconds(key: string, value: number) {
-  const lowerKey = key.toLowerCase();
-
-  if (lowerKey.includes("millisecond") || lowerKey.endsWith("ms")) {
-    return value / 1000;
-  }
-
-  // Live APIs sometimes expose elapsed time in milliseconds without naming it.
-  return value > 604800 ? value / 1000 : value;
-}
-
-function secondsToFlightTime(totalSeconds: number) {
-  const safeSeconds = Math.max(0, Math.floor(totalSeconds));
-  const hours = Math.floor(safeSeconds / 3600);
-  const minutes = Math.floor((safeSeconds % 3600) / 60);
-
-  return `${hours.toString().padStart(2, "0")}:${minutes
-    .toString()
-    .padStart(2, "0")}`;
-}
-
-function dateToSeconds(value: unknown) {
-  if (typeof value !== "string" && typeof value !== "number") {
-    return null;
-  }
-
-  const parsed = new Date(value);
-  const timestamp = parsed.getTime();
-
-  if (Number.isNaN(timestamp)) {
-    return null;
-  }
-
-  return Math.max(0, (Date.now() - timestamp) / 1000);
-}
-
-function extractFlightTime(flight: UnknownRecord) {
-  const durationKeys = [
-    "flightTime",
-    "flightTimeSeconds",
-    "flightTimeMilliseconds",
-    "flightTimeMs",
-    "totalFlightTime",
-    "duration",
-    "durationSeconds",
-    "durationMilliseconds",
-    "durationMs",
-    "totalTime",
-  ];
-
-  for (const key of durationKeys) {
-    const value = flight[key];
-    if (typeof value === "number") {
-      return secondsToFlightTime(normalizeDurationSeconds(key, value));
-    }
-  }
-
-  const startedSeconds = [
-    "created",
-    "createdAt",
-    "startTime",
-    "startedAt",
-    "departureTime",
-  ]
-    .map((key) => dateToSeconds(flight[key]))
-    .find((value): value is number => value !== null);
-
-  return startedSeconds ? secondsToFlightTime(startedSeconds) : "";
-}
-
-async function findLocalAircraft(aircraftId: string, liveryId: string) {
-  const normalizedAircraftId = normalizeInfiniteFlightId(aircraftId);
-  const normalizedLiveryId = normalizeInfiniteFlightId(liveryId);
-  if (!isInfiniteFlightId(normalizedAircraftId)) return null;
-  if (normalizedLiveryId && !isInfiniteFlightId(normalizedLiveryId)) return null;
-
-  const aircraft = await models.Aircraft.findAll({
-    attributes: ["id", "ifaircraftid", "ifliveryid"],
-    where: { status: 1 },
-    raw: true,
-  });
-  const aircraftRecords = aircraft as unknown as UnknownRecord[];
-  const exactAircraftAndLivery = aircraftRecords.find(
-    (item) =>
-      normalizeInfiniteFlightId(getString(item, ["ifaircraftid"])) ===
-        normalizedAircraftId &&
-      normalizeInfiniteFlightId(getString(item, ["ifliveryid"])) ===
-        normalizedLiveryId,
-  );
-
-  if (normalizedLiveryId) return exactAircraftAndLivery ?? null;
-
-  return (
-    aircraftRecords.find(
-      (item) =>
-        normalizeInfiniteFlightId(getString(item, ["ifaircraftid"])) ===
-        normalizedAircraftId,
-    ) ?? null
-  );
-}
-
-function extractAirportFromRecord(record: UnknownRecord, keys: string[]) {
-  for (const key of keys) {
-    const value = record[key];
-
-    if (typeof value === "string") {
-      const normalized = normalizeIcao(value);
-      if (normalized.length === 4) return normalized;
-    }
-
-    const nested = asRecord(value);
-    const nestedIcao = getString(nested, [
-      "icao",
-      "icaoCode",
-      "identifier",
-      "airportIdentifier",
-      "name",
-    ]);
-
-    if (nestedIcao) {
-      const normalized = normalizeIcao(nestedIcao);
-      if (normalized.length === 4) return normalized;
-    }
-  }
-
-  return "";
-}
-
-function extractAirportFromFlightPlan(plan: UnknownRecord, index: 0 | -1) {
-  const root = asRecord(plan.result ?? plan);
-  const direct = extractAirportFromRecord(root, [
-    index === 0 ? "originAirport" : "destinationAirport",
-    index === 0 ? "departureAirport" : "arrivalAirport",
-    index === 0 ? "departure" : "arrival",
-    index === 0 ? "origin" : "destination",
-  ]);
-
-  if (direct) return direct;
-
-  const items = getArray(root.flightPlanItems ?? root.waypoints ?? root.items);
-  const item = index === 0 ? items[0] : items[items.length - 1];
-
-  if (!item) return "";
-
-  return extractAirportFromRecord(item, [
-    "icao",
-    "icaoCode",
-    "identifier",
-    "airportIdentifier",
-    "name",
-  ]);
-}
-
-async function resolveInfiniteFlightUserId(pilot: UnknownRecord) {
-  const storedUserId = getString(pilot, ["ifuserid"]);
-  if (storedUserId) return storedUserId;
-
-  const ifc = getString(pilot, ["ifc"]);
-  if (!ifc) return "";
-
-  const { data } = await getInfiniteFlightUser(ifc);
-  const user = findInfiniteFlightUser(data.result, ifc);
-  const userId = getString(user ?? {}, ["userId"]);
-
-  if (userId) {
-    await models.Pilot.update(
-      { ifuserid: userId },
-      { where: { id: pilot.id } },
-    );
-  }
-
-  return userId;
-}
-
-async function findCurrentFlight(ifUserId: string) {
-  const { data: sessionsData } = await getInfiniteFlightSessions();
-  const sessions = getArray(sessionsData);
-
-  for (const session of sessions) {
-    const sessionId = getString(session, ["id", "sessionId"]);
-    if (!isInfiniteFlightId(sessionId)) continue;
-
-    const { data: flightsData } = await getInfiniteFlightFlights(sessionId);
-    const flights = getArray(flightsData);
-    const flight = flights.find(
-      (item) =>
-        getString(item, ["userId", "pilotId", "id"]).toLowerCase() ===
-        ifUserId.toLowerCase(),
-    );
-
-    if (flight) {
-      return { sessionId, flight };
-    }
-  }
-
-  return null;
-}
 
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
@@ -399,9 +136,7 @@ export async function GET(request: NextRequest) {
         arrival,
         flightTime: extractFlightTime(flight),
         date: new Date().toISOString().slice(0, 10),
-        aircraftId: aircraft
-          ? String((aircraft as unknown as UnknownRecord).id)
-          : "",
+        aircraftId: aircraft ? String(aircraft.id) : "",
         fuelUsed,
         multi: "",
       },
@@ -418,9 +153,6 @@ export async function GET(request: NextRequest) {
       error instanceof InfiniteFlightApiError
         ? error.message
         : "Failed to fetch ACARS data from Infinite Flight";
-    return NextResponse.json(
-      { error: message },
-      { status },
-    );
+    return NextResponse.json({ error: message }, { status });
   }
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getToken, isAuthenticated } from "@/lib/utils/auth";
-import { authFetch } from "@/lib/utils/api";
+import { authFetch } from "../lib/utils/api";
 
 type User = {
   callsign: string;

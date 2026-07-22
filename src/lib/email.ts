@@ -6,6 +6,10 @@ const DEFAULT_SENDER = {
 };
 
 type SendEmailParams = {
+  sender?: {
+    name: string;
+    email: string;
+  };
   to: {
     email: string;
     name?: string;
@@ -24,6 +28,7 @@ function escapeHtml(value: string) {
 }
 
 export async function sendEmail({
+  sender,
   to,
   subject,
   htmlContent,
@@ -40,7 +45,7 @@ export async function sendEmail({
       "api-key": BREVO_API_KEY,
     },
     body: JSON.stringify({
-      sender: DEFAULT_SENDER,
+      sender: sender ?? DEFAULT_SENDER,
       to: [{ email: to.email, name: to.name || to.email }],
       subject,
       htmlContent,

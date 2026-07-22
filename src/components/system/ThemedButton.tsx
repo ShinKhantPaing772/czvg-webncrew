@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Button } from "@/components/ui/button";
+import { Button } from "../ui/button";
 import { cn } from "@/lib/utils";
 
 type Props = React.ComponentProps<typeof Button>;

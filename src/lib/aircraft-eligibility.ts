@@ -5,22 +5,6 @@ export type AircraftRequirements = {
   awardreq?: number | null;
 };
 
-export function meetsAircraftRequirements(
-  requirements: AircraftRequirements,
-  eligibleRankIds: number[],
-  ownedAwardIds: number[],
-) {
-  const rankRequired = Number(requirements.rankreq) || null;
-  const awardRequired = Number(requirements.awardreq) || null;
-
-  if (!rankRequired && !awardRequired) return false;
-
-  return Boolean(
-    (rankRequired && eligibleRankIds.includes(rankRequired)) ||
-      (awardRequired && ownedAwardIds.includes(awardRequired)),
-  );
-}
-
 export async function canPilotUseAircraft(
   pilotId: number,
   requirements: AircraftRequirements,

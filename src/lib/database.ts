@@ -1,8 +1,5 @@
 import { Sequelize } from "sequelize";
-
-const sslCa = process.env.DB_SSL_CA?.replace(/\\n/g, "\n");
-const rejectUnauthorized =
-  process.env.DB_SSL_REJECT_UNAUTHORIZED === "true" || Boolean(sslCa);
+import { databaseSslOptions } from "./database-ssl.mjs";
 
 // Database connection configuration
 const sequelize = new Sequelize({
@@ -16,8 +13,7 @@ const sequelize = new Sequelize({
   dialectOptions: {
     ssl: {
       require: true,
-      rejectUnauthorized,
-      ...(sslCa ? { ca: sslCa } : {}),
+      ...databaseSslOptions(),
     },
   },
   pool: {
