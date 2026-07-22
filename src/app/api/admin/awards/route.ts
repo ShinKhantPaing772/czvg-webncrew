@@ -84,7 +84,10 @@ async function saveAward(
     }
     const stored = { ...values, featured: values.featured ? 1 : null };
     if (id) {
-      const award = await models.Award.findByPk(id, { transaction });
+      const award = await models.Award.findByPk(id, {
+        attributes: ["id", "name", "description", "imageurl", "featured"],
+        transaction,
+      });
       if (!award) return null;
       await award.update(stored, { transaction });
       return award;
@@ -116,7 +119,7 @@ export async function PUT(request: Request) {
     const body = (await request.json()) as Record<string, unknown>;
     const id = positiveId(body.id);
     if (!id) return NextResponse.json({ success: false, message: "A valid award ID is required" }, { status: 400 });
-    if (!(await models.Award.findByPk(id))) {
+    if (!(await models.Award.findByPk(id, { attributes: ["id"] }))) {
       return NextResponse.json({ success: false, message: "Award not found" }, { status: 404 });
     }
     const validated = await validateAward(body, id);
@@ -137,7 +140,7 @@ export async function DELETE(request: Request) {
     if (!auth.ok) return auth.response;
     const id = positiveId(new URL(request.url).searchParams.get("id"));
     if (!id) return NextResponse.json({ success: false, message: "A valid award ID is required" }, { status: 400 });
-    if (!(await models.Award.findByPk(id))) {
+    if (!(await models.Award.findByPk(id, { attributes: ["id"] }))) {
       return NextResponse.json({ success: false, message: "Award not found" }, { status: 404 });
     }
     const [aircraft, grants] = await Promise.all([

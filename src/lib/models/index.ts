@@ -377,8 +377,16 @@ PirepComment.init(
 // Associations
 Aircraft.belongsTo(Rank, { foreignKey: "rankreq" });
 Aircraft.belongsTo(Award, { foreignKey: "awardreq" });
-Pilot.hasMany(Award, { foreignKey: "pilotid" });
-Award.belongsToMany(Pilot, { through: AwardGranted, foreignKey: "awardid" });
+Pilot.belongsToMany(Award, {
+  through: AwardGranted,
+  foreignKey: "pilotid",
+  otherKey: "awardid",
+});
+Award.belongsToMany(Pilot, {
+  through: AwardGranted,
+  foreignKey: "awardid",
+  otherKey: "pilotid",
+});
 Pirep.belongsTo(Pilot, { foreignKey: "pilotid" });
 Pirep.belongsTo(Aircraft, { foreignKey: "aircraftid" });
 Pirep.hasMany(PirepComment, { foreignKey: "pirepid", as: "Comments" });
