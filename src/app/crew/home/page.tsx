@@ -75,6 +75,8 @@ type DashboardData = {
     approvedPireps: number;
     pendingPireps: number;
     rejectedPireps: number;
+    recentRejectedPireps: number;
+    recentPirepWarningLimit: number;
   };
   recentPireps: RecentPirep[];
 };
@@ -300,15 +302,19 @@ export default function UserDashboard() {
             </Card>
           </section>
 
-          {dashboard.statistics.rejectedPireps > 0 && (
+          {dashboard.statistics.recentRejectedPireps > 0 && (
             <Card className="border-red-200 bg-red-50">
               <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3 text-red-800">
                   <AlertCircle className="h-5 w-5" />
                   <p className="text-sm font-medium">
-                    {dashboard.statistics.rejectedPireps} rejected PIREP
-                    {dashboard.statistics.rejectedPireps === 1 ? "" : "s"} may
-                    need attention.
+                    Within your latest{" "}
+                    {dashboard.statistics.recentPirepWarningLimit} PIREPs,{" "}
+                    {dashboard.statistics.recentRejectedPireps}{" "}
+                    {dashboard.statistics.recentRejectedPireps === 1
+                      ? "was"
+                      : "were"}{" "}
+                    rejected and may need attention.
                   </p>
                 </div>
                 <Button asChild variant="outline" size="sm">

@@ -13,6 +13,8 @@ type RankRecord = {
   timereq: number;
 };
 
+const RECENT_PIREP_WARNING_LIMIT = 10;
+
 function secondsToDurationInput(seconds: number) {
   return formatFlightTime(seconds || 0);
 }
@@ -88,8 +90,11 @@ export async function GET(
             attributes: ["id", "name", "liveryname"],
           },
         ],
-        order: [["date", "DESC"]],
-        limit: 8,
+        order: [
+          ["date", "DESC"],
+          ["id", "DESC"],
+        ],
+        limit: RECENT_PIREP_WARNING_LIMIT,
       }),
       models.Rank.findAll({
         attributes: ["id", "name", "timereq"],
@@ -104,6 +109,9 @@ export async function GET(
     ]);
 
     const totalSeconds = Number(approvedSeconds || 0);
+    const recentRejectedCount = recentPireps.filter(
+      (pirep: any) => Number(pirep.status) === 2,
+    ).length;
     const rankRows = ranks.length
       ? ranks
       : [{ id: 0, name: "Trainee", timereq: 0 }];
@@ -177,6 +185,8 @@ export async function GET(
         approvedPireps: approvedCount,
         pendingPireps: pendingCount,
         rejectedPireps: rejectedCount,
+        recentRejectedPireps: recentRejectedCount,
+        recentPirepWarningLimit: RECENT_PIREP_WARNING_LIMIT,
       },
       recentPireps: recentPireps.map((pirep: any) => ({
         id: pirep.id,
