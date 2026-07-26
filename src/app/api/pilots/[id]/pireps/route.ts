@@ -193,3 +193,87 @@ export async function GET(
     );
   }
 }
+
+export async function POST(
+  request: Request,
+  { params }: { params: { id: string } },
+) {
+  try {
+    const auth = await requireAuth(request);
+    if (!auth.ok) return auth.response;
+
+    const pilotId = Number(params.id);
+    if (!Number.isInteger(pilotId) || pilotId <= 0) {
+      return NextResponse.json({ error: "Invalid pilot id" }, { status: 400 });
+    }
+
+    if (String(auth.user.id) !== String(pilotId)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const body = await request.json();
+    const pirepId = Number(body.pirepId);
+    const content =
+      typeof body.content === "string" ? body.content.trim() : "";
+
+    if (!Number.isInteger(pirepId) || pirepId <= 0) {
+      return NextResponse.json(
+        { success: false, error: "Invalid PIREP id" },
+        { status: 400 },
+      );
+    }
+
+    if (!content) {
+      return NextResponse.json(
+        { success: false, error: "Comment is required" },
+        { status: 400 },
+      );
+    }
+
+    const pirep = await models.Pirep.findOne({
+      where: {
+        id: pirepId,
+        pilotid: pilotId,
+      },
+      attributes: ["id"],
+    });
+
+    if (!pirep) {
+      return NextResponse.json(
+        { success: false, error: "PIREP not found" },
+        { status: 404 },
+      );
+    }
+
+    const createdComment = await models.PirepComment.create({
+      pirepid: pirepId,
+      userid: auth.user.id,
+      content,
+    });
+
+    const comment = await models.PirepComment.findByPk(createdComment.id, {
+      attributes: ["id", "userid", "content", "dateposted"],
+      include: [
+        {
+          model: models.Pilot,
+          as: "User",
+          attributes: ["id", "callsign", "name"],
+        },
+      ],
+    });
+
+    return NextResponse.json(
+      {
+        success: true,
+        comment: comment?.toJSON() ?? createdComment.toJSON(),
+      },
+      { status: 201 },
+    );
+  } catch (error) {
+    console.error("[PIREPs] Error adding pilot comment:", error);
+    return NextResponse.json(
+      { success: false, error: "Failed to add comment" },
+      { status: 500 },
+    );
+  }
+}

@@ -47,8 +47,9 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
-import { Input } from "@/components/ui/input"; // 🔍 new import
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -117,8 +118,12 @@ export default function ViewPireps() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [newComment, setNewComment] = useState("");
+  const [commentError, setCommentError] = useState<string | null>(null);
+  const [submittingCommentId, setSubmittingCommentId] = useState<number | null>(
+    null,
+  );
 
-  // 🔍 Search Feature
   const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
@@ -222,6 +227,56 @@ export default function ViewPireps() {
     }
   };
 
+  const handleAddComment = async (pirepId: number) => {
+    const content = newComment.trim();
+    if (!content) {
+      setCommentError("Enter a comment before posting.");
+      return;
+    }
+
+    if (!user?.id) {
+      setCommentError("Your session could not be verified. Please sign in again.");
+      return;
+    }
+
+    setSubmittingCommentId(pirepId);
+    setCommentError(null);
+
+    try {
+      const response = await authFetch(`/api/pilots/${user.id}/pireps`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ pirepId, content }),
+      });
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Failed to add comment");
+      }
+
+      const comment = data.comment as PirepComment;
+      setPirepsData((currentPireps) =>
+        currentPireps.map((pirep) =>
+          pirep.id === pirepId
+            ? {
+                ...pirep,
+                Comments: [...(pirep.Comments ?? []), comment],
+              }
+            : pirep,
+        ),
+      );
+      setNewComment("");
+    } catch (err) {
+      setCommentError(
+        err instanceof Error ? err.message : "Failed to add comment",
+      );
+    } finally {
+      setSubmittingCommentId(null);
+    }
+  };
+
   return (
     <CrewHeader>
       <main className="flex flex-1 flex-col gap-4 md:gap-8">
@@ -230,7 +285,6 @@ export default function ViewPireps() {
             <h1 className="text-2xl font-bold">My PIREPs</h1>
 
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-end">
-              {/* 🔍 Search bar */}
               <div className="w-full space-y-2 sm:w-64">
                 <Label htmlFor="pirep-search">Search</Label>
                 <div className="relative">
@@ -349,13 +403,17 @@ export default function ViewPireps() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => setSelectedPirep(pirep)}
+                              onClick={() => {
+                                setSelectedPirep(pirep);
+                                setNewComment("");
+                                setCommentError(null);
+                              }}
                             >
                               <Eye className="h-4 w-4 mr-1" />
                               <span className="hidden sm:inline">View</span>
                             </Button>
                           </DialogTrigger>
-                          <DialogContent className="max-w-5xl w-full bg-white">
+                          <DialogContent className="max-h-[90vh] w-full max-w-5xl overflow-y-auto bg-white">
                             <DialogHeader>
                               <DialogTitle className="flex items-center gap-2">
                                 {getStatusIcon(
@@ -439,14 +497,18 @@ export default function ViewPireps() {
                                 </CardContent>
                               </Card>
 
-                              {pirep.Comments && pirep.Comments.length > 0 && (
-                                <Card>
-                                  <CardHeader>
-                                    <CardTitle className="text-sm font-medium">
-                                      Admin Comments
-                                    </CardTitle>
-                                  </CardHeader>
-                                  <CardContent className="pt-0">
+                              <Card>
+                                <CardHeader>
+                                  <CardTitle className="text-sm font-medium">
+                                    Comments
+                                  </CardTitle>
+                                  <CardDescription>
+                                    Discuss this PIREP with the review team.
+                                  </CardDescription>
+                                </CardHeader>
+                                <CardContent className="space-y-4 pt-0">
+                                  {pirep.Comments &&
+                                  pirep.Comments.length > 0 ? (
                                     <div className="space-y-3 text-sm">
                                       {pirep.Comments.map((comment) => (
                                         <div
@@ -471,9 +533,55 @@ export default function ViewPireps() {
                                         </div>
                                       ))}
                                     </div>
-                                  </CardContent>
-                                </Card>
-                              )}
+                                  ) : (
+                                    <p className="text-sm text-muted-foreground">
+                                      No comments yet.
+                                    </p>
+                                  )}
+
+                                  <div className="space-y-2 border-t pt-4">
+                                    <Label htmlFor={`pirep-comment-${pirep.id}`}>
+                                      Add a comment
+                                    </Label>
+                                    <Textarea
+                                      id={`pirep-comment-${pirep.id}`}
+                                      value={newComment}
+                                      onChange={(event) => {
+                                        setNewComment(event.target.value);
+                                        setCommentError(null);
+                                      }}
+                                      placeholder="Write a comment about this PIREP..."
+                                      disabled={submittingCommentId === pirep.id}
+                                      aria-invalid={Boolean(commentError)}
+                                    />
+                                    {commentError && (
+                                      <p
+                                        className="text-sm text-red-600"
+                                        role="alert"
+                                      >
+                                        {commentError}
+                                      </p>
+                                    )}
+                                    <div className="flex justify-end">
+                                      <Button
+                                        type="button"
+                                        onClick={() =>
+                                          handleAddComment(pirep.id)
+                                        }
+                                        disabled={
+                                          submittingCommentId === pirep.id ||
+                                          !newComment.trim()
+                                        }
+                                      >
+                                        {submittingCommentId === pirep.id && (
+                                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        )}
+                                        Post Comment
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </CardContent>
+                              </Card>
                             </div>
                           </DialogContent>
                         </Dialog>
