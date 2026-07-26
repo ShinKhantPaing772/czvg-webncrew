@@ -160,16 +160,28 @@ function validateRouteRow(
     throw new Error(`Row ${rowNumber}: ${errors.join(", ")}`);
   }
 
-  // Parse aircraft names (semicolon or pipe separated list)
-  const aircraftStr = (row.aircraft || "").toString().trim();
+  // Preview rows already contain a normalized aircraftNames array. Preserve it
+  // during the import pass; raw CSV rows still use the aircraft column.
+  const normalizedAircraftNames = (row as unknown as { aircraftNames?: unknown })
+    .aircraftNames;
   const aircraftNames: string[] = [];
 
-  if (aircraftStr) {
+  if (Array.isArray(normalizedAircraftNames)) {
+    for (const name of normalizedAircraftNames) {
+      if (typeof name === "string" && name.trim()) {
+        aircraftNames.push(name.trim());
+      }
+    }
+  } else {
+    const aircraftStr = (row.aircraft || "").toString().trim();
+
     // Split by semicolon or pipe
-    const names = aircraftStr.split(/[;|]/).map((name: string) => name.trim());
-    for (const name of names) {
-      if (name) {
-        aircraftNames.push(name);
+    if (aircraftStr) {
+      const names = aircraftStr.split(/[;|]/).map((name: string) => name.trim());
+      for (const name of names) {
+        if (name) {
+          aircraftNames.push(name);
+        }
       }
     }
   }
@@ -280,9 +292,14 @@ export async function POST(request: Request) {
 
           const aircraftIds: number[] = [];
           for (const aircraftName of validatedRoute.aircraftNames) {
-            const mappedId = Number(mappings?.[aircraftName]);
+            const mapping = mappings?.[aircraftName];
+            if (mapping === undefined || mapping === null || mapping === "") {
+              continue;
+            }
+
+            const mappedId = Number(mapping);
             if (!Number.isInteger(mappedId) || mappedId <= 0) {
-              throw new Error(`Missing aircraft mapping for "${aircraftName}"`);
+              throw new Error(`Invalid aircraft mapping for "${aircraftName}"`);
             }
             aircraftIds.push(mappedId);
           }

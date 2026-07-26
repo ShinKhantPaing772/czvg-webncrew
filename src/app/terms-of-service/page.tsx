@@ -10,64 +10,78 @@ export const metadata: Metadata = {
     "Terms for using the China Southern Virtual Group website, applicant portal, and crew center.",
 };
 
-const effectiveDate = "July 6, 2026";
+const effectiveDate = "July 26, 2026";
 
 const sections = [
   {
-    title: "Overview",
+    title: "Overview and Agreement",
     body: [
       "These Terms of Service govern your use of the China Southern Virtual Group IF website, applicant portal, crew center, routes, dashboards, PIREP tools, admin workflows, and related virtual airline services.",
       "CZVG is a virtual airline community for the Infinite Flight platform. We do not provide real-world airline, transportation, aviation training, dispatch, travel booking, employment, or safety services.",
-      "By accessing the site, creating an account, applying to join, or using the crew center, you agree to these terms and to any applicable CZVG staff instructions, community standards, and virtual airline rules.",
+      "By applying, creating an account, signing in, or using an authenticated CZVG feature, you agree to these terms, the Privacy Policy, and applicable CZVG rules and staff instructions. If you do not agree, do not apply for or use a CZVG account.",
     ],
   },
   {
-    title: "Eligibility",
+    title: "Eligibility and Applications",
     body: [
-      "You must be at least 13 years old to apply or use an account. If you are under the age of majority where you live, you should have permission from a parent or guardian.",
-      "Applicants must meet CZVG application requirements, which may include having an active Infinite Flight Pro subscription, an Infinite Flight Community account linked to Infinite Flight, good standing in the community, the required Infinite Flight grade, no relevant blacklist or watchlist issues, the ability to use Discord, and active participation.",
-      "CZVG staff may approve, reject, pause, or close applications at their discretion when needed to protect the group, enforce standards, or comply with partner community requirements.",
+      "You must be at least 13 years old to apply or use an account. If you are under the age of majority where you live, you must have permission from a parent or guardian. The signup flow does not independently verify age, so you are responsible for giving an accurate representation.",
+      "Application requirements currently include an active Infinite Flight Pro subscription, an Infinite Flight Community account linked to Infinite Flight, Grade 3 or above, good community standing, no applicable IFVARB blacklist or watchlist issue, the ability to use Discord, and reasonable active participation. Requirements may change with notice on the application page or through staff instructions.",
+      "CZVG uses the Infinite Flight public API to verify the submitted Infinite Flight Community username and obtain the linked user ID and available grade or violation metrics. You authorize those checks when you apply and while staff review or maintain your account.",
+      "CZVG staff may approve, reject, pause, or close an application based on the stated requirements, submitted records, community standing, safety or security concerns, available capacity, or reasonable operational judgment. An application does not guarantee membership, rank, staff access, or any real-world benefit.",
     ],
   },
   {
     title: "Accounts and Security",
     body: [
-      "You are responsible for the accuracy of the information you submit, keeping your password secure, and all activity that occurs under your account.",
-      "You may not share, sell, transfer, impersonate, or create misleading accounts. You may not attempt to access another pilot's account, admin pages, tokens, database records, or staff-only tools.",
-      "We may suspend or revoke tokens, reset access, require re-verification, or disable accounts if we suspect misuse, inaccurate information, security issues, inactivity, or violations of these terms.",
+      "You must provide an accurate preferred name, email address, and Infinite Flight Community username and keep information reasonably current. Passwords must meet the minimum shown by the signup or reset flow, and you are responsible for keeping your password, reset codes, and authentication token confidential.",
+      "CZVG stores its authentication token in your browser's local storage, and the server accepts a valid token for up to seven days. Log out on shared devices and notify staff promptly if you believe an account or token has been compromised.",
+      "You may not share, sell, transfer, impersonate, or create a misleading or duplicate account; use another person's email or Infinite Flight identity; or attempt to access another pilot's account, protected API, admin page, token, database record, or staff-only tool.",
+      "We may expire or delete tokens, reset access, require re-verification, restrict features, or disable an account if we reasonably suspect misuse, inaccurate information, a security issue, inactivity, or a violation of these terms.",
     ],
   },
   {
-    title: "Applicant and Onboarding Rules",
+    title: "Examination and Onboarding",
     body: [
-      "Applications may require Infinite Flight profile checks, an assigned callsign, entrance examination steps, score review, replay submission, Discord onboarding, and staff approval.",
-      "If a flight replay is required, the link you submit must be valid and relevant to the requested assessment. Staff may reject incomplete, misleading, unavailable, or unrelated replay links.",
-      "Discord invite links are provided for onboarding and community participation. Discord is a separate service with its own terms, policies, moderation tools, and account requirements.",
+      "Onboarding can include an assigned callsign, a Google Forms entrance examination, your declaration that the examination is complete, staff entry and review of the score, an additional replay, a Discord invite, and final staff approval.",
+      "A score below 80 currently requires an additional ShareMyInfiniteFlight replay with the requested ATC coverage. Any replay URL must use the supported ShareMyInfiniteFlight domain, remain available for review, relate to your own requested assessment, and not be false, misleading, or unrelated.",
+      "Do not falsely declare an examination complete, interfere with the form, share restricted examination material or access credentials, manipulate a score, or submit another person's work. CZVG may require a retake, additional evidence, or staff review when results are incomplete or questionable.",
+      "Discord access is part of CZVG onboarding and community participation. An invite is personal to the onboarding process and must not be published, sold, or used to bypass Discord or CZVG moderation.",
     ],
   },
   {
     title: "PIREPs and Flight Records",
     body: [
-      "PIREPs must describe virtual flights you actually completed in a truthful and reasonably accurate way, including route, flight number, aircraft, date, flight time, fuel used, and any multiplier code.",
-      "Do not submit duplicate, fabricated, manipulated, or misleading PIREPs. Do not claim time, rank progress, events, aircraft, multipliers, or awards that you did not earn under CZVG rules.",
-      "CZVG staff may review, approve, reject, edit, comment on, or remove PIREPs and related pilot statistics to maintain accurate records and fair progression.",
-      "Live flight lookup and ACARS-style tools are convenience features. They depend on Infinite Flight data availability and may be incomplete, delayed, unavailable, or mismatched. You remain responsible for reviewing a PIREP before submission.",
+      "A PIREP must describe a virtual flight you actually completed in a truthful and reasonably accurate way, including the flight number, route, aircraft, date, flight time, fuel used, and any requested multiplier.",
+      "Do not submit a duplicate, fabricated, manipulated, or misleading PIREP or claim credited time, rank progress, event participation, aircraft eligibility, a multiplier, or an award you did not earn. A multiplier can change credited time, so it may differ from the raw duration.",
+      "The live-flight and ACARS-style tools are convenience features that use public Infinite Flight API data to prefill available fields. That data can be incomplete, delayed, unavailable, or matched incorrectly. You remain responsible for checking every field before submitting the PIREP.",
+      "PIREPs may include a discussion between the pilot and permitted staff. Comments must be relevant, truthful, and respectful and must not contain secrets, credentials, unnecessary personal information, harassment, or unlawful material.",
+      "Authorized staff may review, approve, reject, correct PIREP fields, add or remove review comments, and adjust related statistics when reasonably necessary to keep records accurate and progression fair. CZVG may also remove or exclude invalid records through administrative maintenance.",
     ],
   },
   {
     title: "Acceptable Use",
     body: [
-      "Use CZVG in a respectful, lawful, and community-minded way. Do not harass others, evade moderation, exploit bugs, interfere with the website, overload APIs, scrape protected areas, upload malicious content, or attempt to bypass permissions.",
+      "Use CZVG in a respectful, lawful, and community-minded way. Do not harass others, evade moderation, exploit or conceal a bug, interfere with the website, overload an endpoint or third-party API, scrape protected areas, inject malicious content, automate submissions without permission, or bypass access controls.",
       "Do not use CZVG to coordinate real-world aviation activity, emergency services, unlawful activity, spam, phishing, credential theft, or commercial activity not approved by CZVG staff.",
       "Do not misrepresent CZVG as being affiliated with, endorsed by, or operated by China Southern Group, Infinite Flight, IFVARB, Discord, or any real-world airline or organization.",
+      "Do not collect, expose, or misuse another applicant's, pilot's, or staff member's personal information. If you discover a vulnerability or private information exposed in error, stop accessing it and report it privately to CZVG staff.",
     ],
   },
   {
     title: "Third-Party Services",
     body: [
-      "CZVG links to and interacts with third-party services, including Infinite Flight, Infinite Flight Community, IFVARB, Discord, ShareMyInfiniteFlight, iflytics, Brevo email delivery, Instagram, and other community resources.",
-      "Third-party services are not controlled by CZVG. Their availability, content, moderation, privacy practices, account actions, and terms are their own responsibility.",
-      "You must follow any applicable third-party rules when using those services with CZVG, including Infinite Flight, Infinite Flight Community, IFVARB, and Discord rules.",
+      "CZVG depends on or links to services including Infinite Flight and its public API, Infinite Flight Community, IFVARB, Discord, ShareMyInfiniteFlight, Google Forms, Google Maps, Google Sheets, Brevo email delivery, iflytics, Instagram, third-party image hosts, community forums, and the separately hosted live map.",
+      "Third-party services are not controlled by CZVG. Their availability, content, data handling, cookies, moderation, account decisions, security, and terms are governed by their operators. Embeds and remote content can contact a provider as soon as the relevant CZVG page loads, while a link contacts the provider when you open it.",
+      "You must follow any applicable third-party rules when using a service with CZVG. Losing access to Infinite Flight, Infinite Flight Community, Discord, or another required service can affect your eligibility or ability to use related CZVG features.",
+      "CZVG is not responsible for a third-party outage, data error, account action, content change, or loss, except where applicable law does not allow that responsibility to be excluded.",
+    ],
+  },
+  {
+    title: "Your Submissions",
+    body: [
+      "You keep any rights you have in comments, replay links, and other original material you submit. You give CZVG a non-exclusive, worldwide, royalty-free license to host, store, copy, format, transmit, display, and use that material only as reasonably needed to operate, review, moderate, secure, and preserve the virtual airline and its records.",
+      "That operational license includes showing a submission to authorized staff or the relevant pilot, including limited application or PIREP details in configured Discord notices, and preserving an appropriate historical or audit record. It ends when the material is deleted except for copies that must reasonably remain for security, legal, dispute, backup, or historical-record purposes.",
+      "You must have the right to submit the material and must not include another person's confidential information, personal data, or copyrighted content unless you have permission or another lawful basis to do so.",
     ],
   },
   {
@@ -82,14 +96,16 @@ const sections = [
     title: "Service Availability and Changes",
     body: [
       "CZVG is maintained as a virtual community service. We may update, limit, pause, remove, or discontinue any part of the website, crew center, route database, admin tools, or integrations at any time.",
-      "We do not guarantee that the site will always be available, error-free, secure, compatible with every browser, or that all data from Infinite Flight or other third-party services will be current or complete.",
+      "We do not guarantee that the site will always be available, uninterrupted, error-free, secure, compatible with every browser, or that data from Infinite Flight or another third party will be current or complete. Features, eligibility rules, routes, fleet data, ranks, awards, multipliers, and integrations can change as the group evolves.",
     ],
   },
   {
-    title: "Enforcement",
+    title: "Enforcement and Account Closure",
     body: [
       "CZVG staff may warn, restrict, suspend, reject, remove, or terminate access for violations of these terms, application requirements, crew center rules, Discord rules, Infinite Flight community standards, or staff instructions.",
-      "We may also preserve, review, or disclose relevant information when reasonably necessary to investigate abuse, protect the service, comply with law, or communicate with platform or community partners.",
+      "When practical, the response will reflect the seriousness and history of the issue, but CZVG may act immediately when needed to protect users, data, systems, community partners, or the group.",
+      "You may ask staff to close your account. Account closure does not automatically erase PIREPs, comments, awards, security records, or other history that CZVG reasonably needs for accurate virtual-airline records, dispute resolution, abuse prevention, or legal obligations. Privacy requests are handled under the Privacy Policy and applicable law.",
+      "We may preserve, review, or disclose relevant information when reasonably necessary to investigate abuse, protect the service, enforce these terms, comply with law, or communicate with an applicable platform or community partner.",
     ],
   },
   {
@@ -109,7 +125,8 @@ const sections = [
   {
     title: "Privacy",
     body: [
-      "Our Privacy Policy explains how we collect, use, store, and share information for the applicant portal, crew center, PIREPs, email notices, Discord staff workflows, and Infinite Flight integrations.",
+      "Our Privacy Policy explains how CZVG collects, uses, stores, and discloses information for accounts, applications, the Google Forms examination workflow, the crew center, PIREPs, browser storage, Brevo email, Discord notices, third-party embeds, and Infinite Flight integrations.",
+      "Transactional application, password-reset, examination, Discord invite, approval, security, and service messages are part of operating an account and are not marketing subscriptions.",
     ],
     link: {
       href: "/privacy-policy",
@@ -120,7 +137,7 @@ const sections = [
     title: "Changes to These Terms",
     body: [
       "We may update these terms as CZVG features, staff practices, community standards, third-party integrations, or legal requirements change. The effective date above will be updated when material changes are made.",
-      "Continuing to use the website or crew center after updated terms are posted means you accept the updated terms.",
+      "Updated terms apply from the posted effective date. Continuing to use an authenticated CZVG service after that date means you accept the updated terms; if you do not agree, stop using the account and ask staff to close it.",
     ],
   },
 ];
@@ -154,9 +171,10 @@ export default function TermsOfServicePage() {
               <aside className="rounded-md border border-slate-200 bg-slate-50 p-5 text-sm text-slate-600 lg:sticky lg:top-24">
                 <p className="font-semibold text-slate-950">Quick Summary</p>
                 <p className="mt-3 leading-6">
-                  CZVG is a virtual airline community. Keep account information
-                  accurate, file truthful PIREPs, follow staff and platform
-                  rules, and do not use the site for real-world aviation.
+                  CZVG is a virtual airline community. Be eligible, protect your
+                  account, complete onboarding honestly, file accurate PIREPs,
+                  follow staff and platform rules, and never use CZVG data for
+                  real-world aviation.
                 </p>
                 <Link
                   href="/privacy-policy"

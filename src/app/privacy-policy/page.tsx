@@ -10,103 +10,120 @@ export const metadata: Metadata = {
     "How China Southern Virtual Group collects, uses, and protects information for applicants, pilots, and crew center users.",
 };
 
-const effectiveDate = "July 6, 2026";
+const effectiveDate = "July 26, 2026";
 
 const sections = [
   {
-    title: "Who We Are",
+    title: "Who We Are and What This Policy Covers",
     body: [
       "China Southern Virtual Group IF, also called CZVG in this policy, is a virtual airline community and crew center for Infinite Flight pilots. We are not a real-world airline, travel provider, flight school, or transportation service.",
-      "This policy explains how we handle information when you visit the website, apply to join, sign in to the crew center, file PIREPs, use applicant tools, or interact with our staff systems.",
+      "This policy explains how CZVG handles information when you visit the website, apply to join, sign in, complete onboarding, use the crew center or ACARS-style tools, file or comment on a PIREP, contact staff, or use a connected feature.",
     ],
   },
   {
-    title: "Information We Collect",
+    title: "Information You Provide and Records We Create",
     body: [
-      "Account and application information, including your preferred name, email address, password hash, assigned callsign, Infinite Flight Community username, Infinite Flight user ID, application status, entrance exam status, entrance exam score, staff notes, Discord invite status, and application timestamps.",
-      "Infinite Flight and community information, including publicly available or API-returned Infinite Flight profile details such as grade, violation count, live flight data used for ACARS-style assistance, and links you provide from ShareMyInfiniteFlight.",
-      "Crew activity information, including PIREPs, flight numbers, departure and arrival airports, aircraft selections, flight time, fuel used, multipliers, PIREP status, reviewer comments, ranks, awards, permissions, and related dashboard statistics.",
-      "Authentication and security information, including bearer tokens stored by your browser, one-time passcodes for password reset, token expiration and revocation records, rate-limit records, and standard server logs that may include IP address, browser details, device information, pages requested, and timestamps.",
-      "Communications information, including transactional emails we send about applications, password resets, exam scores, Discord invites, approvals, and staff notifications sent through configured Discord webhooks.",
+      "Account information includes your preferred name, email address, password hash, assigned callsign, Infinite Flight Community username, Infinite Flight user ID, account status, join date, transferred hours or flights where applicable, and permissions assigned by staff. CZVG stores a bcrypt hash of your password, not the password in readable form.",
+      "Application and onboarding records include your application status, Infinite Flight grade and violation count, the date those metrics were checked, examination completion status and score, related timestamps, a ShareMyInfiniteFlight replay URL when required, a Discord invite URL and delivery status, and notes entered by authorized staff.",
+      "Crew activity records include PIREPs, flight number, departure and arrival airports, flight date, aircraft and livery selection, submitted or credited flight time, fuel used, multiplier, review status, pilot and staff comments, comment authors and timestamps, ranks, awards, route eligibility, and dashboard statistics.",
+      "Communications records include the recipient name and email address and the content of transactional messages about applications, password resets, examination results, Discord invites, and approvals. CZVG also creates limited application and PIREP summaries for configured Discord channels.",
     ],
   },
   {
-    title: "How We Collect Information",
+    title: "Information from Infinite Flight and Other Sources",
     body: [
-      "We collect information directly from you when you apply, sign in, submit a PIREP, update application steps, reset a password, or otherwise enter information in the crew center.",
-      "We collect some information from third-party services when needed to run the virtual airline, including the Infinite Flight public API, Infinite Flight Community profile pages, ShareMyInfiniteFlight links you submit, Discord invite links, and transactional email providers.",
-      "We also collect limited technical information automatically through the website, authentication flow, hosting environment, database, and security logs.",
+      "When you enter an Infinite Flight Community username, CZVG sends that username to the Infinite Flight public API to confirm the account and obtain the associated user ID and available profile metrics such as grade and violation count. Staff tools may repeat that lookup or use the stored user ID to keep the link accurate.",
+      "When you request ACARS-style assistance, CZVG uses your Infinite Flight user ID to find a current public live flight and may process returned session, flight, flight-plan, aircraft, livery, route, airport, duration, and fuel information. Infinite Flight endpoints may return other public live-session records in the same response; CZVG uses those records only to locate the requested pilot's flight and temporarily cache the API response.",
+      "The entrance examination opens on Google Forms. Information entered on that form is submitted to Google and the form owner rather than through the CZVG website; CZVG stores the completion status, score entered by staff, and related timestamps in the crew center. A replay itself is hosted by ShareMyInfiniteFlight; CZVG stores the URL you submit, not the replay file.",
     ],
   },
   {
-    title: "How We Use Information",
+    title: "Authentication, Browser Storage, and Technical Data",
     body: [
-      "We use information to operate the applicant portal and crew center, review applications, assign callsigns, verify basic Infinite Flight eligibility, manage ranks and permissions, process PIREPs, show pilot dashboards, detect duplicate or invalid submissions, and support staff moderation.",
-      "We use contact information to send transactional messages such as password reset codes, application confirmations, examination results, Discord invite notices, and account approval messages.",
-      "We use security information to authenticate users, revoke sessions, protect admin tools, investigate abuse, prevent fraud, maintain service reliability, and comply with community rules or legal obligations.",
-      "We do not use applicant or pilot information for third-party targeted advertising, and we do not sell personal information.",
+      "After sign-in or application, the browser stores an authentication token in localStorage under the site's origin. The signed token represents your pilot ID and email address. The server accepts it for up to seven days, while the browser copy can remain until you log out or clear site data.",
+      "If you save filters in the route finder, the browser stores the filter name and selected search, airport, aircraft, duration, and eligibility settings in localStorage. Those saved filters remain on that browser until you remove them or clear site data.",
+      "Password-reset records include your email address, a bcrypt hash of the one-time passcode, its expiration time, and temporary request or verification counters used for rate limiting. Standard application, hosting, database, and security logs may also include IP address, browser or device details, referrer, requested page or endpoint, response status, error details, and timestamps.",
     ],
   },
   {
-    title: "How We Share Information",
+    title: "How We Collect and Use Information",
     body: [
-      "CZVG staff with appropriate permissions may access applicant, pilot, PIREP, and admin information to operate the virtual airline.",
-      "We share information with service providers that help us run the site, including hosting, database, email delivery, Discord webhook, and security infrastructure providers. These providers process information for us or as needed to provide their own services.",
-      "We may send applicant or PIREP summaries to configured Discord channels for staff review. These summaries may include your name, callsign, Infinite Flight Community username or user ID, email address, flight route, flight time, and other details relevant to the staff workflow.",
-      "When you click links or use connected services such as Infinite Flight, Infinite Flight Community, IFVARB, Discord, ShareMyInfiniteFlight, iflytics, Instagram, or community forums, those services handle information under their own policies.",
-      "We may disclose information if required by law, to protect users or the service, to investigate misuse, or to enforce our Terms of Service and community rules.",
+      "We collect information directly from you when you apply, sign in, declare an examination complete, submit a replay URL, reset a password, file or comment on a PIREP, save a browser preference, or otherwise enter information. Authorized staff also create or update application scores, notes, status, callsigns, Discord invites, PIREP reviews, ranks, awards, and permissions.",
+      "We use this information to operate the website, applicant portal, and crew center; assign callsigns; evaluate eligibility; complete onboarding; authenticate users; provide live-flight assistance; process and review PIREPs; calculate credited time, ranks, awards, and eligibility; display your dashboard; and maintain virtual airline history.",
+      "We also use information to send required transactional messages, prevent duplicate or invalid submissions, rate-limit password-reset attempts, enforce permissions and community standards, investigate misuse, troubleshoot failures, protect the service, and meet legal obligations.",
+      "CZVG does not sell personal information, use it for third-party targeted advertising, or send marketing email through the current codebase.",
+    ],
+  },
+  {
+    title: "When Information Is Disclosed",
+    body: [
+      "Authorized CZVG staff can access applicant, pilot, PIREP, comment, award, rank, and permission records according to their assigned role. A PIREP pilot can see comments attached to that pilot's own PIREPs.",
+      "For a new application, the configured Discord webhook receives the applicant's preferred name, assigned callsign, Infinite Flight Community username, Infinite Flight user ID, and email address. For a new PIREP, the configured Discord webhook receives the flight number, pilot name and callsign, route, fuel used, and credited flight time. Access to those messages depends on the permissions of the destination Discord channel.",
+      "Brevo receives the recipient name and email address, subject line, and transactional email content needed to deliver application, examination, Discord invite, approval, and password-reset messages. Message content can include a callsign, examination score, Discord invite URL, or one-time passcode, depending on the notice.",
+      "CZVG sends Infinite Flight Community usernames or Infinite Flight user IDs to the Infinite Flight public API for identity checks and synchronization and processes public API responses for profile and live-flight features. Hosting, database, and security infrastructure providers also process information as needed to operate and protect the site.",
+      "We may preserve or disclose relevant information when reasonably necessary to comply with law, respond to a valid legal request, protect users or the service, investigate misuse, enforce the Terms of Service, or communicate with an applicable platform or community partner.",
+    ],
+  },
+  {
+    title: "Third-Party Pages, Embeds, and Remote Content",
+    body: [
+      "Public CZVG pages embed Google Maps and a published Google Sheet, display a separately hosted live map, and load some images from third-party content hosts. When one of these resources loads, your browser connects directly to that provider and may send technical information such as your IP address, browser details, referring site or page, and existing provider cookies under that provider's own policy.",
+      "When you open or use Google Forms, Infinite Flight, Infinite Flight Community, IFVARB, Discord, ShareMyInfiniteFlight, iflytics, Instagram, community forums, the live map, or another linked service, that service independently handles the information you provide and the technical data it receives under its own terms and privacy policy.",
     ],
   },
   {
     title: "Browser Storage, Cookies, and Tracking",
     body: [
-      "The crew center stores your authentication token in browser localStorage so you can stay signed in. You can clear it by logging out or clearing your browser site data.",
-      "The current codebase does not use advertising cookies, cross-site advertising trackers, or analytics pixels for targeted advertising. If that changes, this policy should be updated before those tools are used.",
-      "Because we do not currently run cross-site behavioral tracking, browser Do Not Track signals do not change how the site behaves. Third-party websites linked from CZVG may use their own cookies or tracking technologies.",
+      "The current CZVG codebase does not set its own advertising cookies or install dedicated advertising, behavioral analytics, or cross-site tracking pixels. It uses localStorage for the authentication token and optional saved route filters described above.",
+      "Third-party embeds, remote content, and linked sites may set or read their own cookies or use similar technologies. Their behavior is controlled by those providers and your browser or provider settings, not by CZVG.",
+      "Because CZVG does not currently operate cross-site behavioral tracking, browser Do Not Track signals do not change the site's own behavior. You can clear CZVG localStorage through logout, the route-filter controls, or your browser's site-data settings.",
     ],
   },
   {
     title: "Retention",
     body: [
-      "We keep account, application, PIREP, rank, award, and operational records for as long as needed to run CZVG, maintain virtual airline history, resolve disputes, enforce standards, and keep reliable pilot statistics.",
-      "Authentication tokens expire after a limited session period and may be revoked on logout. Password reset one-time passcodes are intended for short-term use and expire after 10 minutes.",
-      "Cached Infinite Flight lookup data is intended to be short lived. Server and hosting logs may be retained according to the relevant provider's operational settings.",
-      "If you ask us to delete information, we will review the request and remove or anonymize information where reasonably possible. We may retain limited records when needed for security, anti-abuse, audit, legal, or legitimate virtual airline recordkeeping purposes.",
+      "The current application has no automatic deletion schedule for core account, application, PIREP, comment, rank, award, permission, or operational history. CZVG keeps those records while they are needed to run the group, maintain reliable virtual airline history and statistics, resolve disputes, enforce standards, or meet legal obligations.",
+      "Authentication tokens are valid for seven days. Logging out deletes the current server token when the logout request succeeds, and a later verification request removes expired server-token records. A local browser copy may remain until logout or site data is cleared, but the server will not accept it after expiration.",
+      "Password-reset passcodes expire after 10 minutes. Their hashed records are removed after a successful reset, when a later check detects expiration, or when a replacement code is requested. Temporary in-memory rate-limit counters generally reset after 15 minutes or when the relevant reset flow succeeds.",
+      "Infinite Flight API responses are cached for approximately 15 seconds to one hour depending on the endpoint: live flights and flight plans use the shortest period, user lookups use about five minutes, sessions use about 10 minutes, and aircraft or livery reference data uses about one hour. Expired cache rows are removed during later cache maintenance.",
+      "Saved route filters remain only in that browser until removed or site data is cleared. Hosting, database, email, Discord, Google, and other third-party providers retain information under their own operational settings and policies.",
+      "If you ask us to close an account or delete information, we will review the request and remove or anonymize information where reasonably possible. We may retain limited records when needed for security, anti-abuse, audit, dispute resolution, legal obligations, or legitimate virtual airline recordkeeping.",
     ],
   },
   {
     title: "Security",
     body: [
-      "We use reasonable technical and organizational safeguards for the size and nature of the service, including password hashing, expiring authentication tokens, permission checks for admin routes, and HTTPS when the site is served over a secure connection.",
-      "No website or database can be guaranteed completely secure. You are responsible for keeping your password private, using a strong and unique password, and logging out on shared devices.",
+      "We use safeguards appropriate to the size and nature of the service, including bcrypt hashing for passwords and reset passcodes, signed expiring authentication tokens, role-based checks on protected and admin routes, request validation, rate limiting for password resets, restrictive browser security headers, and HTTPS when the site is served over a secure connection.",
+      "No website, browser-storage mechanism, email, webhook, or database can be guaranteed completely secure. Keep your password and one-time passcodes private, use a strong password that you do not reuse elsewhere, and log out on shared devices.",
     ],
   },
   {
     title: "Your Choices and Requests",
     body: [
-      "You can review and update certain account and flight information in the crew center. Staff can help correct application or pilot records when self-service editing is not available.",
-      "You may request access, correction, deletion, or restriction of your personal information by contacting CZVG through the Infinite Flight Community profile linked below. We may need to verify your identity before acting on a request.",
-      "Depending on where you live, privacy laws may give you additional rights. We will handle verified requests in a reasonable way and will not discriminate against you for making a privacy request.",
+      "You can review your application, account, dashboard, and PIREP information in the crew center and can update certain applicant or PIREP information through the available tools. Staff can help correct records when self-service editing is not available.",
+      "You can remove saved route filters, log out, or clear the site's local browser data. You can also manage cookies and other information held by Google, Discord, and other third parties through their own controls.",
+      "You may request access, correction, account closure, deletion, or restriction of your personal information by contacting CZVG through the Infinite Flight Community profile linked below. We may need to verify your identity, and closing or deleting required account data may end your ability to use the crew center.",
+      "Depending on where you live, privacy law may give you additional rights. We will consider verified requests under applicable law and will not discriminate against you for making a privacy request.",
     ],
   },
   {
     title: "Children and Teens",
     body: [
-      "CZVG is not intended for children under 13. Applicants must be at least 13 years old, and users under the age of majority in their location should use the service only with permission from a parent or guardian.",
-      "If we learn that we have collected personal information from a child under 13 without appropriate consent, we will take reasonable steps to delete it.",
+      "CZVG is not intended for children under 13, and applicants must represent that they are at least 13 years old. The current signup flow does not collect a date of birth or perform automated age verification. Users under the age of majority where they live should use the service only with permission from a parent or guardian.",
+      "If we learn that an applicant or account holder is under 13, we will take reasonable steps to close the account and delete or anonymize the associated personal information, subject to limited security or legal retention needs.",
     ],
   },
   {
     title: "International Users",
     body: [
-      "CZVG is available to an international flight simulation community. Your information may be processed in countries where our hosting, database, email, Discord, and other service providers operate.",
-      "By using the site, you understand that your information may be transferred to and processed in locations that may have privacy laws different from those in your country or region.",
+      "CZVG serves an international flight-simulation community. Information may be processed in countries where CZVG staff or our hosting, database, email, Discord, Infinite Flight, Google, and other providers operate.",
+      "Those locations may have privacy rules different from the rules in your country or region. Where applicable law requires additional safeguards for a transfer, CZVG will take reasonable steps to use them.",
     ],
   },
   {
     title: "Changes to This Policy",
     body: [
-      "We may update this policy as the website, crew center, staff workflow, or legal requirements change. The effective date above will be updated when material changes are made.",
+      "We may update this policy as the website, crew center, staff workflow, third-party services, or legal requirements change. We will post the revised policy and update the effective date when changes are made.",
     ],
   },
 ];
@@ -140,9 +157,11 @@ export default function PrivacyPolicyPage() {
               <aside className="rounded-md border border-slate-200 bg-slate-50 p-5 text-sm text-slate-600 lg:sticky lg:top-24">
                 <p className="font-semibold text-slate-950">Quick Summary</p>
                 <p className="mt-3 leading-6">
-                  CZVG uses applicant, account, Infinite Flight, PIREP, and
-                  security data to operate the virtual airline. We do not sell
-                  personal information or run targeted advertising.
+                  CZVG uses account, application, Infinite Flight, PIREP, and
+                  security data to run the virtual airline. Authorized staff can
+                  access operational records, and limited notices go to Discord,
+                  Brevo, and operational providers. We do not sell personal
+                  information or run targeted advertising.
                 </p>
                 <Link
                   href="/terms-of-service"
