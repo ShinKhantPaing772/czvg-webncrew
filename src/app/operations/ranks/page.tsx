@@ -1,32 +1,110 @@
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowRight, Award, Clock3, Plane, ShieldCheck, Star, Trophy } from "lucide-react";
+import {
+  ArrowRight,
+  Award,
+  Clock3,
+  ShieldCheck,
+  Star,
+  Trophy,
+} from "lucide-react";
 
 import { Footer } from "@/components/layout/footer";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
-import { models } from "@/lib/models";
 
-export const dynamic = "force-dynamic";
-export const runtime = "nodejs";
+export const dynamic = "force-static";
 
 type PublicRank = {
   id: number;
   name: string;
   timereq: number;
-  imageurl: string | null;
+  imageurl: string;
   barcount: number;
   bartone: "gold" | "white";
   starcount: number;
   aircraft: string[];
 };
 
-type FeaturedAward = {
-  id: number;
-  name: string;
-  description: string;
-  imageurl: string;
-};
+const ranks: PublicRank[] = [
+  {
+    id: 1,
+    name: "Trainee Second Officer",
+    timereq: 0,
+    imageurl:
+      "https://global.discourse-cdn.com/infiniteflight/original/4X/9/f/d/9fddae7f609a83f4d5f0f0b9cecfe41fce096836.png",
+    barcount: 1,
+    bartone: "white",
+    starcount: 0,
+    aircraft: ["E190"],
+  },
+  {
+    id: 2,
+    name: "Second Officer",
+    timereq: 21 * 60 * 60,
+    imageurl:
+      "https://global.discourse-cdn.com/infiniteflight/original/4X/7/6/2/762e27e54b98ad4c9c894fca9ee8c1dfa994affb.png",
+    barcount: 1,
+    bartone: "gold",
+    starcount: 0,
+    aircraft: ["A319", "A320", "A321"],
+  },
+  {
+    id: 3,
+    name: "First Officer",
+    timereq: 70 * 60 * 60,
+    imageurl:
+      "https://global.discourse-cdn.com/infiniteflight/original/4X/7/c/0/7c0231e4927f43356d12e9e839d1fd21183c49de.png",
+    barcount: 2,
+    bartone: "gold",
+    starcount: 0,
+    aircraft: ["B737"],
+  },
+  {
+    id: 4,
+    name: "SR First Officer",
+    timereq: 140 * 60 * 60,
+    imageurl:
+      "https://global.discourse-cdn.com/infiniteflight/original/4X/7/e/7/7e774e9d23860935ce53d0d8f8ca8624a9f5d214.png",
+    barcount: 3,
+    bartone: "gold",
+    starcount: 0,
+    aircraft: ["A330", "B757"],
+  },
+  {
+    id: 5,
+    name: "Captain",
+    timereq: 230 * 60 * 60,
+    imageurl:
+      "https://global.discourse-cdn.com/infiniteflight/original/4X/0/4/0/0401c2231ffaac4ddfeac1309ce8f7f134f65991.png",
+    barcount: 4,
+    bartone: "gold",
+    starcount: 0,
+    aircraft: ["777F", "B777"],
+  },
+  {
+    id: 6,
+    name: "SR Captain",
+    timereq: 400 * 60 * 60,
+    imageurl:
+      "https://global.discourse-cdn.com/infiniteflight/original/4X/9/7/d/97dc473f7f9d9520e894038c9048b2ae8b2eadab.png",
+    barcount: 4,
+    bartone: "gold",
+    starcount: 1,
+    aircraft: ["B787", "A350", "A380"],
+  },
+  {
+    id: 7,
+    name: "Fleet Captain",
+    timereq: 800 * 60 * 60,
+    imageurl:
+      "https://global.discourse-cdn.com/infiniteflight/optimized/4X/1/d/4/1d49408bf5b2a652de2fe4feccb091a8a485f6f1_2_1640x418.png",
+    barcount: 4,
+    bartone: "gold",
+    starcount: 2,
+    aircraft: ["B74F"],
+  },
+];
 
 function formatTime(seconds: number) {
   const hours = Math.floor(seconds / 3600);
@@ -34,52 +112,7 @@ function formatTime(seconds: number) {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 }
 
-async function loadRankPageData() {
-  const [rankRows, aircraftRows, awardRow] = await Promise.all([
-    models.Rank.findAll({
-      attributes: ["id", "name", "timereq", "imageurl", "barcount", "bartone", "starcount"],
-      order: [["timereq", "ASC"]],
-      raw: true,
-    }),
-    models.Aircraft.findAll({
-      where: { status: 1 },
-      attributes: ["name", "rankreq"],
-      order: [["name", "ASC"]],
-      raw: true,
-    }),
-    models.Award.findOne({
-      where: { featured: 1 },
-      attributes: ["id", "name", "description", "imageurl"],
-      raw: true,
-    }),
-  ]);
-
-  const aircraftByRank = new Map<number, Set<string>>();
-  for (const aircraft of aircraftRows as any[]) {
-    const rankId = Number(aircraft.rankreq);
-    if (!rankId) continue;
-    const names = aircraftByRank.get(rankId) || new Set<string>();
-    names.add(String(aircraft.name));
-    aircraftByRank.set(rankId, names);
-  }
-
-  const ranks: PublicRank[] = (rankRows as any[]).map((rank) => ({
-    id: Number(rank.id),
-    name: String(rank.name),
-    timereq: Number(rank.timereq),
-    imageurl: rank.imageurl ? String(rank.imageurl) : null,
-    barcount: Number(rank.barcount) || 1,
-    bartone: rank.bartone === "white" ? "white" : "gold",
-    starcount: Number(rank.starcount) || 0,
-    aircraft: Array.from(aircraftByRank.get(Number(rank.id)) || []),
-  }));
-
-  return { ranks, featuredAward: awardRow as FeaturedAward | null };
-}
-
-export default async function RanksPage() {
-  const { ranks, featuredAward } = await loadRankPageData();
-
+export default function RanksPage() {
   return (
     <div className="flex min-h-screen flex-col bg-white">
       <Header />
@@ -94,7 +127,7 @@ export default async function RanksPage() {
             <div className="max-w-3xl">
               <p className="text-xs font-semibold uppercase text-sky-200">Pilot ranks</p>
               <h1 className="mt-3 text-4xl font-bold leading-tight sm:text-5xl">Progress through the fleet as your flight time grows.</h1>
-              <p className="mt-5 text-lg leading-8 text-slate-300">Use this rank guide to see flight-hour requirements, aircraft unlocks, and special pilot rewards.</p>
+              <p className="mt-5 text-lg leading-8 text-slate-300">Use this rank guide to see flight-hour requirements, aircraft unlocks, Fleet Captain status, and CEO rewards.</p>
             </div>
           </div>
         </section>
@@ -104,7 +137,7 @@ export default async function RanksPage() {
             <div className="mb-8 max-w-3xl">
               <div className="flex items-center gap-3"><ShieldCheck className="h-6 w-6 text-primary" /><p className="site-eyebrow">Rank ladder</p></div>
               <h2 className="site-heading mt-3">Aircraft unlocks by rank.</h2>
-              <p className="site-copy mt-4">Each tier lists the flight-time range and active aircraft available at that rank.</p>
+              <p className="site-copy mt-4">Each tier lists the flight-time range and primary aircraft available at that rank.</p>
             </div>
 
             {ranks.length === 0 ? (
@@ -130,7 +163,7 @@ export default async function RanksPage() {
                         </div>
                         <div className="bg-black/30 px-6 pb-6 md:flex md:items-end md:p-6">
                           <div className="flex h-28 w-full items-center justify-center sm:h-36 md:h-40">
-                            {rank.imageurl ? <Image src={rank.imageurl} alt={`${rank.name} aircraft`} width={600} height={240} unoptimized className="h-full w-full object-contain" /> : <Plane className="h-16 w-16 text-white/30" aria-hidden="true" />}
+                            <Image src={rank.imageurl} alt={`${rank.name} aircraft`} width={600} height={240} unoptimized className="h-full w-full object-contain" />
                           </div>
                         </div>
                       </div>
@@ -142,11 +175,32 @@ export default async function RanksPage() {
           </div>
         </section>
 
-        {featuredAward ? (
-          <section className="site-section bg-slate-50">
-            <div className="site-container"><div className="mx-auto max-w-4xl"><article className="site-card border-primary/30 bg-primary p-6 text-white md:p-8"><div className="grid gap-6 md:grid-cols-[1fr_180px] md:items-center"><div><div className="flex h-12 w-12 items-center justify-center rounded-md bg-white/15"><Trophy className="h-6 w-6" /></div><p className="mt-6 text-xs font-semibold uppercase text-sky-100">Featured Award</p><h2 className="mt-3 text-3xl font-bold leading-tight">{featuredAward.name}</h2><div className="mt-6 rounded-md bg-white p-5 text-primary"><div className="flex items-center gap-3"><Award className="h-6 w-6" /><p className="text-lg font-bold">Pilot recognition</p></div><p className="mt-3 text-sm leading-6 text-slate-600">{featuredAward.description}</p></div></div><Image src={featuredAward.imageurl} alt={featuredAward.name} width={360} height={360} unoptimized className="mx-auto max-h-44 w-full object-contain" /></div></article></div></div>
-          </section>
-        ) : null}
+        <section className="site-section bg-slate-50">
+          <div className="site-container">
+            <div className="mx-auto max-w-4xl">
+              <article className="site-card border-primary/30 bg-primary p-6 text-white md:p-8">
+                <div className="flex h-12 w-12 items-center justify-center rounded-md bg-white/15">
+                  <Trophy className="h-6 w-6" />
+                </div>
+                <p className="mt-6 text-xs font-semibold uppercase text-sky-100">
+                  CEO&apos;s Award
+                </p>
+                <h2 className="mt-3 text-3xl font-bold leading-tight">
+                  A Reward for the most dedicated pilots.
+                </h2>
+                <div className="mt-6 rounded-md bg-white p-5 text-primary">
+                  <div className="flex items-center gap-3">
+                    <Award className="h-6 w-6" />
+                    <p className="text-lg font-bold">1.3x multiplier</p>
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-slate-600">
+                    CEO&apos;s Award applies a 1.3x multiplier to all flights.
+                  </p>
+                </div>
+              </article>
+            </div>
+          </div>
+        </section>
 
         <section className="bg-primary py-16 text-white"><div className="site-container text-center"><h2 className="text-3xl font-bold">Ready to climb the ranks?</h2><p className="mx-auto mt-4 max-w-2xl text-white/80">Join the crew center, file flights, and unlock aircraft as your hours grow.</p><div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row"><Button asChild className="bg-white text-primary hover:bg-white/90"><Link href="/crew?type=signup">Apply Now<ArrowRight className="h-4 w-4" /></Link></Button><Button asChild variant="outline" className="border-white/60 bg-transparent text-white hover:bg-white/10 hover:text-white"><Link href="/operations/fleet">View Fleet</Link></Button></div></div></section>
       </main>
