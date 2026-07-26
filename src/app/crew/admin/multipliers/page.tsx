@@ -58,7 +58,6 @@ type Multiplier = {
   name: string;
   minrankid: number | null;
   minRankName: string | null;
-  pirepCount: number;
 };
 
 type Rank = {
@@ -226,8 +225,6 @@ export default function AdminMultipliersPage() {
       Number.isFinite(factor) &&
       factor > 0,
   );
-  const locksReference = Boolean(selected && selected.pirepCount > 0);
-
   return (
     <CrewHeader>
       <main className="flex-1 space-y-4">
@@ -269,8 +266,8 @@ export default function AdminMultipliersPage() {
           <CardHeader className="p-4">
             <CardTitle>PIREP Multipliers</CardTitle>
             <CardDescription>
-              Codes are entered by pilots when filing a PIREP. Used multiplier
-              names and codes are locked to protect report history.
+              Codes are entered by pilots when filing a PIREP. Existing reports
+              retain their stored multiplier labels after edits or deletion.
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
@@ -283,23 +280,20 @@ export default function AdminMultipliersPage() {
                   <TableHead className="hidden md:table-cell">
                     Minimum Rank
                   </TableHead>
-                  <TableHead className="hidden sm:table-cell">
-                    PIREPs
-                  </TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="py-10 text-center">
+                    <TableCell colSpan={5} className="py-10 text-center">
                       <Loader2 className="mx-auto h-5 w-5 animate-spin" />
                     </TableCell>
                   </TableRow>
                 ) : filteredMultipliers.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={6}
+                      colSpan={5}
                       className="py-10 text-center text-muted-foreground"
                     >
                       {multipliers.length === 0
@@ -324,9 +318,6 @@ export default function AdminMultipliersPage() {
                       <TableCell className="hidden md:table-cell">
                         {multiplier.minRankName ?? "No minimum rank"}
                       </TableCell>
-                      <TableCell className="hidden sm:table-cell">
-                        {multiplier.pirepCount.toLocaleString()}
-                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
                           <Button
@@ -340,63 +331,47 @@ export default function AdminMultipliersPage() {
                             </span>
                           </Button>
 
-                          {multiplier.pirepCount > 0 ? (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              disabled
-                              title="Used multipliers cannot be deleted"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                              <span className="sr-only">
-                                {multiplier.name} cannot be deleted because it
-                                is in use
-                              </span>
-                            </Button>
-                          ) : (
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  disabled={deletingId === multiplier.id}
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                disabled={deletingId === multiplier.id}
+                              >
+                                {deletingId === multiplier.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-4 w-4" />
+                                )}
+                                <span className="sr-only">
+                                  Delete {multiplier.name}
+                                </span>
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>
+                                  Delete {multiplier.name}?
+                                </AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Pilots will no longer be able to use code{" "}
+                                  {multiplier.code}. Existing PIREPs will retain
+                                  their stored multiplier text. This action
+                                  cannot be undone.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() =>
+                                    deleteMultiplier(multiplier)
+                                  }
                                 >
-                                  {deletingId === multiplier.id ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <Trash2 className="h-4 w-4" />
-                                  )}
-                                  <span className="sr-only">
-                                    Delete {multiplier.name}
-                                  </span>
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>
-                                    Delete {multiplier.name}?
-                                  </AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Pilots will no longer be able to use code{" "}
-                                    {multiplier.code}. This action cannot be
-                                    undone.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>
-                                    Cancel
-                                  </AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() =>
-                                      deleteMultiplier(multiplier)
-                                    }
-                                  >
-                                    Delete
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          )}
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -425,21 +400,12 @@ export default function AdminMultipliersPage() {
                 </div>
               ) : null}
 
-              {locksReference ? (
-                <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                  The name and code are locked because this multiplier appears
-                  on existing PIREPs. Its factor and rank requirement can still
-                  be updated.
-                </div>
-              ) : null}
-
               <div className="space-y-2">
                 <Label htmlFor="multiplier-name">Name</Label>
                 <Input
                   id="multiplier-name"
                   value={form.name}
                   maxLength={120}
-                  disabled={locksReference}
                   onChange={(event) =>
                     setForm({ ...form, name: event.target.value })
                   }
@@ -458,7 +424,6 @@ export default function AdminMultipliersPage() {
                     max="2147483647"
                     step="1"
                     value={form.code}
-                    disabled={locksReference}
                     onChange={(event) =>
                       setForm({ ...form, code: event.target.value })
                     }

@@ -82,7 +82,7 @@ CREATE TABLE `pireps` (
   `date` date NOT NULL,
   `aircraftid` int NOT NULL,
   `fuelused` int NOT NULL,
-  `multi` int NOT NULL,
+  `multi` text NOT NULL,
   `status` int DEFAULT 0
 );
 
@@ -122,8 +122,6 @@ CREATE TABLE `route_aircraft` (
 ALTER TABLE `pireps` ADD FOREIGN KEY (`pilotid`) REFERENCES `pilots` (`id`);
 
 ALTER TABLE `notifications` ADD FOREIGN KEY (`pilotid`) REFERENCES `pilots` (`id`);
-
-ALTER TABLE `pireps` ADD FOREIGN KEY (`multi`) REFERENCES `multipliers` (`code`);
 
 ALTER TABLE `permissions` ADD FOREIGN KEY (`userid`) REFERENCES `pilots` (`id`);
 

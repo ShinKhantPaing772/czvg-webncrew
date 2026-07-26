@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { Op } from "sequelize";
 
 import { models } from "@/lib/models";
 import { requirePermission } from "@/lib/server-auth";
@@ -105,21 +104,6 @@ async function validateMultiplier(
   };
 }
 
-function referenceWhere(multiplier: Pick<StoredMultiplier, "code" | "name">) {
-  return {
-    [Op.or]: [
-      { multi: String(multiplier.code) },
-      { multi: multiplier.name },
-    ],
-  };
-}
-
-async function referenceCount(
-  multiplier: Pick<StoredMultiplier, "code" | "name">,
-) {
-  return models.Pirep.count({ where: referenceWhere(multiplier) });
-}
-
 export async function GET(request: Request) {
   try {
     const auth = await requirePermission(request, "pireps");
@@ -144,12 +128,9 @@ export async function GET(request: Request) {
     const rankNames = new Map(
       ranks.map((rank: any) => [Number(rank.id), String(rank.name)]),
     );
-    const usageCounts = await Promise.all(
-      storedMultipliers.map((multiplier) => referenceCount(multiplier)),
-    );
 
     return NextResponse.json({
-      multipliers: storedMultipliers.map((multiplier, index) => ({
+      multipliers: storedMultipliers.map((multiplier) => ({
         ...multiplier,
         code: Number(multiplier.code),
         multiplier: Number(multiplier.multiplier),
@@ -158,7 +139,6 @@ export async function GET(request: Request) {
         minRankName: multiplier.minrankid
           ? rankNames.get(Number(multiplier.minrankid)) ?? null
           : null,
-        pirepCount: usageCounts[index],
       })),
       ranks,
     });
@@ -230,22 +210,6 @@ export async function PUT(request: Request) {
       );
     }
 
-    const pirepCount = await referenceCount(storedMultiplier);
-    const changesReference =
-      Number(storedMultiplier.code) !== validated.value.code ||
-      storedMultiplier.name !== validated.value.name;
-
-    if (pirepCount > 0 && changesReference) {
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            "The name and code cannot be changed after a multiplier has been used by a PIREP",
-        },
-        { status: 409 },
-      );
-    }
-
     await storedMultiplier.update(validated.value);
     return NextResponse.json({
       success: true,
@@ -282,20 +246,7 @@ export async function DELETE(request: Request) {
       );
     }
 
-    const pirepCount = await referenceCount(multiplier);
-    if (pirepCount > 0) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: `This multiplier is used by ${pirepCount} PIREP${
-            pirepCount === 1 ? "" : "s"
-          } and cannot be deleted`,
-        },
-        { status: 409 },
-      );
-    }
-
-    await models.Multiplier.destroy({ where: { id: { [Op.eq]: id } } });
+    await multiplier.destroy();
     return NextResponse.json({
       success: true,
       message: "Multiplier deleted",
