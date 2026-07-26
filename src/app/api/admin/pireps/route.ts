@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { Op } from "sequelize";
 import type { Includeable } from "sequelize";
 import { models } from "@/lib/models";
+import sequelize from "@/lib/database";
+import {
+  MAX_PIREP_COMMENTS,
+  PirepCommentLimitError,
+} from "@/lib/pirep-comments";
 import { formatFlightTime } from "@/lib/utils/time";
 import { requirePermission } from "@/lib/server-auth";
 
@@ -182,6 +187,13 @@ export async function PUT(request: Request) {
       );
     }
 
+    const trimmedComment =
+      typeof comment === "string" ? comment.trim() : "";
+    const normalizedDeleteCommentIds = Array.isArray(deleteCommentIds)
+      ? deleteCommentIds
+          .map((commentId) => Number(commentId))
+          .filter((commentId) => Number.isInteger(commentId))
+      : [];
     const updates: Record<string, string | number> = {};
 
     if (flightnum !== undefined) {
@@ -281,28 +293,50 @@ export async function PUT(request: Request) {
       updates.status = parsedStatus;
     }
 
-    if (Object.keys(updates).length > 0) {
-      await pirep.update(updates);
-    }
-
-    if (Array.isArray(deleteCommentIds) && deleteCommentIds.length > 0) {
-      await models.PirepComment.destroy({
-        where: {
-          pirepid: id,
-          id: deleteCommentIds
-            .map((commentId) => Number(commentId))
-            .filter((commentId) => Number.isInteger(commentId)),
-        },
+    await sequelize.transaction(async (transaction) => {
+      const lockedPirep = await models.Pirep.findByPk(id, {
+        transaction,
+        lock: transaction.LOCK.UPDATE,
       });
-    }
 
-    if (comment?.trim()) {
-      await models.PirepComment.create({
-        pirepid: id,
-        userid: auth.user.id,
-        content: comment.trim(),
-      });
-    }
+      if (!lockedPirep) {
+        throw new Error("PIREP no longer exists");
+      }
+
+      if (Object.keys(updates).length > 0) {
+        await lockedPirep.update(updates, { transaction });
+      }
+
+      if (normalizedDeleteCommentIds.length > 0) {
+        await models.PirepComment.destroy({
+          where: {
+            pirepid: id,
+            id: normalizedDeleteCommentIds,
+          },
+          transaction,
+        });
+      }
+
+      if (trimmedComment) {
+        const commentCount = await models.PirepComment.count({
+          where: { pirepid: id },
+          transaction,
+        });
+
+        if (commentCount >= MAX_PIREP_COMMENTS) {
+          throw new PirepCommentLimitError();
+        }
+
+        await models.PirepComment.create(
+          {
+            pirepid: id,
+            userid: auth.user.id,
+            content: trimmedComment,
+          },
+          { transaction },
+        );
+      }
+    });
 
     const updatedPirep = await serializePirep(Number(id));
 
@@ -311,6 +345,13 @@ export async function PUT(request: Request) {
       data: updatedPirep,
     });
   } catch (error) {
+    if (error instanceof PirepCommentLimitError) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 409 },
+      );
+    }
+
     console.error("Error updating PIREP:", error);
     return NextResponse.json(
       { success: false, error: "Failed to update PIREP" },

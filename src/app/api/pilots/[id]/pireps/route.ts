@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { Op } from "sequelize";
 import type { Includeable } from "sequelize";
 import { models } from "@/lib/models";
+import sequelize from "@/lib/database";
+import {
+  MAX_PIREP_COMMENTS,
+  PirepCommentLimitError,
+} from "@/lib/pirep-comments";
 import { formatFlightTime } from "@/lib/utils/time";
 import { hasPermission, requireAuth } from "@/lib/server-auth";
 
@@ -245,10 +250,38 @@ export async function POST(
       );
     }
 
-    const createdComment = await models.PirepComment.create({
-      pirepid: pirepId,
-      userid: auth.user.id,
-      content,
+    const createdComment = await sequelize.transaction(async (transaction) => {
+      const lockedPirep = await models.Pirep.findOne({
+        where: {
+          id: pirepId,
+          pilotid: pilotId,
+        },
+        attributes: ["id"],
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
+
+      if (!lockedPirep) {
+        throw new Error("PIREP no longer exists");
+      }
+
+      const commentCount = await models.PirepComment.count({
+        where: { pirepid: pirepId },
+        transaction,
+      });
+
+      if (commentCount >= MAX_PIREP_COMMENTS) {
+        throw new PirepCommentLimitError();
+      }
+
+      return models.PirepComment.create(
+        {
+          pirepid: pirepId,
+          userid: auth.user.id,
+          content,
+        },
+        { transaction },
+      );
     });
 
     const comment = await models.PirepComment.findByPk(createdComment.id, {
@@ -270,6 +303,13 @@ export async function POST(
       { status: 201 },
     );
   } catch (error) {
+    if (error instanceof PirepCommentLimitError) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 409 },
+      );
+    }
+
     console.error("[PIREPs] Error adding pilot comment:", error);
     return NextResponse.json(
       { success: false, error: "Failed to add comment" },

@@ -58,6 +58,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useSession } from "@/hooks/use-session";
+import {
+  MAX_PIREP_COMMENTS,
+  PIREP_COMMENT_LIMIT_MESSAGE,
+} from "@/lib/pirep-comments";
 import { authFetch } from "@/lib/utils/api";
 
 interface PirepComment {
@@ -231,6 +235,12 @@ export default function ViewPireps() {
     const content = newComment.trim();
     if (!content) {
       setCommentError("Enter a comment before posting.");
+      return;
+    }
+
+    const pirep = pirepsData.find((item) => item.id === pirepId);
+    if ((pirep?.Comments?.length ?? 0) >= MAX_PIREP_COMMENTS) {
+      setCommentError(PIREP_COMMENT_LIMIT_MESSAGE);
       return;
     }
 
@@ -499,9 +509,15 @@ export default function ViewPireps() {
 
                               <Card>
                                 <CardHeader>
-                                  <CardTitle className="text-sm font-medium">
-                                    Comments
-                                  </CardTitle>
+                                  <div className="flex items-center justify-between gap-4">
+                                    <CardTitle className="text-sm font-medium">
+                                      Comments
+                                    </CardTitle>
+                                    <span className="text-xs text-muted-foreground">
+                                      {pirep.Comments?.length ?? 0}/
+                                      {MAX_PIREP_COMMENTS}
+                                    </span>
+                                  </div>
                                   <CardDescription>
                                     Discuss this PIREP with the review team.
                                   </CardDescription>
@@ -539,47 +555,59 @@ export default function ViewPireps() {
                                     </p>
                                   )}
 
-                                  <div className="space-y-2 border-t pt-4">
-                                    <Label htmlFor={`pirep-comment-${pirep.id}`}>
-                                      Add a comment
-                                    </Label>
-                                    <Textarea
-                                      id={`pirep-comment-${pirep.id}`}
-                                      value={newComment}
-                                      onChange={(event) => {
-                                        setNewComment(event.target.value);
-                                        setCommentError(null);
-                                      }}
-                                      placeholder="Write a comment about this PIREP..."
-                                      disabled={submittingCommentId === pirep.id}
-                                      aria-invalid={Boolean(commentError)}
-                                    />
-                                    {commentError && (
-                                      <p
-                                        className="text-sm text-red-600"
-                                        role="alert"
+                                  {(pirep.Comments?.length ?? 0) >=
+                                  MAX_PIREP_COMMENTS ? (
+                                    <p className="border-t pt-4 text-sm text-muted-foreground">
+                                      This PIREP has reached the{" "}
+                                      {MAX_PIREP_COMMENTS}-comment limit.
+                                    </p>
+                                  ) : (
+                                    <div className="space-y-2 border-t pt-4">
+                                      <Label
+                                        htmlFor={`pirep-comment-${pirep.id}`}
                                       >
-                                        {commentError}
-                                      </p>
-                                    )}
-                                    <div className="flex justify-end">
-                                      <Button
-                                        type="button"
-                                        onClick={() =>
-                                          handleAddComment(pirep.id)
-                                        }
+                                        Add a comment
+                                      </Label>
+                                      <Textarea
+                                        id={`pirep-comment-${pirep.id}`}
+                                        value={newComment}
+                                        onChange={(event) => {
+                                          setNewComment(event.target.value);
+                                          setCommentError(null);
+                                        }}
+                                        placeholder="Write a comment about this PIREP..."
                                         disabled={
-                                          submittingCommentId === pirep.id ||
-                                          !newComment.trim()
+                                          submittingCommentId === pirep.id
                                         }
-                                      >
-                                        {submittingCommentId === pirep.id && (
-                                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        )}
-                                        Post Comment
-                                      </Button>
+                                        aria-invalid={Boolean(commentError)}
+                                      />
+                                      {commentError && (
+                                        <p
+                                          className="text-sm text-red-600"
+                                          role="alert"
+                                        >
+                                          {commentError}
+                                        </p>
+                                      )}
+                                      <div className="flex justify-end">
+                                        <Button
+                                          type="button"
+                                          onClick={() =>
+                                            handleAddComment(pirep.id)
+                                          }
+                                          disabled={
+                                            submittingCommentId === pirep.id ||
+                                            !newComment.trim()
+                                          }
+                                        >
+                                          {submittingCommentId === pirep.id && (
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                          )}
+                                          Post Comment
+                                        </Button>
+                                      </div>
                                     </div>
-                                  </div>
+                                  )}
                                 </CardContent>
                               </Card>
                             </div>

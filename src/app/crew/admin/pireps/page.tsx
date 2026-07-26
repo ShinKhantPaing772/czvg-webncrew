@@ -15,6 +15,10 @@ import {
 } from "lucide-react";
 import { CrewHeader } from "@/components/crew-header";
 import { Button } from "@/components/ui/button";
+import {
+  MAX_PIREP_COMMENTS,
+  PIREP_COMMENT_LIMIT_MESSAGE,
+} from "@/lib/pirep-comments";
 import { authFetch } from "@/lib/utils/api";
 import {
   Card,
@@ -508,6 +512,15 @@ export default function AdminPireps() {
       return;
     }
 
+    const remainingCommentCount = Math.max(
+      0,
+      (pirep.Comments?.length ?? 0) - deletedCommentIds.length,
+    );
+    if (newComment && remainingCommentCount >= MAX_PIREP_COMMENTS) {
+      setUpdateError(PIREP_COMMENT_LIMIT_MESSAGE);
+      return;
+    }
+
     setIsUpdating(true);
     try {
       const response = await authFetch("/api/admin/pireps", {
@@ -572,6 +585,12 @@ export default function AdminPireps() {
     pagination.currentPage * pagination.limit,
     pagination.total,
   );
+  const selectedCommentCount = Math.max(
+    0,
+    (selectedPirep?.Comments?.length ?? 0) - deletedCommentIds.length,
+  );
+  const selectedCommentLimitReached =
+    selectedCommentCount >= MAX_PIREP_COMMENTS;
 
   return (
     <CrewHeader>
@@ -1094,9 +1113,15 @@ export default function AdminPireps() {
 
                               <Card>
                                 <CardHeader>
-                                  <CardTitle className="text-sm font-medium">
-                                    Admin Comments
-                                  </CardTitle>
+                                  <div className="flex items-center justify-between gap-4">
+                                    <CardTitle className="text-sm font-medium">
+                                      PIREP Comments
+                                    </CardTitle>
+                                    <span className="text-xs text-muted-foreground">
+                                      {selectedCommentCount}/
+                                      {MAX_PIREP_COMMENTS}
+                                    </span>
+                                  </div>
                                 </CardHeader>
                                 <CardContent className="space-y-4 pt-0">
                                   {selectedPirep.Comments?.filter(
@@ -1150,7 +1175,7 @@ export default function AdminPireps() {
                                     </div>
                                   ) : (
                                     <p className="text-sm text-muted-foreground">
-                                      No admin comments yet.
+                                      No comments yet.
                                     </p>
                                   )}
 
@@ -1163,8 +1188,13 @@ export default function AdminPireps() {
                                       </Label>
                                       <Textarea
                                         id={`comment-${selectedPirep.id}`}
-                                        placeholder="Enter a comment for the pilot..."
+                                        placeholder={
+                                          selectedCommentLimitReached
+                                            ? "Comment limit reached"
+                                            : "Enter a comment for the pilot..."
+                                        }
                                         value={editForm.newComment}
+                                        disabled={selectedCommentLimitReached}
                                         onChange={(event) =>
                                           handleEditFormChange(
                                             "newComment",
@@ -1174,8 +1204,9 @@ export default function AdminPireps() {
                                       />
                                       <p className="flex items-center text-xs text-muted-foreground">
                                         <Plus className="mr-1 h-3 w-3" />
-                                        The comment will be added when changes
-                                        are saved.
+                                        {selectedCommentLimitReached
+                                          ? `Delete a comment before adding another. The limit is ${MAX_PIREP_COMMENTS}.`
+                                          : "The comment will be added when changes are saved."}
                                       </p>
                                     </div>
                                   )}
@@ -1190,8 +1221,13 @@ export default function AdminPireps() {
                                 </Label>
                                 <Textarea
                                   id="admin-remarks"
-                                  placeholder="Enter remarks for the pilot..."
+                                  placeholder={
+                                    selectedCommentLimitReached
+                                      ? "Comment limit reached"
+                                      : "Enter remarks for the pilot..."
+                                  }
                                   ref={remarkRef}
+                                  disabled={selectedCommentLimitReached}
                                   onChange={(event) =>
                                     setHasRemark(
                                       event.currentTarget.value.trim().length >
@@ -1199,6 +1235,13 @@ export default function AdminPireps() {
                                     )
                                   }
                                 />
+                                {selectedCommentLimitReached && (
+                                  <p className="text-sm text-muted-foreground">
+                                    This PIREP has reached the{" "}
+                                    {MAX_PIREP_COMMENTS}-comment limit. Delete a
+                                    comment before adding a rejection remark.
+                                  </p>
+                                )}
 
                                 <div className="flex justify-end gap-2 mt-4">
                                   <Button
