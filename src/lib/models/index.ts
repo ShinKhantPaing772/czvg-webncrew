@@ -168,7 +168,7 @@ class Multiplier extends Model {
   declare code: number;
   declare multiplier: number;
   declare name: string;
-  declare minrankid: number;
+  declare minrankid: number | null;
 }
 Multiplier.init(
   {

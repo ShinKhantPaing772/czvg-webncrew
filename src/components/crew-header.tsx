@@ -14,6 +14,7 @@ import {
   Award,
   Medal,
   Trophy,
+  Gauge,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -48,6 +49,11 @@ export function CrewHeader({ children }: CrewHeaderProps) {
     home: [{ title: "Admin Dashboard", href: "/crew/admin", icon: Home }],
     pireps: [
       { title: "Manage PIREPs", href: "/crew/admin/pireps", icon: FileText },
+      {
+        title: "Manage Multipliers",
+        href: "/crew/admin/multipliers",
+        icon: Gauge,
+      },
     ],
     routes: [
       {

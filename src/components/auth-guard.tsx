@@ -106,8 +106,10 @@ export function AuthGuard({ children }: AuthGuardProps) {
 
       // Visiting /crew/admin/{section}
       const adminSection = parts[2];
+      const requiredPermission =
+        adminSection === "multipliers" ? "pireps" : adminSection;
 
-      if (!permissions.includes(adminSection)) {
+      if (!permissions.includes(requiredPermission)) {
         router.push("/crew/home");
       }
     }
