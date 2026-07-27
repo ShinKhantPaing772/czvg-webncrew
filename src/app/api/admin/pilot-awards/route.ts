@@ -18,7 +18,64 @@ export async function GET(request: Request) {
     const auth = await requirePermission(request, "awards");
     if (!auth.ok) return auth.response;
 
-    const query = new URL(request.url).searchParams.get("query")?.trim() || "";
+    const searchParams = new URL(request.url).searchParams;
+    const awardIdParam = searchParams.get("awardId");
+
+    if (awardIdParam !== null) {
+      const awardId = validId(awardIdParam);
+      if (!awardId) {
+        return NextResponse.json(
+          { success: false, message: "A valid award ID is required" },
+          { status: 400 },
+        );
+      }
+
+      const award = await models.Award.findByPk(awardId, {
+        attributes: ["id", "name", "description", "imageurl"],
+        raw: true,
+      });
+      if (!award) {
+        return NextResponse.json(
+          { success: false, message: "Award not found" },
+          { status: 404 },
+        );
+      }
+
+      const grants = await models.AwardGranted.findAll({
+        where: { awardid: awardId },
+        attributes: ["pilotid", "dateawarded"],
+        order: [["dateawarded", "DESC"]],
+        raw: true,
+      });
+      const pilotIds = Array.from(
+        new Set(grants.map((grant: any) => Number(grant.pilotid))),
+      );
+      const pilots = pilotIds.length
+        ? await models.Pilot.findAll({
+            where: { id: { [Op.in]: pilotIds } },
+            attributes: ["id", "name", "callsign", "email", "status"],
+            order: [["name", "ASC"]],
+            raw: true,
+          })
+        : [];
+      const dateAwardedByPilot = new Map<number, Date>();
+      for (const grant of grants as any[]) {
+        const pilotId = Number(grant.pilotid);
+        if (!dateAwardedByPilot.has(pilotId)) {
+          dateAwardedByPilot.set(pilotId, grant.dateawarded);
+        }
+      }
+
+      return NextResponse.json({
+        award,
+        recipients: pilots.map((pilot: any) => ({
+          ...pilot,
+          dateAwarded: dateAwardedByPilot.get(Number(pilot.id)),
+        })),
+      });
+    }
+
+    const query = searchParams.get("query")?.trim() || "";
     const where = query
       ? {
           [Op.or]: [
@@ -50,19 +107,31 @@ export async function GET(request: Request) {
           })
         : [],
     ]);
-    const grantMap = new Map<number, Array<{ awardId: number; dateAwarded: Date }>>();
+    const grantMap = new Map<
+      number,
+      Array<{ awardId: number; dateAwarded: Date }>
+    >();
     for (const grant of grants as any[]) {
       const list = grantMap.get(Number(grant.pilotid)) || [];
-      list.push({ awardId: Number(grant.awardid), dateAwarded: grant.dateawarded });
+      list.push({
+        awardId: Number(grant.awardid),
+        dateAwarded: grant.dateawarded,
+      });
       grantMap.set(Number(grant.pilotid), list);
     }
     return NextResponse.json({
       awards,
-      pilots: pilots.map((pilot: any) => ({ ...pilot, grants: grantMap.get(Number(pilot.id)) || [] })),
+      pilots: pilots.map((pilot: any) => ({
+        ...pilot,
+        grants: grantMap.get(Number(pilot.id)) || [],
+      })),
     });
   } catch (error) {
     console.error("[Pilot Awards] Fetch error:", error);
-    return NextResponse.json({ success: false, message: "Failed to load pilot awards" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: "Failed to load pilot awards" },
+      { status: 500 },
+    );
   }
 }
 
@@ -82,16 +151,32 @@ export async function PUT(request: Request) {
         )
       : null;
     if (!pilotId || awardIds === null) {
-      return NextResponse.json({ success: false, message: "A valid pilot and award list are required" }, { status: 400 });
+      return NextResponse.json(
+        {
+          success: false,
+          message: "A valid pilot and award list are required",
+        },
+        { status: 400 },
+      );
     }
     if (!(await models.Pilot.findByPk(pilotId))) {
-      return NextResponse.json({ success: false, message: "Pilot not found" }, { status: 404 });
+      return NextResponse.json(
+        { success: false, message: "Pilot not found" },
+        { status: 404 },
+      );
     }
     const validAwards = awardIds.length
-      ? await models.Award.findAll({ where: { id: { [Op.in]: awardIds } }, attributes: ["id"], raw: true })
+      ? await models.Award.findAll({
+          where: { id: { [Op.in]: awardIds } },
+          attributes: ["id"],
+          raw: true,
+        })
       : [];
     if (validAwards.length !== awardIds.length) {
-      return NextResponse.json({ success: false, message: "One or more awards were not found" }, { status: 400 });
+      return NextResponse.json(
+        { success: false, message: "One or more awards were not found" },
+        { status: 400 },
+      );
     }
 
     await sequelize.transaction(async (transaction) => {
@@ -112,7 +197,11 @@ export async function PUT(request: Request) {
       }
       if (toAdd.length) {
         await models.AwardGranted.bulkCreate(
-          toAdd.map((awardid) => ({ pilotid: pilotId, awardid, dateawarded: new Date() })),
+          toAdd.map((awardid) => ({
+            pilotid: pilotId,
+            awardid,
+            dateawarded: new Date(),
+          })),
           { transaction },
         );
       }
@@ -121,6 +210,9 @@ export async function PUT(request: Request) {
     return NextResponse.json({ success: true, message: "Pilot awards updated" });
   } catch (error) {
     console.error("[Pilot Awards] Update error:", error);
-    return NextResponse.json({ success: false, message: "Failed to update pilot awards" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: "Failed to update pilot awards" },
+      { status: 500 },
+    );
   }
 }
