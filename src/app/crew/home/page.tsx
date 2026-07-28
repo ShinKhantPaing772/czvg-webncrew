@@ -142,13 +142,13 @@ function AwardArtwork({ award }: { award: ReceivedAward }) {
         width={48}
         height={48}
         unoptimized
-        className="h-12 w-12 shrink-0 rounded-md border object-contain"
+        className="h-12 w-12 shrink-0 object-contain"
       />
     );
   }
 
   return (
-    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md border bg-muted">
+    <span className="flex h-12 w-12 shrink-0 items-center justify-center">
       <ImageOff className="h-5 w-5 text-muted-foreground" />
     </span>
   );

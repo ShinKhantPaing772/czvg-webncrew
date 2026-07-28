@@ -53,7 +53,7 @@ export async function GET(request: Request) {
       const pilots = pilotIds.length
         ? await models.Pilot.findAll({
             where: { id: { [Op.in]: pilotIds } },
-            attributes: ["id", "name", "callsign", "email", "status"],
+            attributes: ["id", "name", "callsign", "ifc", "email", "status"],
             order: [["name", "ASC"]],
             raw: true,
           })
@@ -81,13 +81,14 @@ export async function GET(request: Request) {
           [Op.or]: [
             { name: { [Op.like]: `%${query}%` } },
             { callsign: { [Op.like]: `%${query}%` } },
+            { ifc: { [Op.like]: `%${query}%` } },
             { email: { [Op.like]: `%${query}%` } },
           ],
         }
       : undefined;
     const pilots = await models.Pilot.findAll({
       where,
-      attributes: ["id", "name", "callsign", "email", "status"],
+      attributes: ["id", "name", "callsign", "ifc", "email", "status"],
       order: [["name", "ASC"]],
       limit: 50,
       raw: true,

@@ -41,6 +41,7 @@ type Pilot = {
   id: number;
   name: string;
   callsign: string;
+  ifc: string;
   email: string;
   status: number;
   grants: Grant[];
@@ -232,7 +233,7 @@ export default function PilotAwardsPage() {
     if (!normalizedQuery) return recipients;
 
     return recipients.filter((recipient) =>
-      `${recipient.name} ${recipient.callsign} ${recipient.email}`
+      `${recipient.name} ${recipient.callsign} ${recipient.ifc} ${recipient.email}`
         .toLowerCase()
         .includes(normalizedQuery),
     );
@@ -351,7 +352,7 @@ export default function PilotAwardsPage() {
                         className="pl-8"
                         value={pilotQuery}
                         onChange={(event) => setPilotQuery(event.target.value)}
-                        placeholder="Name, callsign, or email"
+                        placeholder="Name, callsign, IFC, or email"
                       />
                     </div>
                     <Button type="submit" variant="outline">
@@ -388,7 +389,10 @@ export default function PilotAwardsPage() {
                             {pilot.name}
                           </p>
                           <p className="truncate text-xs text-muted-foreground">
-                            {pilot.callsign} · {pilot.email}
+                            {pilot.callsign} · IFC: {pilot.ifc}
+                          </p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {pilot.email}
                           </p>
                         </div>
                         {pilot.grants.length ? (
@@ -563,7 +567,7 @@ export default function PilotAwardsPage() {
                         onChange={(event) =>
                           setRecipientQuery(event.target.value)
                         }
-                        placeholder="Search recipients by name, callsign, or email"
+                        placeholder="Search by name, callsign, IFC, or email"
                       />
                     </div>
                   ) : null}
@@ -600,7 +604,10 @@ export default function PilotAwardsPage() {
                               {recipient.name}
                             </p>
                             <p className="truncate text-xs text-muted-foreground">
-                              {recipient.callsign} · {recipient.email}
+                              {recipient.callsign} · IFC: {recipient.ifc}
+                            </p>
+                            <p className="truncate text-xs text-muted-foreground">
+                              {recipient.email}
                             </p>
                           </div>
                           <div className="shrink-0 text-right">
