@@ -1,14 +1,17 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   AlertCircle,
   Clock,
   FileText,
+  ImageOff,
   Loader2,
   Plane,
   Search,
+  Trophy,
   UserIcon,
 } from "lucide-react";
 
@@ -51,6 +54,14 @@ type RecentPirep = {
   } | null;
 };
 
+type ReceivedAward = {
+  id: number;
+  name: string | null;
+  description: string | null;
+  imageurl: string | null;
+  dateAwarded: string;
+};
+
 type DashboardData = {
   standing: {
     status: number;
@@ -78,6 +89,10 @@ type DashboardData = {
     recentRejectedPireps: number;
     recentPirepWarningLimit: number;
   };
+  awards: {
+    ownedAwardIds: number[];
+    received: ReceivedAward[];
+  };
   recentPireps: RecentPirep[];
 };
 
@@ -95,6 +110,48 @@ function statusLabel(status: number) {
   if (status === 0) return "Pending";
   if (status === 1) return "Accepted";
   return "Rejected";
+}
+
+function displayImageUrl(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) return null;
+
+  const trimmed = value.trim();
+  if (trimmed.startsWith("/")) return trimmed;
+
+  try {
+    const url = new URL(trimmed);
+    return url.protocol === "https:" ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+function formatAwardDate(value: string) {
+  const dateOnly = value.slice(0, 10);
+  return new Date(`${dateOnly}T00:00:00`).toLocaleDateString();
+}
+
+function AwardArtwork({ award }: { award: ReceivedAward }) {
+  const imageUrl = displayImageUrl(award.imageurl);
+
+  if (imageUrl) {
+    return (
+      <Image
+        src={imageUrl}
+        alt=""
+        width={48}
+        height={48}
+        unoptimized
+        className="h-12 w-12 shrink-0 rounded-md border object-contain"
+      />
+    );
+  }
+
+  return (
+    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md border bg-muted">
+      <ImageOff className="h-5 w-5 text-muted-foreground" />
+    </span>
+  );
 }
 
 export default function UserDashboard() {
@@ -323,6 +380,57 @@ export default function UserDashboard() {
               </CardContent>
             </Card>
           )}
+
+          <section>
+            <Card>
+              <CardHeader className="flex flex-row items-start justify-between gap-3">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Trophy className="h-5 w-5 text-amber-500" />
+                    Awards
+                  </CardTitle>
+                  <CardDescription>
+                    Recognition you have received from the airline
+                  </CardDescription>
+                </div>
+                <Badge variant="secondary">
+                  {dashboard.awards.received.length}
+                </Badge>
+              </CardHeader>
+              <CardContent>
+                {dashboard.awards.received.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center gap-2 py-10 text-center text-muted-foreground">
+                    <span className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                      <Trophy className="h-5 w-5" />
+                    </span>
+                    <p className="text-sm">No awards received yet.</p>
+                  </div>
+                ) : (
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {dashboard.awards.received.map((award) => (
+                      <article
+                        key={award.id}
+                        className="flex h-full items-start gap-3 rounded-lg border p-4"
+                      >
+                        <AwardArtwork award={award} />
+                        <div className="min-w-0">
+                          <h3 className="font-semibold">
+                            {award.name || "Unnamed award"}
+                          </h3>
+                          <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+                            {award.description || "No description"}
+                          </p>
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            Awarded {formatAwardDate(award.dateAwarded)}
+                          </p>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </section>
 
           <section>
             <Card>

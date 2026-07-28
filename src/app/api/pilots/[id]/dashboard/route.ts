@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Op } from "sequelize";
 
 import { models } from "@/lib/models";
 import { formatFlightTime } from "@/lib/utils/time";
@@ -103,12 +104,40 @@ export async function GET(
       }) as Promise<RankRecord[]>,
       models.AwardGranted.findAll({
         where: { pilotid: pilotId },
-        attributes: ["awardid"],
+        attributes: ["awardid", "dateawarded"],
+        order: [["dateawarded", "DESC"]],
         raw: true,
       }),
     ]);
 
     const totalSeconds = Number(approvedSeconds || 0);
+    const ownedAwardIds = awardGrants.map((grant: any) =>
+      Number(grant.awardid),
+    );
+    const awardRows = ownedAwardIds.length
+      ? await models.Award.findAll({
+          where: { id: { [Op.in]: ownedAwardIds } },
+          attributes: ["id", "name", "description", "imageurl"],
+          raw: true,
+        })
+      : [];
+    const awardById = new Map(
+      awardRows.map((award: any) => [Number(award.id), award]),
+    );
+    const receivedAwards = awardGrants.flatMap((grant: any) => {
+      const award = awardById.get(Number(grant.awardid));
+      if (!award) return [];
+
+      return [
+        {
+          id: Number(award.id),
+          name: award.name,
+          description: award.description,
+          imageurl: award.imageurl,
+          dateAwarded: toDateString(grant.dateawarded),
+        },
+      ];
+    });
     const recentRejectedCount = recentPireps.filter(
       (pirep: any) => Number(pirep.status) === 2,
     ).length;
@@ -177,7 +206,8 @@ export async function GET(
         eligibleRankIds,
       },
       awards: {
-        ownedAwardIds: awardGrants.map((grant: any) => Number(grant.awardid)),
+        ownedAwardIds,
+        received: receivedAwards,
       },
       statistics: {
         approvedFlightSeconds: totalSeconds,
