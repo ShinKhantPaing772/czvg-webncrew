@@ -154,6 +154,33 @@ function AwardArtwork({ award }: { award: ReceivedAward }) {
   );
 }
 
+function ProfileAwardIcon({ award }: { award: ReceivedAward }) {
+  const imageUrl = displayImageUrl(award.imageurl);
+  const awardName = award.name?.trim() || "Unnamed award";
+
+  return (
+    <span
+      role="img"
+      aria-label={awardName}
+      title={awardName}
+      className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-background p-0.5 shadow-sm"
+    >
+      {imageUrl ? (
+        <Image
+          src={imageUrl}
+          alt=""
+          width={28}
+          height={28}
+          unoptimized
+          className="h-full w-full object-contain"
+        />
+      ) : (
+        <Trophy aria-hidden="true" className="h-4 w-4 text-amber-500" />
+      )}
+    </span>
+  );
+}
+
 export default function UserDashboard() {
   const { user, loading: sessionLoading } = useSession();
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
@@ -240,6 +267,17 @@ export default function UserDashboard() {
                           {user.name}
                         </h1>
                         <Badge variant="outline">{dashboard.standing.label}</Badge>
+                        {dashboard.awards.received.length > 0 && (
+                          <span
+                            role="group"
+                            className="flex flex-wrap items-center gap-1"
+                            aria-label="Received awards"
+                          >
+                            {dashboard.awards.received.map((award) => (
+                              <ProfileAwardIcon key={award.id} award={award} />
+                            ))}
+                          </span>
+                        )}
                       </div>
                       <div className="mt-1.5 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                         <Badge variant="outline" className="bg-slate-50">

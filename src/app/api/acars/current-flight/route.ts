@@ -14,6 +14,7 @@ import {
 } from "@/lib/acars/infinite-flight-data";
 import {
   getInfiniteFlightFlightPlan,
+  getInfiniteFlightUserFlight,
   InfiniteFlightApiError,
 } from "@/lib/infinite-flight-api";
 import { models } from "@/lib/models";
@@ -73,16 +74,33 @@ export async function GET(request: NextRequest) {
     const { sessionId, flight } = currentFlight;
     const flightId = getString(flight, ["flightId", "id"]);
     let flightPlan: UnknownRecord = {};
+    let userFlight: UnknownRecord = {};
 
     if (flightId) {
-      try {
-        const { data } = await getInfiniteFlightFlightPlan(
+      const [flightPlanResult, userFlightResult] = await Promise.allSettled([
+        getInfiniteFlightFlightPlan(
           sessionId,
           flightId,
+        ),
+        getInfiniteFlightUserFlight(ifUserId, flightId),
+      ]);
+
+      if (flightPlanResult.status === "fulfilled") {
+        flightPlan = flightPlanResult.value.data;
+      } else {
+        console.warn(
+          "[ACARS] Unable to fetch flight plan:",
+          flightPlanResult.reason,
         );
-        flightPlan = data;
-      } catch (error) {
-        console.warn("[ACARS] Unable to fetch flight plan:", error);
+      }
+
+      if (userFlightResult.status === "fulfilled") {
+        userFlight = userFlightResult.value.data.result;
+      } else {
+        console.warn(
+          "[ACARS] Unable to fetch user flight:",
+          userFlightResult.reason,
+        );
       }
     }
 
@@ -108,20 +126,26 @@ export async function GET(request: NextRequest) {
         "departureAirport",
         "origin",
         "originAirport",
-      ]) || extractAirportFromFlightPlan(flightPlan, 0);
+      ]) ||
+      extractAirportFromRecord(userFlight, ["originAirport"]) ||
+      extractAirportFromFlightPlan(flightPlan, 0);
     const arrival =
       extractAirportFromRecord(flight, [
         "arrival",
         "arrivalAirport",
         "destination",
         "destinationAirport",
-      ]) || extractAirportFromFlightPlan(flightPlan, -1);
-    const fuelUsed = getString(flight, [
-      "fuelUsed",
-      "fuelUsedKg",
-      "fuelBurned",
-      "fuelBurnedKg",
-    ]);
+      ]) ||
+      extractAirportFromRecord(userFlight, ["destinationAirport"]) ||
+      extractAirportFromFlightPlan(flightPlan, -1);
+    const fuelUsed =
+      getString(userFlight, ["fuelUsedKg"]) ||
+      getString(flight, [
+        "fuelUsed",
+        "fuelUsedKg",
+        "fuelBurned",
+        "fuelBurnedKg",
+      ]);
 
     return NextResponse.json({
       acars: {
@@ -134,7 +158,8 @@ export async function GET(request: NextRequest) {
         ]),
         departure,
         arrival,
-        flightTime: extractFlightTime(flight),
+        flightTime:
+          extractFlightTime(userFlight) || extractFlightTime(flight),
         date: new Date().toISOString().slice(0, 10),
         aircraftId: aircraft ? String(aircraft.id) : "",
         fuelUsed,
@@ -144,6 +169,7 @@ export async function GET(request: NextRequest) {
         sessionId,
         flightId,
         aircraftMatched: Boolean(aircraft),
+        userFlightMatched: Boolean(getString(userFlight, ["id"])),
       },
     });
   } catch (error) {

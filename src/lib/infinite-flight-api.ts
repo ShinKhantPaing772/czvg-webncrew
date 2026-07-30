@@ -29,6 +29,7 @@ export type {
 export const INFINITE_FLIGHT_CACHE_TTL = {
   aircraft: 60 * 60,
   user: 5 * 60,
+  userFlight: 5 * 60,
   sessions: 10 * 60,
   flights: 15,
   flightPlan: 15,
@@ -104,6 +105,22 @@ export function getInfiniteFlightFlights(sessionId: unknown) {
     cacheKey: `if-session-flights-${id}`,
     ttlSeconds: INFINITE_FLIGHT_CACHE_TTL.flights,
     isValidResult: Array.isArray,
+  });
+}
+
+export function getInfiniteFlightUserFlight(
+  userId: unknown,
+  flightId: unknown,
+) {
+  const normalizedUserId = requireInfiniteFlightId(userId, "User ID");
+  const normalizedFlightId = requireInfiniteFlightId(flightId, "Flight ID");
+
+  return requestInfiniteFlight<UnknownRecord>({
+    path: `/users/${encodeURIComponent(normalizedUserId)}/flights/${encodeURIComponent(normalizedFlightId)}`,
+    cacheKey: `if-user-flight-${normalizedUserId}-${normalizedFlightId}`,
+    ttlSeconds: INFINITE_FLIGHT_CACHE_TTL.userFlight,
+    isValidResult: (result: unknown): result is UnknownRecord =>
+      Boolean(result) && typeof result === "object" && !Array.isArray(result),
   });
 }
 

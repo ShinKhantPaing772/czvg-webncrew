@@ -81,6 +81,18 @@ function normalizeDurationSeconds(key: string, value: number) {
     return value / 1000;
   }
 
+  if (
+    lowerKey === "totaltime" ||
+    lowerKey.includes("minute") ||
+    lowerKey.endsWith("mins")
+  ) {
+    return value * 60;
+  }
+
+  if (lowerKey.includes("hour")) {
+    return value * 60 * 60;
+  }
+
   return value > 604800 ? value / 1000 : value;
 }
 
@@ -111,12 +123,18 @@ export function extractFlightTime(flight: UnknownRecord) {
     "flightTimeSeconds",
     "flightTimeMilliseconds",
     "flightTimeMs",
+    "flightTimeMinutes",
+    "flightTimeHours",
     "totalFlightTime",
     "duration",
     "durationSeconds",
     "durationMilliseconds",
     "durationMs",
+    "durationMinutes",
+    "durationHours",
     "totalTime",
+    "totalTimeMinutes",
+    "totalTimeHours",
   ];
 
   for (const key of durationKeys) {
