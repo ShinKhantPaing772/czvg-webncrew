@@ -163,7 +163,7 @@ function ProfileAwardIcon({ award }: { award: ReceivedAward }) {
       role="img"
       aria-label={awardName}
       title={awardName}
-      className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-background p-0.5 shadow-sm"
+      className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-md bg-background p-0.5 shadow-sm"
     >
       {imageUrl ? (
         <Image
