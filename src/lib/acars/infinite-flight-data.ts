@@ -106,15 +106,27 @@ function secondsToFlightTime(totalSeconds: number) {
     .padStart(2, "0")}`;
 }
 
-function dateToSeconds(value: unknown) {
+export function parseInfiniteFlightDate(value: unknown) {
   if (typeof value !== "string" && typeof value !== "number") {
     return null;
   }
 
-  const timestamp = new Date(value).getTime();
-  if (Number.isNaN(timestamp)) return null;
+  const normalizedValue =
+    typeof value === "string" &&
+    /^\d{4}-\d{2}-\d{2}[T ]/.test(value.trim()) &&
+    !/(?:z|[+-]\d{2}:?\d{2})$/i.test(value.trim())
+      ? `${value.trim()}Z`
+      : value;
+  const date = new Date(normalizedValue);
 
-  return Math.max(0, (Date.now() - timestamp) / 1000);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function dateToSeconds(value: unknown) {
+  const date = parseInfiniteFlightDate(value);
+  if (!date) return null;
+
+  return Math.max(0, (Date.now() - date.getTime()) / 1000);
 }
 
 export function extractFlightTime(flight: UnknownRecord) {
@@ -139,7 +151,7 @@ export function extractFlightTime(flight: UnknownRecord) {
 
   for (const key of durationKeys) {
     const value = flight[key];
-    if (typeof value === "number") {
+    if (typeof value === "number" && Number.isFinite(value) && value > 0) {
       return secondsToFlightTime(normalizeDurationSeconds(key, value));
     }
   }

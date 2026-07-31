@@ -124,6 +124,23 @@ export function getInfiniteFlightUserFlight(
   });
 }
 
+export function getInfiniteFlightUserFlights(userId: unknown) {
+  const normalizedUserId = requireInfiniteFlightId(userId, "User ID");
+
+  return requestInfiniteFlight<UnknownRecord>({
+    path: `/users/${encodeURIComponent(normalizedUserId)}/flights?page=1`,
+    cacheKey: `if-user-flights-${normalizedUserId}-page-1`,
+    ttlSeconds: INFINITE_FLIGHT_CACHE_TTL.userFlight,
+    isValidResult: (result: unknown): result is UnknownRecord => {
+      if (!result || typeof result !== "object" || Array.isArray(result)) {
+        return false;
+      }
+
+      return Array.isArray((result as UnknownRecord).data);
+    },
+  });
+}
+
 export function getInfiniteFlightFlightPlan(
   sessionId: unknown,
   flightId: unknown,

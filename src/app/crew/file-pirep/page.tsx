@@ -92,6 +92,13 @@ type FormValues = z.infer<typeof formSchema>;
 
 type AcarsResponse = {
   acars?: Partial<FormValues>;
+  meta?: {
+    source?: "active" | "recent";
+    flightId?: string;
+    aircraftMatched?: boolean;
+    flightTimeEstimated?: boolean;
+    fuelPending?: boolean;
+  };
   error?: string;
 };
 
@@ -126,6 +133,9 @@ export default function FilePirep() {
     [],
   );
   const [isLoadingAircraft, setIsLoadingAircraft] = useState(true);
+  const [aircraftLoadError, setAircraftLoadError] = useState<string | null>(
+    null,
+  );
   const searchParams = useSearchParams();
 
   const initialValues = {
@@ -146,6 +156,7 @@ export default function FilePirep() {
     const fetchAircraft = async () => {
       if (!user?.id) return;
       setIsLoadingAircraft(true);
+      setAircraftLoadError(null);
       try {
         const [response, eligibilityResponse] = await Promise.all([
           fetch("/api/aircraft"),
@@ -177,9 +188,10 @@ export default function FilePirep() {
         setFilteredAircraftData(eligibleAircraft);
       } catch (error) {
         console.error("Error fetching aircraft:", error);
-        setSubmitMessage(
-          error instanceof Error ? error.message : "Failed to load aircraft",
-        );
+        const message =
+          error instanceof Error ? error.message : "Failed to load aircraft";
+        setAircraftLoadError(message);
+        setSubmitMessage(message);
       } finally {
         setIsLoadingAircraft(false);
       }
@@ -252,6 +264,18 @@ export default function FilePirep() {
       setAcarsMessage("Please sign in before fetching ACARS data.");
       return;
     }
+    if (isLoadingAircraft) {
+      setAcarsMessage(
+        "Please wait for the available aircraft list to finish loading.",
+      );
+      return;
+    }
+    if (aircraftLoadError) {
+      setAcarsMessage(
+        "The available aircraft list could not be loaded. Refresh the page before importing ACARS.",
+      );
+      return;
+    }
 
     setIsFetchingAcars(true);
     setAcarsMessage(null);
@@ -259,13 +283,30 @@ export default function FilePirep() {
     setAcarsMissingFields([]);
 
     try {
-      const response = await authFetch(
-        `/api/acars/current-flight?pilotId=${user.id}`,
+      const params = new URLSearchParams({ pilotId: String(user.id) });
+      const savedFlightId = window.sessionStorage.getItem(
+        "acars:last-flight-id",
       );
-      const data: AcarsResponse = await response.json();
+      if (savedFlightId) params.set("flightId", savedFlightId);
+
+      let response = await authFetch(`/api/acars/current-flight?${params}`);
+      let data: AcarsResponse = await response.json();
+
+      if (!response.ok && response.status === 404 && savedFlightId) {
+        window.sessionStorage.removeItem("acars:last-flight-id");
+        params.delete("flightId");
+        response = await authFetch(`/api/acars/current-flight?${params}`);
+        data = await response.json();
+      }
 
       if (!response.ok || !data.acars) {
         throw new Error(data.error || "Failed to fetch ACARS data");
+      }
+      if (data.meta?.flightId) {
+        window.sessionStorage.setItem(
+          "acars:last-flight-id",
+          data.meta.flightId,
+        );
       }
 
       const acarsValues = Object.fromEntries(
@@ -300,7 +341,23 @@ export default function FilePirep() {
       });
       setAcarsFilledFields(filledFields);
       setAcarsMissingFields(missingFields);
-      setAcarsMessage("ACARS data loaded from your current Infinite Flight flight.");
+
+      const acarsMessages = [
+        data.meta?.source === "recent"
+          ? "ACARS data loaded from your most recent Infinite Flight flight."
+          : "ACARS data loaded from your current Infinite Flight flight.",
+      ];
+      if (data.meta?.flightTimeEstimated) {
+        acarsMessages.push(
+          "Flight time is currently estimated from the flight start time.",
+        );
+      }
+      if (data.meta?.fuelPending) {
+        acarsMessages.push(
+          "Infinite Flight has not finalized fuel used yet; import again after it finalizes the logbook entry.",
+        );
+      }
+      setAcarsMessage(acarsMessages.join(" "));
     } catch (error) {
       console.error(error);
       setAcarsMessage(
@@ -334,15 +391,23 @@ export default function FilePirep() {
               type="button"
               variant="outline"
               onClick={fetchAcarsData}
-              disabled={isFetchingAcars}
+              disabled={
+                isFetchingAcars ||
+                isLoadingAircraft ||
+                Boolean(aircraftLoadError)
+              }
               className="flex items-center gap-2"
             >
-              {isFetchingAcars ? (
+              {isFetchingAcars || isLoadingAircraft ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <RefreshCw className="h-4 w-4" />
               )}
-              Import ACARS
+              {isLoadingAircraft
+                ? "Loading aircraft"
+                : aircraftLoadError
+                  ? "Aircraft unavailable"
+                  : "Import ACARS"}
             </Button>
           </div>
         </CardHeader>
