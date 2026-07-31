@@ -271,8 +271,9 @@ export default function AdminPireps() {
   }, [currentPage, activeTab, searchQuery, itemsPerPage]);
 
   useEffect(() => {
-    if (pagination.totalPages > 0 && currentPage > pagination.totalPages) {
-      setCurrentPage(pagination.totalPages);
+    const lastPage = Math.max(pagination.totalPages, 1);
+    if (currentPage > lastPage) {
+      setCurrentPage(lastPage);
     }
   }, [currentPage, pagination.totalPages]);
 
@@ -378,8 +379,7 @@ export default function AdminPireps() {
         throw new Error(data.error || "Failed to approve PIREP");
       }
 
-      // Refresh the PIREPs list
-      fetchPireps();
+      await fetchPireps();
 
       // Reset selected PIREP and close the dialog
       setSelectedPirep(null);
@@ -420,8 +420,7 @@ export default function AdminPireps() {
         throw new Error(data.error || "Failed to reject PIREP");
       }
 
-      // Refresh the PIREPs list
-      fetchPireps();
+      await fetchPireps();
 
       // Reset selected PIREP and close the dialog
       setSelectedPirep(null);
@@ -550,11 +549,6 @@ export default function AdminPireps() {
       }
 
       const updatedPirep = data.data as Pirep;
-      setPirepsData((currentPireps) =>
-        currentPireps.map((currentPirep) =>
-          currentPirep.id === pirep.id ? updatedPirep : currentPirep,
-        ),
-      );
       setSelectedPirep(updatedPirep);
       setEditForm(pirepToEditForm(updatedPirep));
       setDeletedCommentIds([]);

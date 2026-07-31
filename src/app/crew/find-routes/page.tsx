@@ -206,8 +206,6 @@ export default function FindRoutes() {
       try {
         setLoading(true);
         setError(null);
-        setCurrentPage(1);
-
         const url = new URL("/api/routes", window.location.origin);
         url.searchParams.set("limit", "500");
         if (filters.searchQuery.trim()) {
@@ -317,7 +315,15 @@ export default function FindRoutes() {
     currentPage * itemsPerPage,
   );
 
+  useEffect(() => {
+    const lastPage = Math.max(totalPages, 1);
+    if (currentPage > lastPage) {
+      setCurrentPage(lastPage);
+    }
+  }, [currentPage, totalPages]);
+
   function updateFilters(next: Partial<Filters>) {
+    setCurrentPage(1);
     setFilters((current) => ({ ...current, ...next }));
   }
 
@@ -354,6 +360,7 @@ export default function FindRoutes() {
   }
 
   function applyFilter(saved: Filters) {
+    setCurrentPage(1);
     setFilters(saved);
   }
 
@@ -505,7 +512,8 @@ export default function FindRoutes() {
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() =>
+                onClick={() => {
+                  setCurrentPage(1);
                   setFilters({
                     searchQuery: "",
                     departureFilter: "",
@@ -514,7 +522,7 @@ export default function FindRoutes() {
                     durationRange: "",
                     eligibleOnly: false,
                   })
-                }
+                }}
               >
                 <X className="mr-2 h-4 w-4" />
                 Clear

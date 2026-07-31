@@ -152,8 +152,17 @@ export default function Users() {
     const response = await authFetch("/api/admin/users");
     const data = await response.json();
     // Make sure it’s an array
-    const usersArray = Array.isArray(data) ? data : data.users || [];
+    const usersArray: Pilots[] = Array.isArray(data) ? data : data.users || [];
     setUsers(usersArray);
+    return usersArray;
+  };
+
+  const refreshSelectedUser = async (userId: string) => {
+    const refreshedUsers = await loadUsers();
+    const refreshedUser =
+      refreshedUsers.find((user) => user.id === userId) ?? null;
+    setSelectedUser(refreshedUser);
+    return refreshedUser;
   };
 
   useEffect(() => {
@@ -195,11 +204,20 @@ export default function Users() {
   });
 
   // Paginate users
-  const totalPages = Math.ceil(sortedUsers.length / itemsPerPage);
+  const totalPages = Math.max(
+    1,
+    Math.ceil(sortedUsers.length / itemsPerPage),
+  );
   const paginatedUsers = sortedUsers.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage,
   );
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   // Get status badge variant
   const getStatusBadge = (status: string) => {
@@ -318,23 +336,7 @@ export default function Users() {
       const data = await response.json();
 
       if (data.success) {
-        const updatedUser = {
-          ...user,
-          ifGrade: data.ifGrade,
-          ifViolations: data.ifViolations,
-          ifMetricsUpdatedAt: data.ifMetricsUpdatedAt,
-        };
-
-        setUsers((currentUsers) =>
-          currentUsers.map((currentUser) =>
-            currentUser.id === user.id
-              ? { ...currentUser, ...updatedUser }
-              : currentUser,
-          ),
-        );
-        setSelectedUser((current) =>
-          current?.id === user.id ? { ...current, ...updatedUser } : current,
-        );
+        await refreshSelectedUser(user.id);
       }
     } catch (error) {
       console.error("Error refreshing IF metrics:", error);
@@ -377,23 +379,7 @@ export default function Users() {
       const data = await response.json();
 
       if (data.success) {
-        const updatedUser = {
-          ...user,
-          examScore: scoreValue ? Number(scoreValue) : null,
-          examStatus: scoreValue ? 2 : user.examStatus,
-          examResultReceivedAt: scoreValue
-            ? new Date().toISOString()
-            : user.examResultReceivedAt,
-          discordInviteUrl: inviteUrl || null,
-          discordInviteSentAt: inviteUrl ? new Date().toISOString() : null,
-        };
-
-        setUsers((currentUsers) =>
-          currentUsers.map((currentUser) =>
-            currentUser.id === user.id ? updatedUser : currentUser,
-          ),
-        );
-        setSelectedUser(updatedUser);
+        await refreshSelectedUser(user.id);
         setUpdateError("");
       } else {
         setUpdateError(data.message || "Error updating application.");
@@ -443,19 +429,7 @@ export default function Users() {
       });
       const data = await response.json();
       if (data.success) {
-        const updatedUser = {
-          ...user,
-          name,
-          email,
-          callsign,
-          status: Number(editForm.status),
-        };
-        setUsers((currentUsers) =>
-          currentUsers.map((currentUser) =>
-            currentUser.id === user.id ? updatedUser : currentUser,
-          ),
-        );
-        setSelectedUser(updatedUser);
+        await refreshSelectedUser(user.id);
         setUpdateError("");
         setIsEditingUser(false);
       } else {
@@ -547,7 +521,10 @@ export default function Users() {
           <Tabs
             defaultValue="all"
             className="space-y-4"
-            onValueChange={(val) => setActiveTab(val)}
+            onValueChange={(value) => {
+              setActiveTab(value);
+              setCurrentPage(1);
+            }}
           >
             <div className="flex justify-between">
               <TabsList>
@@ -618,7 +595,10 @@ export default function Users() {
                       placeholder="Search by name, email, ID..."
                       className="pl-8"
                       value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        setCurrentPage(1);
+                      }}
                     />
                   </div>
                 </div>
@@ -660,7 +640,10 @@ export default function Users() {
                       <Label htmlFor="status">Status</Label>
                       <Select
                         value={statusFilter}
-                        onValueChange={setStatusFilter}
+                        onValueChange={(value) => {
+                          setStatusFilter(value);
+                          setCurrentPage(1);
+                        }}
                       >
                         <SelectTrigger id="status">
                           <SelectValue placeholder="Filter by status" />

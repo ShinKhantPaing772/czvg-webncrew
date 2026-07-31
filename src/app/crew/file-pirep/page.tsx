@@ -44,7 +44,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CrewHeader } from "@/components/crew-header";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { authFetch } from "@/lib/utils/api";
 interface aircraft {
   id: string;
@@ -115,6 +115,7 @@ const acarsFieldLabels: Record<keyof FormValues, string> = {
 
 export default function FilePirep() {
   const { user } = useSession();
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingAcars, setIsFetchingAcars] = useState(false);
   const [acarsMessage, setAcarsMessage] = useState<string | null>(null);
@@ -247,7 +248,7 @@ export default function FilePirep() {
       }
 
       form.reset();
-      window.location.href = "/crew/view-pireps";
+      router.push("/crew/view-pireps");
     } catch (error) {
       console.error(error);
       setSubmitMessage(

@@ -169,8 +169,9 @@ export default function ViewPireps() {
   }, [user?.id, currentPage, itemsPerPage, searchTerm]);
 
   useEffect(() => {
-    if (pagination.totalPages > 0 && currentPage > pagination.totalPages) {
-      setCurrentPage(pagination.totalPages);
+    const lastPage = Math.max(pagination.totalPages, 1);
+    if (currentPage > lastPage) {
+      setCurrentPage(lastPage);
     }
   }, [currentPage, pagination.totalPages]);
 

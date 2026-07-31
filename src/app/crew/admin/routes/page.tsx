@@ -230,10 +230,7 @@ export default function RoutesPage() {
       setShowImportResult(true);
 
       if (data.success || data.createdCount > 0) {
-        // Refresh routes after successful import
-        setTimeout(() => {
-          fetchRoutes();
-        }, 1000);
+        await fetchRoutes();
       }
     } catch (error) {
       console.error("Error importing routes:", error);
@@ -324,11 +321,25 @@ export default function RoutesPage() {
   const filteredRoutes = routes;
   const sortedRoutes = [...filteredRoutes];
 
-  const pageCount = Math.ceil(sortedRoutes.length / itemsPerPage);
+  const pageCount = Math.max(
+    1,
+    Math.ceil(sortedRoutes.length / itemsPerPage),
+  );
   const paginatedRoutes = sortedRoutes.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage,
   );
+
+  useEffect(() => {
+    if (currentPage > pageCount) {
+      setCurrentPage(pageCount);
+    }
+  }, [currentPage, pageCount]);
+
+  const applyFilters = () => {
+    setCurrentPage(1);
+    fetchRoutes();
+  };
 
   const handleDeleteRoute = async () => {
     if (!selectedRoute) return;
@@ -345,9 +356,9 @@ export default function RoutesPage() {
         throw new Error("Failed to delete route");
       }
 
+      await fetchRoutes();
       setShowDeleteDialog(false);
       alert("Route deleted successfully.");
-      fetchRoutes();
     } catch (err) {
       console.error("Error deleting route:", err);
       alert("Failed to delete route. Please try again.");
@@ -405,7 +416,10 @@ export default function RoutesPage() {
             <Input
               placeholder="ICAO code"
               value={departureFilter}
-              onChange={(e) => setDepartureFilter(e.target.value)}
+              onChange={(e) => {
+                setDepartureFilter(e.target.value);
+                setCurrentPage(1);
+              }}
             />
           </div>
           <div className="space-y-2">
@@ -413,12 +427,21 @@ export default function RoutesPage() {
             <Input
               placeholder="ICAO code"
               value={arrivalFilter}
-              onChange={(e) => setArrivalFilter(e.target.value)}
+              onChange={(e) => {
+                setArrivalFilter(e.target.value);
+                setCurrentPage(1);
+              }}
             />
           </div>
           <div className="space-y-2 w-full">
             <Label>Aircraft</Label>
-            <Select value={aircraftFilter} onValueChange={setAircraftFilter}>
+            <Select
+              value={aircraftFilter}
+              onValueChange={(value) => {
+                setAircraftFilter(value);
+                setCurrentPage(1);
+              }}
+            >
               <SelectTrigger className="w-full">
                 {loadingAircraft ? (
                   <div className="flex items-center gap-2">
@@ -449,7 +472,12 @@ export default function RoutesPage() {
           </div>
           <div className="space-y-2 w-full">
             <Label>Duration</Label>
-            <Select onValueChange={(val) => setDurationRange(val)}>
+            <Select
+              onValueChange={(value) => {
+                setDurationRange(value);
+                setCurrentPage(1);
+              }}
+            >
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select duration range" />
               </SelectTrigger>
@@ -481,11 +509,14 @@ export default function RoutesPage() {
                 placeholder="Search by flight number"
                 className="pl-8"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setCurrentPage(1);
+                }}
               />
             </div>
           </div>
-          <Button onClick={fetchRoutes} variant="default" size="sm">
+          <Button onClick={applyFilters} variant="default" size="sm">
             Search
           </Button>
         </div>
@@ -658,6 +689,7 @@ export default function RoutesPage() {
 
                   if (!response.ok) throw new Error("Failed to add route");
 
+                  await fetchRoutes();
                   setIsAddingRoute(false);
                   reset();
                   setNewRoute({
@@ -670,7 +702,6 @@ export default function RoutesPage() {
                   });
 
                   alert("Route added successfully.");
-                  fetchRoutes();
                 } catch (err) {
                   console.error("Error adding route:", err);
                   alert("Failed to add route.");
