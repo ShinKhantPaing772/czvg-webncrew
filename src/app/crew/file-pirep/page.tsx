@@ -25,12 +25,14 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Popover,
   PopoverContent,
@@ -86,6 +88,7 @@ const formSchema = z.object({
     message: "Fuel used must be a number.",
   }),
   multi: z.string().optional(),
+  notes: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -111,6 +114,7 @@ const acarsFieldLabels: Record<keyof FormValues, string> = {
   aircraftId: "Aircraft",
   fuelUsed: "Fuel used",
   multi: "Multiplier",
+  notes: "Notes",
 };
 
 export default function FilePirep() {
@@ -150,6 +154,7 @@ export default function FilePirep() {
     aircraftId: searchParams.get("aircraftId") || "",
     fuelUsed: searchParams.get("fuelUsed") || "",
     multi: searchParams.get("multi") || "",
+    notes: "",
   };
 
   // Fetch aircraft data from API
@@ -673,6 +678,28 @@ export default function FilePirep() {
                           {...field}
                         />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="notes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Notes (Optional)</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder="Add any details for the PIREP review team..."
+                          rows={4}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Your notes will be posted as the first comment on this
+                        PIREP.
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

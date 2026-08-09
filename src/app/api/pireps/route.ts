@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Op } from "sequelize";
 import { models } from "@/lib/models";
+import sequelize from "@/lib/database";
 import { requireAuth } from "@/lib/server-auth";
 import { canPilotUseAircraft } from "@/lib/aircraft-eligibility";
 
@@ -71,6 +72,7 @@ export async function POST(request: NextRequest) {
       pilotid,
       pilotname,
       pilotcallsign,
+      notes,
     } = body;
 
     if (!pilotid) {
@@ -221,18 +223,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // --- Create PIREP ---
-    const pirep = await models.Pirep.create({
-      flightnum: trimmedFlightnum,
-      departure: normalizedDeparture,
-      arrival: normalizedArrival,
-      flighttime: Math.round(adjustedSeconds),
-      pilotid: auth.user.id,
-      date: parsedDate,
-      aircraftid: parsedAircraftId,
-      fuelused: Math.round(parsedFuel),
-      multi: multiplier ? multiplier.name : "None",
-      status: 0,
+    const trimmedNotes = typeof notes === "string" ? notes.trim() : "";
+
+    // --- Create PIREP and its optional pilot note ---
+    const pirep = await sequelize.transaction(async (transaction) => {
+      const createdPirep = await models.Pirep.create(
+        {
+          flightnum: trimmedFlightnum,
+          departure: normalizedDeparture,
+          arrival: normalizedArrival,
+          flighttime: Math.round(adjustedSeconds),
+          pilotid: auth.user.id,
+          date: parsedDate,
+          aircraftid: parsedAircraftId,
+          fuelused: Math.round(parsedFuel),
+          multi: multiplier ? multiplier.name : "None",
+          status: 0,
+        },
+        { transaction },
+      );
+
+      if (trimmedNotes) {
+        await models.PirepComment.create(
+          {
+            pirepid: createdPirep.id,
+            userid: auth.user.id,
+            content: trimmedNotes,
+          },
+          { transaction },
+        );
+      }
+
+      return createdPirep;
     });
 
     // --- Discord Webhook ---
