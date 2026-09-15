@@ -2,6 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import {
+  getCrewLandingPath,
+  usesApplicantPortal,
+} from "@/lib/pilot-status";
 import { getToken } from "@/lib/utils/auth";
 
 type AuthGuardProps = {
@@ -17,6 +21,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
 
   const token = getToken();
+  const isApplicantPortalUser = usesApplicantPortal(userStatus);
 
   async function checkSession() {
     try {
@@ -69,13 +74,13 @@ export function AuthGuard({ children }: AuthGuardProps) {
 
     // Authenticated user visiting login page
     if (isAuthenticated && isLoginPage) {
-      router.push(userStatus === 0 ? "/crew/application" : "/crew/home");
+      router.push(getCrewLandingPath(userStatus));
       return;
     }
 
     if (
       isAuthenticated &&
-      userStatus === 0 &&
+      isApplicantPortalUser &&
       pathname.startsWith("/crew") &&
       pathname !== "/crew/application"
     ) {
@@ -113,9 +118,22 @@ export function AuthGuard({ children }: AuthGuardProps) {
         router.push("/crew/home");
       }
     }
-  }, [isAuthenticated, pathname, permissions, router, userStatus]);
+  }, [
+    isApplicantPortalUser,
+    isAuthenticated,
+    pathname,
+    permissions,
+    router,
+    userStatus,
+  ]);
 
-  if (isAuthenticated === null) {
+  const isRedirectingToApplicantPortal =
+    isAuthenticated &&
+    isApplicantPortalUser &&
+    pathname.startsWith("/crew") &&
+    pathname !== "/crew/application";
+
+  if (isAuthenticated === null || isRedirectingToApplicantPortal) {
     return (
       <div className="flex h-screen w-full items-center justify-center">
         <p className="text-gray-500">Loading...</p>
