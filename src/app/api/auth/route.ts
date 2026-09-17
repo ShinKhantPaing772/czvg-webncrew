@@ -7,6 +7,7 @@ import {
   getApplicantPortalUrl,
   sendEmail,
 } from "@/lib/email";
+import { canPilotLogIn, getCrewLandingPath } from "@/lib/pilot-status";
 import { isValidSignupName } from "@/lib/utils/signup-name";
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -88,21 +89,6 @@ async function handleLogin({
     );
   }
 
-  if (pilot.status !== 0 && pilot.status !== 1) {
-    let statusMessage =
-      "Login Failed. Your application may still be pending or it may have been denied. Please contact us for more details if you believe this is an error.";
-
-    if (pilot.status === 2) {
-      statusMessage =
-        "Your application has been rejected. If you believe this is a mistake, please contact us on the IFC.";
-    } else if (pilot.status === 3) {
-      statusMessage =
-        "Your account is marked as inactive. Please contact us on the IFC for assistance.";
-    }
-
-    return NextResponse.json({ error: statusMessage }, { status: 401 });
-  }
-
   let isValidPassword = false;
   try {
     if (!password || !pilot.password) {
@@ -128,6 +114,13 @@ async function handleLogin({
     );
   }
 
+  if (!canPilotLogIn(pilot.status)) {
+    return NextResponse.json(
+      { error: "This account is not available for login." },
+      { status: 401 },
+    );
+  }
+
   try {
     const tokenString = await createAuthToken(pilot.id, pilot.email);
 
@@ -142,7 +135,7 @@ async function handleLogin({
           callsign: pilot.callsign,
           status: pilot.status,
         },
-        redirectTo: pilot.status === 0 ? "/crew/application" : "/crew/home",
+        redirectTo: getCrewLandingPath(pilot.status),
       },
       { status: 200 },
     );

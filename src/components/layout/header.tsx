@@ -11,6 +11,7 @@ import {
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 import { useSession } from "@/hooks/use-session";
+import { getCrewLandingPath, usesApplicantPortal } from "@/lib/pilot-status";
 import { logout } from "@/lib/utils/auth";
 
 const brandLogoSrc = "/brand/czvg-logo-horizontal.png";
@@ -20,6 +21,10 @@ export function Header() {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const { user } = useSession();
   const pathname = usePathname();
+  const portalHref = getCrewLandingPath(user?.status ?? null);
+  const portalLabel = usesApplicantPortal(user?.status ?? null)
+    ? "Applicant Portal"
+    : "Crew Center";
 
   const navLinks = [
     { href: "/", label: "Home" },
@@ -104,10 +109,10 @@ export function Header() {
             </Link>
           ) : (
             <Link
-              href="/crew/home"
+              href={portalHref}
               className="rounded-md px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-950"
             >
-              Crew Center
+              {portalLabel}
             </Link>
           )}
         </nav>
@@ -231,11 +236,11 @@ export function Header() {
                 </Link>
               ) : (
                 <Link
-                  href="/crew"
+                  href={portalHref}
                   className="-mx-3 block rounded-md px-3 py-2 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50"
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  Crew Center
+                  {portalLabel}
                 </Link>
               )}
             </div>

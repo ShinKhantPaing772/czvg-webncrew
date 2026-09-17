@@ -23,7 +23,7 @@ import {
   isInfiniteFlightId,
 } from "@/lib/infinite-flight-api";
 import { models } from "@/lib/models";
-import { hasPermission, requireAuth } from "@/lib/server-auth";
+import { hasPermission, requireCrewAuth } from "@/lib/server-auth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -45,7 +45,7 @@ function hasFinalizedFuel(flight: UnknownRecord) {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = await requireAuth(request);
+  const auth = await requireCrewAuth(request);
   if (!auth.ok) return auth.response;
 
   const pilotId = request.nextUrl.searchParams.get("pilotId");

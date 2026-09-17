@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import {
   CheckCircle2,
+  CircleAlert,
+  CircleX,
   ExternalLink,
   KeyRound,
   LinkIcon,
@@ -26,6 +28,11 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import {
+  type ApplicantPortalNotice,
+  CZVG_IFC_PROFILE_URL,
+  getApplicantPortalNotice,
+} from "@/lib/applicant-portal";
 import { authFetch } from "@/lib/utils/api";
 
 const QUIZ_URL = "https://forms.gle/cMGzZyjUidzAnF5E9";
@@ -224,6 +231,10 @@ export default function ApplicationStatusPage() {
   const progressValue = Math.round(
     (completedProgressSteps / progressSteps.length) * 100,
   );
+  const statusNotice = applicant
+    ? getApplicantPortalNotice(applicant.status)
+    : null;
+  const isPendingApplicant = applicant?.status === 0;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -237,7 +248,7 @@ export default function ApplicationStatusPage() {
             Applicant Portal
           </Badge>
           <h1 className="text-3xl font-semibold tracking-normal text-slate-950">
-            Application Status
+            {statusNotice?.badge ?? "Application Status"}
           </h1>
         </section>
 
@@ -250,50 +261,61 @@ export default function ApplicationStatusPage() {
 
         {!loading && applicant && (
           <>
-            <Card>
-              <CardHeader>
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <CardTitle>Application Progress</CardTitle>
-                    <CardDescription>
-                      Track your application through examination and onboarding.
-                    </CardDescription>
-                  </div>
-                  <Badge
-                    variant="outline"
-                    className="border-blue-200 bg-blue-50 text-blue-700"
-                  >
-                    {progressValue}% Complete
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Progress value={progressValue} className="h-3 bg-slate-200" />
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                  {progressSteps.map((step) => (
-                    <div
-                      key={step.label}
-                      className="flex items-center gap-2 text-sm text-slate-600"
-                    >
-                      <span
-                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
-                          step.complete
-                            ? "border-green-200 bg-green-100 text-green-700"
-                            : "border-slate-200 bg-white text-slate-400"
-                        }`}
-                      >
-                        {step.complete && <CheckCircle2 className="h-3.5 w-3.5" />}
-                      </span>
-                      <span className={step.complete ? "font-medium text-slate-900" : ""}>
-                        {step.label}
-                      </span>
+            {statusNotice ? (
+              <StatusNotice notice={statusNotice} />
+            ) : isPendingApplicant ? (
+              <Card>
+                <CardHeader>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <CardTitle>Application Progress</CardTitle>
+                      <CardDescription>
+                        Track your application through examination and
+                        onboarding.
+                      </CardDescription>
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                    <Badge
+                      variant="outline"
+                      className="border-blue-200 bg-blue-50 text-blue-700"
+                    >
+                      {progressValue}% Complete
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Progress value={progressValue} className="h-3 bg-slate-200" />
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                    {progressSteps.map((step) => (
+                      <div
+                        key={step.label}
+                        className="flex items-center gap-2 text-sm text-slate-600"
+                      >
+                        <span
+                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
+                            step.complete
+                              ? "border-green-200 bg-green-100 text-green-700"
+                              : "border-slate-200 bg-white text-slate-400"
+                          }`}
+                        >
+                          {step.complete && (
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                          )}
+                        </span>
+                        <span
+                          className={
+                            step.complete ? "font-medium text-slate-900" : ""
+                          }
+                        >
+                          {step.label}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            ) : null}
 
-            {applicant.discordInviteUrl && (
+            {isPendingApplicant && applicant.discordInviteUrl && (
               <Card className="border-green-200 bg-green-50">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-green-900">
@@ -323,7 +345,7 @@ export default function ApplicationStatusPage() {
               <CardHeader>
                 <CardTitle>Your Information</CardTitle>
                 <CardDescription>
-                  Review the details attached to your submitted application.
+                  Review the details associated with your CZVG account.
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-4 sm:grid-cols-2">
@@ -349,7 +371,7 @@ export default function ApplicationStatusPage() {
               </CardContent>
             </Card>
 
-            {needsFlightReplay && (
+            {isPendingApplicant && needsFlightReplay && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -405,7 +427,7 @@ export default function ApplicationStatusPage() {
               </Card>
             )}
 
-            {!applicant.examDeclared && (
+            {isPendingApplicant && !applicant.examDeclared && (
               <Card>
                 <CardHeader>
                   <CardTitle>Entrance Examination</CardTitle>
@@ -448,7 +470,7 @@ export default function ApplicationStatusPage() {
               </Card>
             )}
 
-            {canUndeclareExam && (
+            {isPendingApplicant && canUndeclareExam && (
               <Card>
                 <CardHeader>
                   <CardTitle>Examination Submitted</CardTitle>
@@ -474,7 +496,6 @@ export default function ApplicationStatusPage() {
                 </CardContent>
               </Card>
             )}
-
           </>
         )}
 
@@ -505,9 +526,84 @@ function InfoItem({
         <Icon className="h-4 w-4" />
         {label}
       </div>
-      <p className={`break-words text-base font-semibold text-slate-950 ${valueClassName}`}>
+      <p
+        className={`break-words text-base font-semibold text-slate-950 ${valueClassName}`}
+      >
         {value}
       </p>
     </div>
+  );
+}
+
+function StatusNotice({ notice }: { notice: ApplicantPortalNotice }) {
+  const isRejected = notice.tone === "danger";
+  const Icon = isRejected ? CircleX : CircleAlert;
+
+  return (
+    <Card
+      role="status"
+      aria-live="polite"
+      className={
+        isRejected
+          ? "border-red-200 bg-red-50"
+          : "border-amber-200 bg-amber-50"
+      }
+    >
+      <CardHeader>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+          <div
+            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${
+              isRejected
+                ? "bg-red-100 text-red-700"
+                : "bg-amber-100 text-amber-700"
+            }`}
+          >
+            <Icon className="h-6 w-6" aria-hidden="true" />
+          </div>
+          <div className="space-y-3">
+            <Badge
+              variant="outline"
+              className={
+                isRejected
+                  ? "border-red-300 bg-red-100 text-red-800"
+                  : "border-amber-300 bg-amber-100 text-amber-800"
+              }
+            >
+              {notice.badge}
+            </Badge>
+            <div className="space-y-2">
+              <h2
+                className={`text-xl font-semibold ${
+                  isRejected ? "text-red-950" : "text-amber-950"
+                }`}
+              >
+                {notice.title}
+              </h2>
+              <CardDescription
+                className={isRejected ? "text-red-800" : "text-amber-800"}
+              >
+                {notice.description}
+              </CardDescription>
+            </div>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <Button
+          asChild
+          className={
+            isRejected
+              ? "bg-red-700 text-white hover:bg-red-800"
+              : "bg-amber-700 text-white hover:bg-amber-800"
+          }
+        >
+          <a href={CZVG_IFC_PROFILE_URL} target="_blank" rel="noreferrer">
+            {notice.actionLabel}
+            <ExternalLink className="h-4 w-4" aria-hidden="true" />
+            <span className="sr-only"> (opens in a new tab)</span>
+          </a>
+        </Button>
+      </CardContent>
+    </Card>
   );
 }

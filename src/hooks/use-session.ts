@@ -74,20 +74,22 @@ export function useSession() {
           }
 
           let pilotData = null;
-          try {
-            const pilotResponse = await fetchWithTimeout(
-              `/api/pilots/${userData.id}/pireps`
-            );
+          if (userData.status === 1) {
+            try {
+              const pilotResponse = await fetchWithTimeout(
+                `/api/pilots/${userData.id}/pireps`,
+              );
 
-            if (pilotResponse.ok) {
-              pilotData = await pilotResponse.json();
-            } else {
-              throw new Error("Failed to load pilot statistics");
-            }
-          } catch (statsError) {
-            console.error("Failed to load pilot statistics:", statsError);
-            if (isMounted) {
-              setError("Failed to load pilot statistics");
+              if (pilotResponse.ok) {
+                pilotData = await pilotResponse.json();
+              } else {
+                throw new Error("Failed to load pilot statistics");
+              }
+            } catch (statsError) {
+              console.error("Failed to load pilot statistics:", statsError);
+              if (isMounted) {
+                setError("Failed to load pilot statistics");
+              }
             }
           }
 

@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { models } from "@/lib/models";
-import { hasPermission, requireAuth } from "@/lib/server-auth";
+import { hasPermission, requireCrewAuth } from "@/lib/server-auth";
 
 export async function GET(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    const auth = await requireAuth(request);
+    const auth = await requireCrewAuth(request);
     if (!auth.ok) return auth.response;
 
     const pilotId = params.id;

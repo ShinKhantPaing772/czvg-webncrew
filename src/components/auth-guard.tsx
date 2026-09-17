@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
   getCrewLandingPath,
@@ -23,9 +23,13 @@ export function AuthGuard({ children }: AuthGuardProps) {
   const token = getToken();
   const isApplicantPortalUser = usesApplicantPortal(userStatus);
 
-  async function checkSession() {
+  const checkSession = useCallback(async () => {
+    setIsAuthenticated(null);
+
     try {
       if (!token) {
+        setPermissions([]);
+        setUserStatus(null);
         setIsAuthenticated(false);
         return;
       }
@@ -52,11 +56,18 @@ export function AuthGuard({ children }: AuthGuardProps) {
       setUserStatus(null);
       setIsAuthenticated(false);
     }
-  }
+  }, [token]);
 
   useEffect(() => {
-    checkSession();
-  }, [token]);
+    const handleFocus = () => {
+      void checkSession();
+    };
+
+    void checkSession();
+    window.addEventListener("focus", handleFocus);
+
+    return () => window.removeEventListener("focus", handleFocus);
+  }, [checkSession, pathname]);
 
   useEffect(() => {
     if (isAuthenticated === null) return;

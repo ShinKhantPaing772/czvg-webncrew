@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
 import { models } from "@/lib/models";
+import { canAccessCrewCenter } from "@/lib/pilot-status";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -139,6 +140,52 @@ export async function requireAuth(request: Request): Promise<AuthResult> {
   }
 }
 
+export async function requireCrewAuth(request: Request): Promise<AuthResult> {
+  const auth = await requireAuth(request);
+  if (!auth.ok) return auth;
+
+  try {
+    const pilot = await models.Pilot.findByPk(auth.user.id, {
+      attributes: ["status"],
+      raw: true,
+    });
+
+    if (!pilot) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          { success: false, error: "User not found" },
+          { status: 401 },
+        ),
+      };
+    }
+
+    if (!canAccessCrewCenter(Number(pilot.status))) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            success: false,
+            error: "Crew Center access requires an active pilot account",
+          },
+          { status: 403 },
+        ),
+      };
+    }
+
+    return auth;
+  } catch (error) {
+    console.error("[Auth] Failed to verify pilot status:", error);
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { success: false, error: "Authentication failed" },
+        { status: 500 },
+      ),
+    };
+  }
+}
+
 export function hasPermission(
   user: AuthenticatedUser,
   permission: string | string[],
@@ -153,7 +200,7 @@ export async function requirePermission(
   request: Request,
   permission: string | string[],
 ) {
-  const auth = await requireAuth(request);
+  const auth = await requireCrewAuth(request);
   if (!auth.ok) return auth;
 
   if (!hasPermission(auth.user, permission)) {

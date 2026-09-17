@@ -3,7 +3,7 @@ import { Op } from "sequelize";
 
 import { models } from "@/lib/models";
 import { formatFlightTime } from "@/lib/utils/time";
-import { hasPermission, requireAuth } from "@/lib/server-auth";
+import { hasPermission, requireCrewAuth } from "@/lib/server-auth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -34,7 +34,7 @@ export async function GET(
   { params }: { params: { id: string } },
 ) {
   try {
-    const auth = await requireAuth(request);
+    const auth = await requireCrewAuth(request);
     if (!auth.ok) return auth.response;
 
     const pilotId = Number(params.id);

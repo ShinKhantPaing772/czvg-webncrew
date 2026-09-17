@@ -1,7 +1,15 @@
-const APPLICANT_PORTAL_STATUSES = new Set([0, 2, 3]);
+const LOGIN_STATUSES = new Set([0, 1, 2, 3]);
+
+export function canPilotLogIn(status: number) {
+  return LOGIN_STATUSES.has(status);
+}
+
+export function canAccessCrewCenter(status: number) {
+  return status === 1;
+}
 
 export function usesApplicantPortal(status: number | null) {
-  return status !== null && APPLICANT_PORTAL_STATUSES.has(status);
+  return status !== 1;
 }
 
 export function getCrewLandingPath(status: number | null) {

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Op } from "sequelize";
 import { models } from "@/lib/models";
 import sequelize from "@/lib/database";
-import { requireAuth } from "@/lib/server-auth";
+import { requireCrewAuth } from "@/lib/server-auth";
 import { canPilotUseAircraft } from "@/lib/aircraft-eligibility";
 
 function normalizeIcao(value: unknown) {
@@ -56,7 +56,7 @@ async function canUseMultiplier(pilotId: number, minrankid?: number | null) {
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireAuth(request);
+    const auth = await requireCrewAuth(request);
     if (!auth.ok) return auth.response;
 
     const body = await request.json();
