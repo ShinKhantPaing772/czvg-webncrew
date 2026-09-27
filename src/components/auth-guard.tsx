@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
   getCrewLandingPath,
@@ -19,54 +19,104 @@ export function AuthGuard({ children }: AuthGuardProps) {
   const [permissions, setPermissions] = useState<string[]>([]);
   const [userStatus, setUserStatus] = useState<number | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const verifiedToken = useRef<string | null>(null);
+  const pendingCheck = useRef<{
+    token: string;
+    controller: AbortController;
+  } | null>(null);
 
-  const token = getToken();
   const isApplicantPortalUser = usesApplicantPortal(userStatus);
 
-  const checkSession = useCallback(async () => {
-    setIsAuthenticated(null);
+  const checkSession = useCallback(async function verifySession(background = false): Promise<void> {
+    // Another tab may have replaced or removed the token since our last render.
+    const currentToken = getToken();
+    if (pendingCheck.current?.token === currentToken) return;
+
+    pendingCheck.current?.controller.abort();
+    pendingCheck.current = null;
+
+    // A focus check must not unmount a verified page and discard its form state.
+    // Initial checks, navigation and account changes still use the loading view.
+    const keepCurrentPage = background && verifiedToken.current === currentToken;
+    if (!keepCurrentPage) {
+      verifiedToken.current = null;
+      setIsAuthenticated(null);
+    }
+
+    const invalidateSession = () => {
+      verifiedToken.current = null;
+      setPermissions([]);
+      setUserStatus(null);
+      setIsAuthenticated(false);
+    };
+
+    if (!currentToken) {
+      invalidateSession();
+      return;
+    }
+
+    const request = { token: currentToken, controller: new AbortController() };
+    pendingCheck.current = request;
+    const isCurrentRequest = () =>
+      pendingCheck.current === request &&
+      !request.controller.signal.aborted &&
+      getToken() === currentToken;
 
     try {
-      if (!token) {
-        setPermissions([]);
-        setUserStatus(null);
-        setIsAuthenticated(false);
-        return;
-      }
-
       const res = await fetch("/api/auth/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token }),
+        body: JSON.stringify({ token: currentToken }),
+        signal: request.controller.signal,
       });
 
-      const user = await res.json();
+      if (!isCurrentRequest()) return;
 
-      if (res.ok) {
-        setPermissions(
-          user?.Permissions?.map((p: { name: string }) => p.name) || [],
-        );
-        setUserStatus(typeof user?.status === "number" ? user.status : null);
-        setIsAuthenticated(true);
-      } else {
-        setUserStatus(null);
-        setIsAuthenticated(false);
+      if (!res.ok) {
+        // Temporary outages do not invalidate an already verified session.
+        // The API remains authoritative for each protected operation.
+        if (!keepCurrentPage || [400, 401, 403, 404].includes(res.status)) {
+          invalidateSession();
+        }
+        return;
       }
+
+      const user = await res.json();
+      if (!isCurrentRequest()) return;
+
+      verifiedToken.current = currentToken;
+      setPermissions(
+        user?.Permissions?.map((p: { name: string }) => p.name) || [],
+      );
+      setUserStatus(typeof user?.status === "number" ? user.status : null);
+      setIsAuthenticated(true);
     } catch {
-      setUserStatus(null);
-      setIsAuthenticated(false);
+      if (isCurrentRequest() && !keepCurrentPage) invalidateSession();
+    } finally {
+      if (pendingCheck.current === request) {
+        pendingCheck.current = null;
+        // A cross-tab login/logout may finish while verification is pending,
+        // without another focus event to start checking the new session.
+        if (!request.controller.signal.aborted && getToken() !== currentToken) {
+          void verifySession();
+        }
+      }
     }
-  }, [token]);
+  }, []);
 
   useEffect(() => {
     const handleFocus = () => {
-      void checkSession();
+      void checkSession(true);
     };
 
     void checkSession();
     window.addEventListener("focus", handleFocus);
 
-    return () => window.removeEventListener("focus", handleFocus);
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      pendingCheck.current?.controller.abort();
+      pendingCheck.current = null;
+    };
   }, [checkSession, pathname]);
 
   useEffect(() => {
