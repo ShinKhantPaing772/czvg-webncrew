@@ -1,5 +1,8 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+Live aircraft scheduling setup, SQL migration, access awards, and optional IF
+integration are documented in [LIVE_SCHEDULING.md](./LIVE_SCHEDULING.md).
+
 ## Getting Started
 
 First, run the development server:

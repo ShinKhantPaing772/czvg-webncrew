@@ -14,6 +14,7 @@ type User = {
   pirepsFiled: number;
   joined: string;
   status: number;
+  canAccessLiveScheduling: boolean;
   Permissions: Array<{
     userid: string;
     name: string;
@@ -96,6 +97,7 @@ export function useSession() {
           if (isMounted) {
             setUser({
               ...userData,
+              canAccessLiveScheduling: userData.canAccessLiveScheduling === true,
               flightTime: pilotData?.statistics?.totalFlightTime ?? "00:00",
               pirepsFiled: pilotData?.statistics?.totalPireps ?? 0,
               rank: pilotData?.statistics?.rank ?? userData.rank ?? "Trainee",

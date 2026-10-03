@@ -72,7 +72,7 @@ const rolesData = [
   {
     id: "admin",
     name: "Admin",
-    permissions: ["home", "pireps", "routes", "users", "aircrafts", "ranks", "awards"],
+    permissions: ["home", "pireps", "routes", "users", "aircrafts", "ranks", "awards", "scheduling"],
   },
   {
     id: "pirep_manager",
@@ -103,6 +103,11 @@ const rolesData = [
     id: "award_manager",
     name: "Award Manager",
     permissions: ["home", "awards"],
+  },
+  {
+    id: "scheduling_manager",
+    name: "Scheduling Manager",
+    permissions: ["home", "scheduling"],
   },
   {
     id: "permissions_manager",
@@ -146,6 +151,11 @@ const availablePermissions = [
     id: "awards",
     name: "Manage Awards",
     description: "Manage award definitions and pilot award assignments",
+  },
+  {
+    id: "scheduling",
+    name: "Manage Live Scheduling",
+    description: "Review flight requests and manage the live fleet and schedules",
   },
   {
     id: "permissions",

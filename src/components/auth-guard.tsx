@@ -17,6 +17,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
   const pathname = usePathname();
 
   const [permissions, setPermissions] = useState<string[]>([]);
+  const [canAccessLiveScheduling, setCanAccessLiveScheduling] = useState(false);
   const [userStatus, setUserStatus] = useState<number | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const verifiedToken = useRef<string | null>(null);
@@ -26,6 +27,17 @@ export function AuthGuard({ children }: AuthGuardProps) {
   } | null>(null);
 
   const isApplicantPortalUser = usesApplicantPortal(userStatus);
+  const isLiveSchedulingPage =
+    pathname === "/crew/scheduling" || pathname.startsWith("/crew/scheduling/");
+  const isAdminPage = pathname === "/crew/admin" || pathname.startsWith("/crew/admin/");
+  const adminSection = pathname.split("/").filter(Boolean)[2] || "home";
+  const adminPermissionAliases: Record<string, string> = {
+    multipliers: "pireps",
+    "pilot-awards": "awards",
+  };
+  const requiredAdminPermission = adminPermissionAliases[adminSection] || adminSection;
+  const hasAdminAccess =
+    permissions.includes("admin") || permissions.includes(requiredAdminPermission);
 
   const checkSession = useCallback(async function verifySession(background = false): Promise<void> {
     // Another tab may have replaced or removed the token since our last render.
@@ -46,6 +58,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
     const invalidateSession = () => {
       verifiedToken.current = null;
       setPermissions([]);
+      setCanAccessLiveScheduling(false);
       setUserStatus(null);
       setIsAuthenticated(false);
     };
@@ -89,6 +102,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
         user?.Permissions?.map((p: { name: string }) => p.name) || [],
       );
       setUserStatus(typeof user?.status === "number" ? user.status : null);
+      setCanAccessLiveScheduling(user?.canAccessLiveScheduling === true);
       setIsAuthenticated(true);
     } catch {
       if (isCurrentRequest() && !keepCurrentPage) invalidateSession();
@@ -125,8 +139,6 @@ export function AuthGuard({ children }: AuthGuardProps) {
     const isLoginPage =
       pathname === "/crew" || pathname === "/crew/forgot-password";
 
-    const isAdminPage = pathname.startsWith("/crew/admin");
-
     // Not authenticated → must login
     if (!isAuthenticated && pathname.startsWith("/crew") && !isLoginPage) {
       router.push("/crew");
@@ -154,36 +166,22 @@ export function AuthGuard({ children }: AuthGuardProps) {
       return;
     }
 
-    // Admin pages
-    if (isAuthenticated && isAdminPage) {
-      // 1. If user has admin → full access
-      if (permissions.includes("admin")) return;
+    if (isAuthenticated && isLiveSchedulingPage && !canAccessLiveScheduling) {
+      router.push("/crew/home");
+      return;
+    }
 
-      const parts = pathname.split("/").filter(Boolean);
-
-      // If visiting /crew/admin
-      if (parts.length === 2) {
-        // Require "home" permission for admin landing page
-        if (!permissions.includes("home")) {
-          router.push("/crew/home");
-        }
-        return;
-      }
-
-      // Visiting /crew/admin/{section}
-      const adminSection = parts[2];
-      const requiredPermission =
-        adminSection === "multipliers" ? "pireps" : adminSection;
-
-      if (!permissions.includes(requiredPermission)) {
-        router.push("/crew/home");
-      }
+    if (isAuthenticated && isAdminPage && !hasAdminAccess) {
+      router.push("/crew/home");
     }
   }, [
+    canAccessLiveScheduling,
+    hasAdminAccess,
+    isAdminPage,
     isApplicantPortalUser,
     isAuthenticated,
+    isLiveSchedulingPage,
     pathname,
-    permissions,
     router,
     userStatus,
   ]);
@@ -194,7 +192,13 @@ export function AuthGuard({ children }: AuthGuardProps) {
     pathname.startsWith("/crew") &&
     pathname !== "/crew/application";
 
-  if (isAuthenticated === null || isRedirectingToApplicantPortal) {
+  const isRestrictedPage = isLiveSchedulingPage || isAdminPage;
+  const isWaitingForRestrictedAccess = isRestrictedPage &&
+    (!isAuthenticated ||
+      (isLiveSchedulingPage && !canAccessLiveScheduling) ||
+      (isAdminPage && !hasAdminAccess));
+
+  if (isAuthenticated === null || isRedirectingToApplicantPortal || isWaitingForRestrictedAccess) {
     return (
       <div className="flex h-screen w-full items-center justify-center">
         <p className="text-gray-500">Loading...</p>

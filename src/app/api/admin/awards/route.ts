@@ -4,6 +4,7 @@ import { Op } from "sequelize";
 import sequelize from "@/lib/database";
 import { models } from "@/lib/models";
 import { requirePermission } from "@/lib/server-auth";
+import { livePilotAwardId } from "@/lib/scheduling/access";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -140,6 +141,12 @@ export async function DELETE(request: Request) {
     if (!auth.ok) return auth.response;
     const id = positiveId(new URL(request.url).searchParams.get("id"));
     if (!id) return NextResponse.json({ success: false, message: "A valid award ID is required" }, { status: 400 });
+    if (id === livePilotAwardId()) {
+      return NextResponse.json(
+        { success: false, message: "This award controls live scheduling access. Configure another Live Pilot award before deleting it." },
+        { status: 409 },
+      );
+    }
     if (!(await models.Award.findByPk(id, { attributes: ["id"] }))) {
       return NextResponse.json({ success: false, message: "Award not found" }, { status: 404 });
     }

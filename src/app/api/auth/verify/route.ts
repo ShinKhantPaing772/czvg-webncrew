@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { Op } from "sequelize";
 import jwt from "jsonwebtoken";
 import { models } from "@/lib/models";
+import { canAccessLiveScheduling } from "@/lib/scheduling/access";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -104,7 +105,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    return NextResponse.json(user);
+    return NextResponse.json({
+      ...user.toJSON(),
+      canAccessLiveScheduling: await canAccessLiveScheduling(user.id, Number(user.status)),
+    });
   } catch (error) {
     if (error instanceof jwt.JsonWebTokenError) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });

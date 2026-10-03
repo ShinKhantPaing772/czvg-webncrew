@@ -15,6 +15,7 @@ import {
   Medal,
   Trophy,
   Gauge,
+  CalendarDays,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,6 +43,9 @@ export function CrewHeader({ children }: CrewHeaderProps) {
     { title: "File PIREP", href: "/crew/file-pirep", icon: FileText },
     { title: "PIREPs", href: "/crew/view-pireps", icon: FileStack },
     { title: "Find Routes", href: "/crew/find-routes", icon: Search },
+    ...(user?.canAccessLiveScheduling
+      ? [{ title: "Live Scheduling", href: "/crew/scheduling", icon: CalendarDays }]
+      : []),
   ];
 
   // Admin permissions mapped to menu items
@@ -72,6 +76,13 @@ export function CrewHeader({ children }: CrewHeaderProps) {
     ],
     ranks: [
       { title: "Manage Ranks", href: "/crew/admin/ranks", icon: Medal },
+    ],
+    scheduling: [
+      {
+        title: "Manage Live Scheduling",
+        href: "/crew/admin/scheduling",
+        icon: CalendarDays,
+      },
     ],
     awards: [
       { title: "Manage Awards", href: "/crew/admin/awards", icon: Trophy },

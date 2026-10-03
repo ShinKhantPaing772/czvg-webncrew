@@ -52,11 +52,11 @@ async function renderGuard() {
   await act(async () => { root!.render(<AuthGuard><DraftForm /></AuthGuard>); });
 }
 
-async function respond(index: number, status = 200, userStatus = 1, permissions: string[] = []) {
+async function respond(index: number, status = 200, userStatus = 1, permissions: string[] = [], liveAccess = false) {
   await act(async () => {
     pending[index].resolve(Response.json(
       status === 200
-        ? { status: userStatus, Permissions: permissions.map((name) => ({ name })) }
+        ? { status: userStatus, Permissions: permissions.map((name) => ({ name })), canAccessLiveScheduling: liveAccess }
         : { error: "Verification failed" },
       { status },
     ));
@@ -110,6 +110,62 @@ beforeEach(() => {
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
+});
+
+describe("AuthGuard live scheduling access", () => {
+  it("keeps live content hidden until award access is verified", async () => {
+    session.pathname = "/crew/scheduling";
+    await renderGuard();
+    expect(input()).toBeNull();
+    await respond(0, 200, 1, [], true);
+    expect(input()).not.toBeNull();
+    expect(session.router.push).not.toHaveBeenCalled();
+  });
+
+  it("denies direct live page access without the award even for an admin", async () => {
+    session.pathname = "/crew/scheduling";
+    await renderGuard();
+    await respond(0, 200, 1, ["admin"]);
+    expect(input()).toBeNull();
+    expect(session.mounted).not.toHaveBeenCalled();
+    expect(session.router.push).toHaveBeenCalledWith("/crew/home");
+  });
+
+  it("removes live content when the award is revoked during a session", async () => {
+    session.pathname = "/crew/scheduling";
+    await renderGuard();
+    await respond(0, 200, 1, [], true);
+    await enterDraft();
+    await focus();
+    await respond(1);
+    expect(input()).toBeNull();
+    expect(session.unmounted).toHaveBeenCalledTimes(1);
+    expect(session.router.push).toHaveBeenCalledWith("/crew/home");
+  });
+
+  it("allows scheduling managers to review without the pilot award", async () => {
+    session.pathname = "/crew/admin/scheduling";
+    await renderGuard();
+    await respond(0, 200, 1, ["scheduling"]);
+    expect(input()).not.toBeNull();
+    expect(session.router.push).not.toHaveBeenCalled();
+  });
+
+  it("keeps the admin review page hidden from live pilots without management permissions", async () => {
+    session.pathname = "/crew/admin/scheduling";
+    await renderGuard();
+    await respond(0, 200, 1, [], true);
+    expect(input()).toBeNull();
+    expect(session.router.push).toHaveBeenCalledWith("/crew/home");
+  });
+
+  it("uses the awards permission for the existing pilot-awards page", async () => {
+    session.pathname = "/crew/admin/pilot-awards";
+    await renderGuard();
+    await respond(0, 200, 1, ["awards"]);
+    expect(input()).not.toBeNull();
+    expect(session.router.push).not.toHaveBeenCalled();
+  });
 });
 
 afterEach(async () => {

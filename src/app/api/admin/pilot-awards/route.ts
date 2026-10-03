@@ -181,6 +181,13 @@ export async function PUT(request: Request) {
     }
 
     await sequelize.transaction(async (transaction) => {
+      // Scheduling transactions lock the same pilot before checking eligibility.
+      // Serialize grant changes so a revoked award cannot authorize a new booking.
+      await models.Pilot.findByPk(pilotId, {
+        attributes: ["id"],
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
       const existing = await models.AwardGranted.findAll({
         where: { pilotid: pilotId },
         attributes: ["awardid"],
