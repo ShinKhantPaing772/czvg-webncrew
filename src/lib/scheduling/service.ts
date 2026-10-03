@@ -338,8 +338,17 @@ export async function schedulingSnapshot(actor: SchedulingActor) {
 export function schedulingFailure(error: unknown) {
   if (error instanceof SchedulingError) return { status: error.status, error: error.message };
   if (error instanceof UniqueConstraintError) return { status: 409, error: "This registration, IF binding, or request already exists" };
-  const dbCode = (error as { original?: { code?: string } })?.original?.code;
-  if (dbCode === "ER_NO_SUCH_TABLE" || dbCode === "ER_BAD_FIELD_ERROR") return { status: 503, error: "Live scheduling needs its SQL migration. Apply migrations/20261002_live_scheduling.sql first." };
+  const dbError = (error as { original?: { code?: string; sqlMessage?: string } })?.original;
+  const dbCode = dbError?.code;
+  if (dbCode === "ER_NO_SUCH_TABLE" || dbCode === "ER_BAD_FIELD_ERROR") {
+    // Keep schema identifiers useful for deployment diagnosis without logging
+    // SQL statements, bound values, credentials, or the complete driver error.
+    const identifier = dbError?.sqlMessage?.match(/^(?:Table|Unknown column) '([A-Za-z0-9_.]+)'/)?.[1];
+    console.error("[Scheduling] Database schema mismatch", { code: dbCode, identifier });
+    return { status: 503, error: dbCode === "ER_NO_SUCH_TABLE"
+      ? "Live scheduling needs its SQL migration. Apply migrations/20261002_live_scheduling.sql first."
+      : "Live scheduling has a database column mismatch. An administrator needs to check the deployed app and database schema." };
+  }
   console.error("[Scheduling] Operation failed", error instanceof Error ? error.name : "Unknown error");
   return { status: 500, error: "Unable to complete this scheduling operation" };
 }

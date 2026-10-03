@@ -22,7 +22,7 @@ vi.mock("./models", () => ({
   LiveScheduleEvent: mocks.LiveScheduleEvent, IfLiveConnection: mocks.IfLiveConnection, IfLiveOutbox: mocks.IfLiveOutbox,
 }));
 
-import { changeAircraft, changeFlight, requestFlight, schedulingSnapshot } from "./service";
+import { changeAircraft, changeFlight, requestFlight, schedulingSnapshot, schedulingFailure } from "./service";
 
 type Row = Record<string, any>;
 type TableName = "Pilot" | "Aircraft" | "AwardGranted" | "LiveAircraft" | "LiveFlight" | "LiveFlightMember" | "LiveScheduleEvent" | "IfLiveConnection" | "IfLiveOutbox";
@@ -133,7 +133,24 @@ beforeEach(() => {
   });
   vi.stubEnv("IF_LIVE_AUTO_PUBLISH_ENABLED", "false");
 });
-afterEach(() => { vi.unstubAllEnvs(); });
+afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
+
+describe("database setup diagnostics", () => {
+  it("distinguishes a model column mismatch from an unapplied migration", () => {
+    const logger = vi.spyOn(console, "error").mockImplementation(() => {});
+    const result = schedulingFailure({ original: { code: "ER_BAD_FIELD_ERROR", sqlMessage: "Unknown column 'LiveFlight.location_updated_at' in 'field list'", sql: "private query", parameters: ["private value"] } });
+    expect(result).toEqual({ status: 503, error: "Live scheduling has a database column mismatch. An administrator needs to check the deployed app and database schema." });
+    expect(logger).toHaveBeenCalledWith("[Scheduling] Database schema mismatch", { code: "ER_BAD_FIELD_ERROR", identifier: "LiveFlight.location_updated_at" });
+  });
+
+  it("keeps migration instructions for missing tables without logging full driver errors", () => {
+    const logger = vi.spyOn(console, "error").mockImplementation(() => {});
+    const result = schedulingFailure({ original: { code: "ER_NO_SUCH_TABLE", sqlMessage: "Table 'crew_center.live_flights' doesn't exist", sql: "private query" } });
+    expect(result.status).toBe(503);
+    expect(result.error).toContain("Apply migrations/20261002_live_scheduling.sql first.");
+    expect(logger).toHaveBeenCalledWith("[Scheduling] Database schema mismatch", { code: "ER_NO_SUCH_TABLE", identifier: "crew_center.live_flights" });
+  });
+});
 
 describe("flight proposals", () => {
   it("accepts an optional callsign and fallback origin without prematurely moving the aircraft", async () => {
