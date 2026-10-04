@@ -34,13 +34,13 @@ describe("IF integration setup status", () => {
     vi.stubEnv("IF_LIVE_REVOCATION_URL", "");
     expect(await ifIntegrationStatus()).toMatchObject({ configured: false, revocationConfigured: false, publishingReady: false, canDisconnect: true, disconnectMode: "local" });
   });
-  it("reports OAuth ready and publishing disabled when the optional URL is absent", async () => {
+  it("reports publishing ready and local disconnect when the optional URL is absent", async () => {
     vi.stubEnv("IF_LIVE_PREVIEW_ENABLED", "true");
     vi.stubEnv("IF_LIVE_REDIRECT_URI", "https://ifczvg.com/oauth/callback");
     vi.stubEnv("IF_LIVE_REVOCATION_URL", "  ");
     const status = await ifIntegrationStatus();
-    expect(status).toMatchObject({ configured: true, disabledReasons: [], bindingReady: true, bindingDisabledReasons: [], revocationConfigured: false, publishingReady: false, canDisconnect: true, disconnectMode: "local" });
-    expect(status.publishingDisabledReasons).toEqual(["Automatic IF publishing requires a supported OAuth revocation URL"]);
+    expect(status).toMatchObject({ configured: true, disabledReasons: [], bindingReady: true, bindingDisabledReasons: [], revocationConfigured: false, publishingReady: true, canDisconnect: true, disconnectMode: "local" });
+    expect(status.publishingDisabledReasons).toEqual([]);
     expect(status.oauthSetup.checks.find(check => check.id === "revocation")).toMatchObject({ ready: false, required: false });
   });
   it("exposes binding readiness independently of publishing readiness without sensitive setup values", async () => {

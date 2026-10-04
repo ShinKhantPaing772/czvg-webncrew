@@ -46,9 +46,9 @@ upcoming crew/captain assignments need admin repair. Flight history remains.
 
 Current reference: [IF PublicApi v3 OAuth Preview](https://infiniteflight.com/guide/developer-reference/live-api/v3-oauth-live-preview).
 It is an optional preview, disabled by default. Obtain a client approved for the
-intended users, confirm the supported token-revocation endpoint, and obtain IF's
-permission for durable organization/aircraft/schedule identifier mappings before
-enabling automatic publishing. IF's [data-use rules](https://infiniteflight.com/guide/developer-reference/live-api/best-practices)
+intended users with schedule-write access, and obtain IF's permission for durable
+organization/aircraft/schedule identifier mappings before enabling publishing.
+IF's [data-use rules](https://infiniteflight.com/guide/developer-reference/live-api/best-practices)
 permit only short-lived operational caches of Live API responses; no fetched
 fleet, coordinates, schedule response, or crew response is permanently imported.
 
@@ -57,14 +57,14 @@ Configure these **server-only** environment variables:
 | Variable | Value |
 | --- | --- |
 | `IF_LIVE_PREVIEW_ENABLED` | `true` to enable admin OAuth linking and temporary reads; default `false` |
-| `IF_LIVE_AUTO_PUBLISH_ENABLED` | `true` to enable the publishing worker; default `false` |
+| `IF_LIVE_AUTO_PUBLISH_ENABLED` | `true` to permit IF schedule writes from the admin publishing action and automatic worker; default `false` |
 | `IF_LIVE_DURABLE_BINDINGS_ALLOWED` | `true` after IF permits retained integration identifiers; enables aircraft linking independently of publishing; default `false` |
 | `IF_LIVE_CLIENT_ID` | Approved confidential OAuth client ID |
 | `IF_LIVE_CLIENT_SECRET` | Client secret |
 | `IF_LIVE_REDIRECT_URI` | Exact registered callback on the domain used for the admin page; see below |
-| `IF_LIVE_REVOCATION_URL` | Optional for OAuth linking and temporary reads; required for automatic publishing. Use only an IF-confirmed official HTTPS token-revocation URL |
+| `IF_LIVE_REVOCATION_URL` | Optional for OAuth, reads, and publishing. Leave unset until IF confirms a supported official HTTPS token-revocation URL; disconnect then removes local credentials only |
 | `IF_LIVE_TOKEN_ENCRYPTION_KEY` | Base64 of 32 random bytes for AES-256-GCM; back it up securely |
-| `IF_LIVE_WORKER_SECRET` | A separate long random secret for the worker endpoint |
+| `IF_LIVE_WORKER_SECRET` | A separate long random secret for the automatic worker endpoint; not needed for the authenticated admin publishing action |
 | `IF_API` | Existing server Live API key, also used for type/livery validation and departure-airport coordinates |
 
 Generate secrets locally, without putting them in Git. For example,
@@ -104,11 +104,13 @@ owner/admin connects the scheduler; additional pilots keep the site's existing
 login and must be members of that IF organization when assigned to published
 crew. They do not each authorize this OAuth client.
 
-IF's public preview guide requires token revocation but currently does not
-document a supported revocation URL. Obtain that URL and confirmation of its
-client-authentication method from IF before enabling automatic publishing; the
-application uses a server-side form POST containing the confidential client
-credentials and token. Do not substitute a guessed endpoint. The
+IF's public preview guide currently does not document a supported revocation
+URL. Leave the setting unset until IF confirms that URL and its supported
+client-authentication method. When configured, this application uses a
+server-side form POST containing the confidential client credentials and token.
+Do not substitute a guessed endpoint. Schedule writes do not depend on this
+setting; disconnect without it deletes local credentials and does not revoke
+the authorization at IF. The
 [API overview](https://infiniteflight.com/guide/developer-reference/live-api/overview)
 lists `hello@infiniteflight.com` for developer access questions.
 
@@ -127,8 +129,8 @@ before deleting the local credentials. Keep the original client credentials
 and encryption key until revocation succeeds; errors preserve the local tokens
 for retry. Preview access and callback configuration may be disabled during
 revocation. An invalid nonempty revocation URL is rejected rather than silently
-treated as successful revocation. Automatic publishing remains unavailable
-while a supported revocation URL is absent; aircraft linking does not require it.
+treated as successful revocation. OAuth, aircraft linking, and schedule publishing
+can operate with the revocation URL unset.
 
 In **Scheduling Administration → Infinite Flight**, connect an IF
 organization owner/admin, then load organizations and temporarily view the fleet.
@@ -156,8 +158,41 @@ Linking alone does not publish anything. Linked flights cannot start until
 their latest approved schedule and crew are published; keep a tail unlinked
 for local-only scheduling until publishing is enabled. Existing aircraft
 catalog entries and pilot/admin-confirmed airports remain the local source of
-truth. Automatic publishing still requires the supported revocation URL,
-publishing flag, permitted durable identifiers, and protected worker.
+truth. Publishing requires the publishing flag and permitted durable identifiers.
+Automatic unattended publishing additionally needs the protected worker.
+
+### View IF schedules and publish approved plans
+
+Both scheduling pages have **Live fleet → View schedules** on each local
+aircraft. Linked aircraft automatically load their IF itinerary when this dialog
+opens. The dialog shows local flight decisions and publishing states alongside
+IF routes, planned UTC times, lifecycle status, and assigned crew counts. Refresh
+reloads the IF view; fetched schedules expire from the interface within 60
+seconds. No IF response is imported into local flights or events. Schedule reads
+remain available even when IF has no persisted aircraft position. A Live Pilot
+award is required for pilot reads; scheduling admins can read without that award.
+
+Set `IF_LIVE_PREVIEW_ENABLED=true`,
+`IF_LIVE_DURABLE_BINDINGS_ALLOWED=true`, and
+`IF_LIVE_AUTO_PUBLISH_ENABLED=true` in hosting and redeploy. The connected IF
+owner/admin must have granted `live:schedules.read` and `live:schedules.write`.
+Use **Publish queued flights** in an aircraft's schedule dialog to process that
+aircraft only, or use the same button in the Infinite Flight admin tab to process
+the whole eligible queue. Each click processes at most two jobs within 25 seconds;
+run again for additional jobs or configure the automatic worker below. This
+admin action uses the site's scheduling permission and never exposes the worker
+secret or OAuth credentials. The write flag can disable all schedule writes
+without hiding temporary schedule reads.
+
+Only approved local decisions are published: flight approval/amendments and
+crew changes synchronize the complete schedule and assigned crew; cancellation
+and invalidated reservations remove application-managed IF bookings. Pending
+requests do not publish. Existing IF flights without a local link remain a
+temporary reference and are not silently adopted or edited. Conflict and
+uncertain-write recovery continue through the existing admin IF controls. The
+API provides no documented start/arrival mutation, so departure and actual
+arrival confirmation remain local. The latest revision must still publish before
+a linked local flight starts.
 
 Binding checks current organization ownership, active fleet status, and the local
 catalog's `ifaircraftid` and `ifliveryid` against IF's official content directory.
@@ -237,7 +272,7 @@ them; its bearer-secret authentication must stay enabled.
 Run `npm test`, `npx tsc --noEmit --incremental false`, and `npm run build`.
 The isolated MySQL concurrency and publisher-selection tests require a new, empty test database;
 they never use the application's production DB environment. Run them with
-`SCHEDULING_TEST_DATABASE_URL=mysql://user:password@127.0.0.1/webncrew_scheduling_test_local npm test -- src/lib/scheduling/service.integration.test.ts src/lib/scheduling/infinite-flight/publisher.test.ts`.
+`SCHEDULING_TEST_DATABASE_URL=mysql://user:password@127.0.0.1/webncrew_scheduling_test_local npm test -- src/lib/scheduling/service.integration.test.ts src/lib/scheduling/infinite-flight/publisher.test.ts --no-file-parallelism`.
 Only database names starting with `webncrew_scheduling_test_` are accepted. A
 remote test server additionally requires `SCHEDULING_TEST_ALLOW_REMOTE=true`.
 The suite creates and removes its own tables after verifying the schema is empty.
@@ -252,8 +287,9 @@ migration, OAuth registration, and scheduler provisioning are operator steps.
 - Automated tests, TypeScript, and the production build passed; see the current
   task report for the latest test count.
 - Both pages were checked at desktop and mobile widths with fictional sample data.
-- Ten isolated MySQL tests passed against a disposable MySQL 8 database, covering
-  concurrent reservations/crew and the actual candidate SQL/advisory locks.
+- Twelve isolated MySQL tests passed against a disposable MySQL 8.4 database,
+  covering concurrent reservations/crew, actual candidate SQL/advisory locks,
+  and aircraft-specific publishing/expired-lease isolation.
   The test container was removed afterward. These suites remain opt-in for normal
   test runs; rerun the command above when changing database or publishing logic.
 - Real IF OAuth/publishing was not exercised. No production migration, account

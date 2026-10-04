@@ -65,7 +65,6 @@ export function getIfLiveConfig() {
     ...disabledReasons,
     ...(!autoPublishEnabled ? ["Automatic IF publishing is disabled"] : []),
     ...(!durableBindingsAllowed ? ["Durable IF mapping retention has not been authorized"] : []),
-    ...(!revocationReady ? ["Automatic IF publishing requires a supported OAuth revocation URL"] : []),
   ];
   const oauthSetup = { callbackUrl, checks: [
     { id: "preview", label: "Preview access enabled", ready: previewEnabled, required: true },

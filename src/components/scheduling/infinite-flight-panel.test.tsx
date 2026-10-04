@@ -26,8 +26,8 @@ const ready = {
   },
 };
 const noRevocation = {
-  ...ready, revocationConfigured: false, disconnectMode: "local", autoPublishEnabled: true, durableBindingsAllowed: true,
-  publishingReady: false, publishingDisabledReasons: ["Automatic IF publishing requires a supported OAuth revocation URL"],
+  ...ready, revocationConfigured: false, disconnectMode: "local", autoPublishEnabled: false, durableBindingsAllowed: true,
+  publishingReady: false, publishingDisabledReasons: ["Automatic IF publishing is disabled"],
   bindingReady: true, bindingDisabledReasons: [] as string[],
   oauthSetup: { ...ready.oauthSetup, checks: ready.oauthSetup.checks.map(check => ({ ...check, ready: check.id !== "revocation" })) },
 };
@@ -38,6 +38,7 @@ const catalog: SchedulingData["catalog"] = [{ id: 1, name: "Airbus A320", livery
 const organizationId = "12345678-1234-1234-1234-123456789abc";
 const remoteAircraft = { id: "12345678-1234-1234-1234-123456789abd", aircraftId: "type", organizationId, registration: "C-TEST", isFleetActiveSlot: true, visibility: 1 };
 const bindingReady = { ...noRevocation, autoPublishEnabled: false, connection: { state: "connected", organizationId, expiresAt: null } };
+const publishingReady = { ...bindingReady, autoPublishEnabled: true, publishingReady: true, publishingDisabledReasons: [] as string[] };
 
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
@@ -194,7 +195,104 @@ describe("Infinite Flight organization linking", () => {
     expect(container.textContent).not.toContain("Supported revocation configured: required");
     expect(container.textContent).toContain("Automatic publishing is currently disabled");
     expect(container.textContent).not.toContain("Automatic publishing is enabled");
-    expect(container.textContent).toContain("requires a supported OAuth revocation URL");
+    expect(container.textContent).not.toContain("requires a supported OAuth revocation URL");
+    expect(container.textContent).not.toContain("a supported revocation endpoint");
+    expect(button("Publish queued flights").disabled).toBe(true);
+  });
+
+  it("publishes queued jobs without a revocation URL and refreshes local flights and connection status", async () => {
+    mocks.fetch.mockImplementation(async (path: string) => Response.json(path.endsWith("/publish")
+      ? { success: true, data: { processed: 2, published: 1, disabled: false, states: { published: 1, queued: 1 } } }
+      : { success: true, data: publishingReady }));
+    await render();
+    expect(button("Publish queued flights").disabled).toBe(false);
+    expect(container.textContent).toContain("does not revoke your authorization at Infinite Flight");
+    await act(async () => button("Publish queued flights").click());
+    expect(mocks.fetch).toHaveBeenCalledWith("/api/admin/scheduling/if/publish", expect.objectContaining({ method: "POST", body: "{}" }));
+    expect(refresh).toHaveBeenCalledOnce();
+    expect(mocks.fetch.mock.calls.filter(call => call[0].endsWith("/status"))).toHaveLength(2);
+    expect(container.querySelector('[role="status"]')?.textContent).toContain("2 queued jobs: 1 synchronized; 1 queued for retry");
+    expect(container.textContent).toContain("remaining queued flights need another publishing run");
+    expect(button("Publish queued flights").disabled).toBe(false);
+  });
+
+  it.each([
+    { label: "the automatic publishing flag is off", status: { ...publishingReady, autoPublishEnabled: false } },
+    { label: "the organization is not saved", status: { ...publishingReady, connection: { state: "connected", organizationId: null, expiresAt: null } } },
+    { label: "authorization needs renewal", status: { ...publishingReady, connection: { state: "reauth_required", organizationId, expiresAt: null } } },
+    { label: "OAuth configuration is unavailable", status: { ...publishingReady, configured: false } },
+  ])("blocks publication when $label", async ({ status }) => {
+    mocks.fetch.mockResolvedValue(Response.json({ success: true, data: status }));
+    await render();
+    expect(button("Publish queued flights").disabled).toBe(true);
+    await act(async () => button("Publish queued flights").click());
+    expect(mocks.fetch.mock.calls.some(call => call[0].endsWith("/publish"))).toBe(false);
+  });
+
+  it("shows conflicts and uncertain writes without claiming those jobs synchronized", async () => {
+    mocks.fetch.mockImplementation(async (path: string) => Response.json(path.endsWith("/publish")
+      ? { success: true, data: { processed: 2, published: 0, disabled: false, states: { conflict: 1, reconciliation: 1 } } }
+      : { success: true, data: publishingReady }));
+    await render(); await act(async () => button("Publish queued flights").click());
+    expect(container.querySelector('[role="status"]')?.textContent).toContain("0 synchronized; 1 need conflict review; 1 need reconciliation");
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    { result: { processed: 1, published: 0, disabled: false, states: { failed: 1 } }, text: "1 queued job: 0 synchronized; 1 failed" },
+    { result: { processed: 0, published: 0, disabled: false, states: {} }, text: "No queued IF flights were ready to publish" },
+    { result: { processed: 0, published: 0, disabled: true, reasons: ["Automatic IF publishing is disabled"] }, text: "IF publishing is unavailable. Automatic IF publishing is disabled" },
+  ])("reports a bounded publication result honestly: $text", async ({ result, text }) => {
+    mocks.fetch.mockImplementation(async (path: string) => Response.json(path.endsWith("/publish")
+      ? { success: true, data: result }
+      : { success: true, data: publishingReady }));
+    await render(); await act(async () => button("Publish queued flights").click());
+    expect(container.querySelector('[role="status"]')?.textContent).toContain(text);
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  it("keeps a rejected publication available for retry without claiming success", async () => {
+    let requests = 0;
+    mocks.fetch.mockImplementation(async (path: string) => path.endsWith("/publish")
+      ? ++requests === 1
+        ? Response.json({ success: false, error: "IF organization admin access is required" }, { status: 403 })
+        : Response.json({ success: true, data: { processed: 1, published: 1, disabled: false, states: { published: 1 } } })
+      : Response.json({ success: true, data: publishingReady }));
+    await render(); await act(async () => button("Publish queued flights").click());
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("IF organization admin access is required");
+    expect(container.querySelector('[role="status"]')).toBeNull(); expect(refresh).not.toHaveBeenCalled();
+    expect(button("Publish queued flights").disabled).toBe(false);
+    await act(async () => button("Publish queued flights").click());
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    expect(container.querySelector('[role="status"]')?.textContent).toContain("1 queued job: 1 synchronized");
+  });
+
+  it("keeps the publication result visible when refreshing local flights fails", async () => {
+    refresh.mockRejectedValueOnce(new Error("Flight refresh failed"));
+    mocks.fetch.mockImplementation(async (path: string) => Response.json(path.endsWith("/publish")
+      ? { success: true, data: { processed: 1, published: 1, disabled: false, states: { published: 1 } } }
+      : { success: true, data: publishingReady }));
+    await render(); await act(async () => button("Publish queued flights").click());
+    expect(container.querySelector('[role="status"]')?.textContent).toContain("1 synchronized");
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Flight refresh failed");
+  });
+
+  it("shows current schedule lifecycle and queue position even if IF position is unavailable", async () => {
+    const schedules = [
+      { id: "schedule-1", callsign: "WNC1", status: 6, sequence: 2, originIcao: "CYYZ", destinationIcao: "CYVR", scheduledDepartureUtc: "2026-10-04T10:00:00Z", scheduledArrivalUtc: "2026-10-04T15:00:00Z", crew: [{ userId: "captain", role: 0 }] },
+      { id: "schedule-2", callsign: "WNC2", status: 5, sequence: 3, originIcao: "CYVR", destinationIcao: "CYYZ", scheduledDepartureUtc: "2026-10-04T16:00:00Z", scheduledArrivalUtc: "2026-10-04T21:00:00Z", crew: [] },
+    ];
+    mocks.fetch.mockImplementation(async (path: string) => Response.json(path.includes("&aircraftId=")
+      ? { success: true, data: { position: null, positionError: "IF has no saved position for this aircraft", schedules } }
+      : path.includes("/fleet?") ? { success: true, data: { aircraft: [remoteAircraft] } }
+      : { success: true, data: publishingReady }));
+    await render(); await act(async () => button("Load IF fleet").click());
+    await act(async () => button("View IF status").click());
+    expect(container.textContent).toContain("IF has no saved position for this aircraft");
+    expect(container.textContent).toContain("In flight");
+    expect(container.textContent).toContain("Queue position 2 · 1 crew");
+    expect(container.textContent).toContain("Unknown IF status");
+    expect(container.textContent).toContain("Queue position 3 · 0 crew");
   });
 
   it("keeps binding and temporary reads available while recovery requires publishing readiness", async () => {

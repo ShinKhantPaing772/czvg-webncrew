@@ -58,6 +58,14 @@ export function publishingLabel(value?: string | null) {
   return value ? labels[value] || value.replace(/_/g, " ") : "Local schedule";
 }
 
+export function ifScheduleStatusLabel(status: number) {
+  const labels: Record<number, string> = {
+    0: "Unknown", 1: "Scheduled", 2: "Boarding", 3: "Boarded", 4: "Taxiing to runway",
+    6: "In flight", 7: "Diverted", 8: "Delayed", 9: "Cancelled", 10: "Taxiing to parking", 11: "Arrived",
+  };
+  return labels[status] || "Unknown IF status";
+}
+
 export function errorMessage(error: unknown, fallback = "Something went wrong. Please try again.") {
   return error instanceof Error ? error.message : fallback;
 }

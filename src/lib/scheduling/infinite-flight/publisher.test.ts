@@ -29,7 +29,7 @@ beforeEach(() => {
   mocks.transaction.mockImplementation(async (callback: any) => callback ? callback(lockTransaction) : lockTransaction);
   mocks.query.mockImplementation(async (query: string, options: any) => query.includes("FROM if_live_outbox AS pending")
     ? options.replacements.attemptedIds.includes(job.id) ? [] : [job]
-    : query.includes("GET_LOCK") ? [{ acquired: 1 }] : query.includes("RELEASE_LOCK") ? [] : [{ name: "live_scheduling_mutex" }]);
+    : query.includes("FROM if_live_outbox AS expired") ? [] : query.includes("GET_LOCK") ? [{ acquired: 1 }] : query.includes("RELEASE_LOCK") ? [] : [{ name: "live_scheduling_mutex" }]);
   mocks.outbox.findAll.mockImplementation(async (options: any) => options.where.state === "processing" ? [] : [job]); mocks.outbox.findByPk.mockResolvedValue(job); mocks.outbox.count.mockResolvedValue(0); mocks.outbox.update.mockResolvedValue([1]);
   mocks.liveFlight.findByPk.mockImplementation(async () => flight); mocks.liveFlight.findAll.mockImplementation(async (options: any) => options.attributes?.[0] === "id" ? [] : typeof options.where.status === "object" ? [flight] : []); mocks.liveFlight.update.mockResolvedValue([1]); mocks.member.findAll.mockResolvedValue([]);
   mocks.aircraft.findByPk.mockResolvedValue({ id: 7, aircraft_id: 1, if_aircraft_id: UUID, active: true }); mocks.connection.findByPk.mockResolvedValue({ organization_id: UUID, state: "connected", connected_by: 9, access_token_encrypted: "test-encrypted" }); mocks.token.mockResolvedValue({ token: "if-access-token", credential: "test-encrypted", owner: 9, organizationId: UUID });
@@ -51,16 +51,18 @@ describe("IF durable publishing worker", () => {
     { label: "unset", value: undefined },
     { label: "empty", value: "" },
     { label: "whitespace", value: "  \t " },
-  ])("does no database or IF work with a $label revocation URL despite working OAuth configuration", async ({ value }) => {
+  ])("publishes an authored reservation with a $label optional revocation URL", async ({ value }) => {
     vi.stubEnv("IF_LIVE_REVOCATION_URL", value);
     const result = await runIfLivePublisher();
-    expect(result).toMatchObject({ disabled: true, processed: 0, published: 0 });
-    expect(result).toHaveProperty("reasons", ["Automatic IF publishing requires a supported OAuth revocation URL"]);
-    expect(mocks.transaction).not.toHaveBeenCalled(); expect(mocks.query).not.toHaveBeenCalled();
-    expect(mocks.outbox.findAll).not.toHaveBeenCalled(); expect(mocks.outbox.update).not.toHaveBeenCalled();
-    expect(mocks.token).not.toHaveBeenCalled(); expect(mocks.fleet).not.toHaveBeenCalled(); expect(mocks.schedules).not.toHaveBeenCalled();
-    expect(mocks.create).not.toHaveBeenCalled(); expect(mocks.update).not.toHaveBeenCalled(); expect(mocks.remove).not.toHaveBeenCalled();
-    expect(job).toMatchObject({ state: "queued", attempts: 0 });
+    expect(result).toMatchObject({ disabled: false, processed: 1, published: 1 });
+    expect(mocks.create).toHaveBeenCalledOnce(); expect(mocks.putCrew).toHaveBeenCalledOnce();
+    expect(mocks.outbox.update).toHaveBeenCalledWith(expect.objectContaining({ state: "done" }), expect.anything());
+    expect(mocks.binding).toHaveBeenCalledOnce();
+  });
+  it("still rejects malformed revocation configuration before queue or IF work", async () => {
+    vi.stubEnv("IF_LIVE_REVOCATION_URL", "https://untrusted.example/revoke");
+    expect(await runIfLivePublisher()).toMatchObject({ disabled: true, processed: 0, reasons: ["The configured IF OAuth revocation URL is invalid"] });
+    expect(mocks.query).not.toHaveBeenCalled(); expect(mocks.token).not.toHaveBeenCalled();
   });
   it("checks award eligibility again before publishing approved crew", async () => {
     mocks.access.mockResolvedValue(false);
@@ -214,16 +216,60 @@ describe("IF durable publishing worker", () => {
     expect(mocks.token).not.toHaveBeenCalled();
   });
 
-  it("keeps the two-job limit while retiring multiple obsolete candidates", async () => {
+  it.each([undefined, 7])("keeps the two-job limit while retiring obsolete candidates (aircraft scope %s)", async aircraftId => {
     const candidates = Array.from({ length: 5 }, (_, index) => ({ ...job, id: index + 1, flight_id: index + 1, revision: index < 2 ? 0 : 1, update: vi.fn(async function(this: any, values: any) { Object.assign(this, values); return this; }) }));
     const query = mocks.query.getMockImplementation()!;
     mocks.query.mockImplementation(async (sql: string, options: any) => sql.includes("FROM if_live_outbox AS pending") ? candidates.filter(row => !options.replacements.attemptedIds.includes(row.id)) : query(sql, options));
     mocks.outbox.findByPk.mockImplementation(async (id: number) => candidates.find(row => row.id === id));
     mocks.liveFlight.findByPk.mockImplementation(async (id: number) => ({ ...flight, id }));
     mocks.access.mockResolvedValue(false);
-    expect(await runIfLivePublisher()).toMatchObject({ processed: 2, published: 0, states: { failed: 2 } });
+    expect(await runIfLivePublisher({ aircraftId })).toMatchObject({ processed: 2, published: 0, states: { failed: 2 } });
     expect(candidates[0].state).toBe("done"); expect(candidates[1].state).toBe("done");
     expect(candidates[4].update).not.toHaveBeenCalled();
+  });
+});
+
+describe("local aircraft publishing scope", () => {
+  it("filters candidates and expired leases by the same bound local aircraft", async () => {
+    expect(await runIfLivePublisher({ aircraftId: 7 })).toMatchObject({ processed: 1, published: 1 });
+    const [sql, options] = selectionQueries()[0];
+    expect(sql).toContain("AND current_flight.live_aircraft_id = :aircraftId");
+    expect(options.replacements.aircraftId).toBe(7);
+    const [expiredSql, expiredOptions] = mocks.query.mock.calls.find(([value]) => String(value).includes("FROM if_live_outbox AS expired"))!;
+    expect(expiredSql).toContain("AND scoped_flight.live_aircraft_id = :aircraftId");
+    expect(expiredSql).toContain("LIMIT 20"); expect(expiredOptions.replacements.aircraftId).toBe(7);
+    expect(mocks.outbox.findAll).not.toHaveBeenCalled();
+  });
+
+  it.each([0, -1, 1.5, Number.NaN, Number.MAX_SAFE_INTEGER + 1])("rejects invalid worker scope %s before DB or IF work", async aircraftId => {
+    await expect(runIfLivePublisher({ aircraftId })).rejects.toMatchObject({ code: "validation", status: 400 });
+    expect(mocks.query).not.toHaveBeenCalled(); expect(mocks.token).not.toHaveBeenCalled();
+  });
+
+  it("does not acquire or publish another aircraft if a candidate moves before the lease", async () => {
+    flight.live_aircraft_id = 8;
+    expect(await runIfLivePublisher({ aircraftId: 7 })).toMatchObject({ processed: 0 });
+    expect(mocks.query.mock.calls.some(([value]) => String(value).includes("GET_LOCK"))).toBe(false);
+    expect(job.update).not.toHaveBeenCalled(); expect(mocks.token).not.toHaveBeenCalled();
+  });
+
+  it("rechecks scope before retiring a stale job or claiming after the local queue lock", async () => {
+    mocks.liveFlight.findByPk.mockImplementation(async (_id: number, options: any) => options?.transaction ? { ...flight, live_aircraft_id: 8, revision: 2 } : flight);
+    expect(await runIfLivePublisher({ aircraftId: 7 })).toMatchObject({ processed: 0 });
+    expect(job.update).not.toHaveBeenCalled(); expect(mocks.token).not.toHaveBeenCalled();
+    expect(mocks.query.mock.calls.some(([value]) => String(value).includes("RELEASE_LOCK"))).toBe(true);
+  });
+
+  it("rechecks expired lease scope under the mutex before marking reconciliation", async () => {
+    const query = mocks.query.getMockImplementation()!;
+    mocks.query.mockImplementation(async (sql: string, options: any) => sql.includes("FROM if_live_outbox AS expired")
+      ? [{ id: 10, flight_id: 10, revision: 1 }, { id: 11, flight_id: 11, revision: 1 }]
+      : sql.includes("FROM if_live_outbox AS pending") ? [] : query(sql, options));
+    mocks.liveFlight.findByPk.mockImplementation(async (id: number) => ({ ...flight, id, live_aircraft_id: id === 10 ? 8 : 7 }));
+    expect(await runIfLivePublisher({ aircraftId: 7 })).toMatchObject({ processed: 0 });
+    expect(mocks.outbox.update).toHaveBeenCalledOnce();
+    expect(mocks.outbox.update).toHaveBeenCalledWith(expect.objectContaining({ state: "reconciliation" }), expect.objectContaining({ where: expect.objectContaining({ id: 11 }), transaction: lockTransaction }));
+    expect(mocks.token).not.toHaveBeenCalled();
   });
 });
 
@@ -262,7 +308,7 @@ describe.runIf(Boolean(process.env.SCHEDULING_TEST_DATABASE_URL?.trim()))("IF pu
     sqlTransaction = await sqlDatabase.transaction();
     // Temporary tables shadow these names only on this pinned connection.
     await sqlDatabase.query("CREATE TEMPORARY TABLE live_flights (id INT PRIMARY KEY, live_aircraft_id INT NOT NULL, revision INT NOT NULL, status VARCHAR(24) NOT NULL, scheduled_departure DATETIME(3) NOT NULL, KEY flight_queue (live_aircraft_id, status, scheduled_departure))", { transaction: sqlTransaction });
-    await sqlDatabase.query("CREATE TEMPORARY TABLE if_live_outbox (id INT PRIMARY KEY, flight_id INT NOT NULL, revision INT NOT NULL, state VARCHAR(24) NOT NULL, attempts INT NOT NULL, next_attempt_at DATETIME(3) NOT NULL, created_at DATETIME(3) NOT NULL, KEY flight_revision (flight_id, revision), KEY ready (state, next_attempt_at))", { transaction: sqlTransaction });
+    await sqlDatabase.query("CREATE TEMPORARY TABLE if_live_outbox (id INT PRIMARY KEY, flight_id INT NOT NULL, revision INT NOT NULL, state VARCHAR(24) NOT NULL, attempts INT NOT NULL, next_attempt_at DATETIME(3) NOT NULL, created_at DATETIME(3) NOT NULL, lease_until DATETIME(3) NULL, KEY flight_revision (flight_id, revision), KEY ready (state, next_attempt_at))", { transaction: sqlTransaction });
     for (const tables of [flightTables, outboxTables]) for (const table of tables.slice(1)) await sqlDatabase.query(`CREATE TEMPORARY TABLE ${table} LIKE ${tables[0]}`, { transaction: sqlTransaction });
   }, 20_000);
 
@@ -283,11 +329,11 @@ describe.runIf(Boolean(process.env.SCHEDULING_TEST_DATABASE_URL?.trim()))("IF pu
       revision: options.superseded && row.id <= 10 ? 2 : 1 }));
     for (const row of flights) {
       await sqlDatabase.query("INSERT INTO live_flights VALUES (:id, :tail, :revision, 'approved', '2026-10-04 10:00:00')", { replacements: { id: row.id, tail: row.live_aircraft_id, revision: row.revision }, transaction: sqlTransaction });
-      await sqlDatabase.query("INSERT INTO if_live_outbox VALUES (:id, :id, 1, 'queued', 0, '2000-01-01', :created)", { replacements: { id: row.id, created: new Date(1000 * row.id) }, transaction: sqlTransaction });
+      await sqlDatabase.query("INSERT INTO if_live_outbox VALUES (:id, :id, 1, 'queued', 0, '2000-01-01', :created, NULL)", { replacements: { id: row.id, created: new Date(1000 * row.id) }, transaction: sqlTransaction });
     }
     if (options.predecessor || options.removal) {
       await sqlDatabase.query("INSERT INTO live_flights VALUES (99, :tail, 1, :status, '2026-10-04 09:00:00')", { replacements: { tail: busyTail, status: options.removal ? "needs_review" : "approved" }, transaction: sqlTransaction });
-      await sqlDatabase.query("INSERT INTO if_live_outbox VALUES (99, 99, 1, 'conflict', 1, '2000-01-01', '2000-01-01')", { transaction: sqlTransaction });
+      await sqlDatabase.query("INSERT INTO if_live_outbox VALUES (99, 99, 1, 'conflict', 1, '2000-01-01', '2000-01-01', NULL)", { transaction: sqlTransaction });
     }
     await copyFixtureTables();
     const query = mocks.query.getMockImplementation()!;
@@ -315,6 +361,35 @@ describe.runIf(Boolean(process.env.SCHEDULING_TEST_DATABASE_URL?.trim()))("IF pu
     expect(jobs.slice(0, 10).every(row => row.update.mock.calls.length === 0)).toBe(true);
     expect(jobs[10].state).toBe("processing");
     expect(mocks.outbox.findByPk).toHaveBeenCalledWith(11, expect.anything());
+  });
+
+  it("restricts actual SQL selection to one aircraft even when other tails have stale jobs", async () => {
+    const jobs = await arrangeWindow({ superseded: true });
+    expect(await runIfLivePublisher({ aircraftId: healthyTail })).toMatchObject({ processed: 1 });
+    expect(jobs.slice(0, 10).every(row => row.update.mock.calls.length === 0)).toBe(true);
+    expect(mocks.outbox.findByPk).toHaveBeenCalledWith(11, expect.anything());
+    const [sql, options] = selectionQueries()[0];
+    const selected = await sqlDatabase.query<{ id: number }>(isolatedCandidateSql(sql), { replacements: options.replacements, transaction: sqlTransaction, type: QueryTypes.SELECT });
+    expect(selected.map(row => row.id)).toEqual([11]);
+  });
+
+  it("reconciles only the scoped aircraft's expired leases using actual SQL", async () => {
+    const jobs = await arrangeWindow();
+    await sqlDatabase.query("UPDATE if_live_outbox SET state = 'processing', lease_until = '2000-01-01' WHERE id IN (10, 11)", { transaction: sqlTransaction });
+    await copyFixtureTables();
+    const query = mocks.query.getMockImplementation()!;
+    mocks.query.mockImplementation(async (sql: string, options: any) => {
+      if (!sql.includes("FROM if_live_outbox AS expired")) return query(sql, options);
+      const expired = await sqlDatabase.query<{ id: number }>(isolatedCandidateSql(sql), { replacements: options.replacements, transaction: sqlTransaction, type: QueryTypes.SELECT });
+      return expired.map(row => jobs.find(candidate => candidate.id === row.id)!);
+    });
+    expect(await runIfLivePublisher({ aircraftId: healthyTail })).toMatchObject({ processed: 0, published: 0 });
+    expect(mocks.outbox.update).toHaveBeenCalledOnce();
+    expect(mocks.outbox.update).toHaveBeenCalledWith(expect.objectContaining({ state: "reconciliation" }), expect.objectContaining({ where: expect.objectContaining({ id: 11 }) }));
+    const [sql, options] = mocks.query.mock.calls.find(([value]) => String(value).includes("FROM if_live_outbox AS expired"))!;
+    const selected = await sqlDatabase.query<{ id: number }>(isolatedCandidateSql(sql), { replacements: options.replacements, transaction: sqlTransaction, type: QueryTypes.SELECT });
+    expect(selected.map(row => row.id)).toEqual([11]);
+    expect(mocks.token).not.toHaveBeenCalled();
   });
 
   it("skips an actual advisory lock covering the oldest ten jobs", async () => {

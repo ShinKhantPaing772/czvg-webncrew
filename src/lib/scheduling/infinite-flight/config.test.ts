@@ -60,14 +60,14 @@ describe("IF OAuth configuration", () => {
     { label: "unset", value: undefined },
     { label: "empty", value: "" },
     { label: "whitespace", value: "  \t " },
-  ])("keeps OAuth ready with a $label revocation URL while disabling publishing", ({ value }) => {
+  ])("keeps OAuth and publishing ready with a $label optional revocation URL", ({ value }) => {
     vi.stubEnv("IF_LIVE_REVOCATION_URL", value);
     const config = getIfLiveConfig();
-    expect(config).toMatchObject({ configured: true, disabledReasons: [], bindingReady: true, bindingDisabledReasons: [], revocationConfigured: false, publishingReady: false });
-    expect(config.publishingDisabledReasons).toEqual(["Automatic IF publishing requires a supported OAuth revocation URL"]);
+    expect(config).toMatchObject({ configured: true, disabledReasons: [], bindingReady: true, bindingDisabledReasons: [], revocationConfigured: false, publishingReady: true });
+    expect(config.publishingDisabledReasons).toEqual([]);
     expect(config.oauthSetup.checks.find(check => check.id === "revocation")).toMatchObject({ ready: false, required: false });
     expect(() => requireIfLiveConfig()).not.toThrow();
-    expect(() => requireIfLiveConfig(true)).toThrow(expect.objectContaining({ code: "disabled" }));
+    expect(() => requireIfLiveConfig(true)).not.toThrow();
     expect(() => requireIfRevocationConfig()).toThrow(expect.objectContaining({ code: "configuration" }));
   });
   it.each([
@@ -107,7 +107,7 @@ describe("IF OAuth configuration", () => {
     vi.stubEnv("IF_LIVE_CLIENT_SECRET", "");
     expect(getIfLiveConfig()).toMatchObject({ configured: false, bindingReady: false, bindingDisabledReasons: ["Infinite Flight OAuth client credentials are missing"] });
   });
-  it("permits publishing once OAuth, retained identifiers, automatic publishing and revocation are ready", () => {
+  it("permits publishing once OAuth, retained identifiers and automatic publishing are ready", () => {
     expect(getIfLiveConfig()).toMatchObject({ configured: true, revocationConfigured: true, publishingReady: true, publishingDisabledReasons: [] });
     expect(() => requireIfLiveConfig(true)).not.toThrow();
   });
