@@ -1,5 +1,5 @@
 import { IfLiveError } from "./config";
-import { assertIfItinerary, type IfLocalFlight } from "./itinerary";
+import { assertIfItinerary, orderedIfSchedules, type IfLocalFlight } from "./itinerary";
 import { sameIfCrew, sameIfSchedule, scheduleMarker } from "./sync";
 import type { AuthoredIfPayload, IfPosition, IfSchedule } from "./types";
 
@@ -34,8 +34,8 @@ export function assertIfDepartureReady(input: {
   let unchanged = false;
   try { unchanged = sameIfSchedule(target, input.desired.schedule) && sameIfCrew(target.crew, input.desired.crew); } catch { /* Unsupported upstream values fail closed. */ }
   if (!unchanged) throw new IfLiveError("The IF schedule or crew changed after publication; ask an administrator to reconcile it before departure", "conflict", 409);
-  const active = input.schedules.filter(row => ![9, 11].includes(row.status));
-  if (active[0]?.id !== target.id || active.some(row => row.id !== target.id && (row.status !== 1 || Date.parse(row.scheduledDepartureUtc) <= Date.parse(target.scheduledDepartureUtc)))) {
+  const active = orderedIfSchedules(input.schedules).filter(row => ![9, 11].includes(row.status));
+  if (active[0]?.id !== target.id || active.some(row => row.id !== target.id && row.status !== 1)) {
     throw new IfLiveError("Finish or resolve the aircraft's preceding IF reservation before starting this flight", "conflict", 409);
   }
   assertIfItinerary({ schedules: input.schedules, localFlights: input.localFlights, target: { publicId: input.publicId, desired: input.desired.schedule }, requireUnstartedReservations: true });

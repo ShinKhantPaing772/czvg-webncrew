@@ -3,9 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   aircraft: { findByPk: vi.fn(), update: vi.fn(), create: vi.fn() },
   connection: { findByPk: vi.fn(), update: vi.fn() },
+  flights: { findAll: vi.fn() },
   authorization: vi.fn(), fleet: vi.fn(), schedules: vi.fn(), position: vi.fn(),
 }));
-vi.mock("@/lib/scheduling/models", () => ({ LiveAircraft: mocks.aircraft, IfLiveConnection: mocks.connection }));
+vi.mock("@/lib/scheduling/models", () => ({ LiveAircraft: mocks.aircraft, IfLiveConnection: mocks.connection, LiveFlight: mocks.flights }));
 vi.mock("./connection", () => ({ getIfAuthorizationSnapshot: mocks.authorization }));
 vi.mock("./client", () => ({ getIfFleet: mocks.fleet, getIfSchedules: mocks.schedules, getIfPosition: mocks.position }));
 
@@ -39,6 +40,7 @@ beforeEach(() => {
   mocks.authorization.mockResolvedValue({ token: "private-token", credential: connection.access_token_encrypted, owner: 42, organizationId: ORG });
   mocks.fleet.mockResolvedValue([{ id: REMOTE, organizationId: ORG }]);
   mocks.schedules.mockResolvedValue([schedule]);
+  mocks.flights.findAll.mockResolvedValue([]);
 });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); });
 
@@ -46,8 +48,9 @@ describe("temporary schedules for a locally bound aircraft", () => {
   it("reads fresh schedules without publishing permission, allowlists the response, and writes nothing", async () => {
     const result = await loadIfAircraftSchedules(7);
     expect(result).toEqual({
-      schedules: [{ id: SCHEDULE, callsign: "WNC1", originIcao: "CYYZ", destinationIcao: "CYVR", scheduledDepartureUtc: schedule.scheduledDepartureUtc,
-        scheduledArrivalUtc: schedule.scheduledArrivalUtc, status: 1, crew: [{ userId: CREW, role: 0 }] }],
+      schedules: [{ id: SCHEDULE, callsign: "WNC1", originIcao: "CYYZ", destinationIcao: "CYVR", scheduledDepartureUtc: "2026-10-05T10:00:00.000Z",
+        scheduledArrivalUtc: "2026-10-05T15:00:00.000Z", status: 1, crew: [{ userId: CREW, role: 0 }], sequence: 1,
+        fingerprint: expect.stringMatching(/^[0-9a-f]{64}$/), managedFlightId: null, editable: false, editDisabledReason: expect.stringContaining("administrator") }],
       loadedAt: "2026-10-04T10:00:00.000Z", expiresAt: "2026-10-04T10:01:00.000Z", publishingReady: false,
       publishingDisabledReasons: expect.arrayContaining(["Automatic IF publishing is disabled", "Durable IF mapping retention has not been authorized"]),
     });
@@ -57,7 +60,7 @@ describe("temporary schedules for a locally bound aircraft", () => {
     expect(mocks.authorization).toHaveBeenCalledOnce(); expect(mocks.aircraft.findByPk).toHaveBeenCalledTimes(2);
     expect(mocks.position).not.toHaveBeenCalled();
     expect(mocks.aircraft.update).not.toHaveBeenCalled(); expect(mocks.aircraft.create).not.toHaveBeenCalled(); expect(mocks.connection.update).not.toHaveBeenCalled();
-    expect(JSON.stringify(result)).not.toMatch(/private-|encrypted-token|organizationId|aircraftId|sequence/);
+    expect(JSON.stringify(result)).not.toMatch(/private-|encrypted-token|organizationId|aircraftId/);
   });
 
   it("returns an empty schedule list without requesting IF position", async () => {

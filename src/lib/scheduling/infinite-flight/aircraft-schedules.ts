@@ -1,13 +1,10 @@
-import { IfLiveConnection, LiveAircraft } from "@/lib/scheduling/models";
+import { IfLiveConnection, LiveAircraft, LiveFlight } from "@/lib/scheduling/models";
 import { getIfFleet, getIfSchedules } from "./client";
 import { getIfAuthorizationSnapshot } from "./connection";
 import { getIfLiveConfig, IF_LIVE_CACHE_MS, IfLiveError, isIfUuid } from "./config";
 import { ifBudgetRemainingMs, withIfRequestBudget } from "./request-budget";
-import type { IfSchedule } from "./types";
-
-export type IfAircraftScheduleView = Pick<IfSchedule,
-  "id" | "callsign" | "originIcao" | "destinationIcao" | "scheduledDepartureUtc" | "scheduledArrivalUtc" | "status" | "crew"
->;
+import { toIfAircraftScheduleView } from "./schedule-view";
+export type { IfAircraftScheduleView } from "./schedule-view";
 
 export function localAircraftIdFromRequest(request: Request): number {
   const params = new URL(request.url).searchParams;
@@ -20,7 +17,7 @@ export function localAircraftIdFromRequest(request: Request): number {
 }
 
 /** Temporary IF responses only; the local fleet binding determines every upstream identifier. */
-export function loadIfAircraftSchedules(aircraftId: number) {
+export function loadIfAircraftSchedules(aircraftId: number, options: { admin?: boolean } = {}) {
   return withIfRequestBudget(20_000, async () => {
     if (!Number.isSafeInteger(aircraftId) || aircraftId <= 0 || aircraftId > 2_147_483_647) {
       throw new IfLiveError("Select one valid local aircraft", "validation", 400);
@@ -54,12 +51,9 @@ export function loadIfAircraftSchedules(aircraftId: number) {
     if (ifBudgetRemainingMs() <= 0) throw new IfLiveError("IF schedules took too long to load; try again", "budget", 503, 15);
     const loadedAt = Date.now();
     const config = getIfLiveConfig();
+    const managedFlights = await LiveFlight.findAll({ where: { live_aircraft_id: aircraftId }, attributes: ["id", "public_id", "if_schedule_id", "status"], raw: true });
     return {
-      schedules: schedules.map((row): IfAircraftScheduleView => ({
-        id: row.id, callsign: row.callsign, originIcao: row.originIcao, destinationIcao: row.destinationIcao,
-        scheduledDepartureUtc: row.scheduledDepartureUtc, scheduledArrivalUtc: row.scheduledArrivalUtc, status: row.status,
-        crew: row.crew.map(member => ({ userId: member.userId, role: member.role })),
-      })),
+      schedules: schedules.map(row => toIfAircraftScheduleView(row, managedFlights, options.admin === true && config.bindingReady)),
       loadedAt: new Date(loadedAt).toISOString(), expiresAt: new Date(loadedAt + IF_LIVE_CACHE_MS).toISOString(),
       publishingReady: config.publishingReady, publishingDisabledReasons: config.publishingDisabledReasons,
     };

@@ -136,9 +136,9 @@ async function publishClaimedJob(job: IfLiveOutbox) {
   const uncertain = flight.publishing_state === "reconciliation" || await IfLiveOutbox.count({ where: { flight_id: flight.id, state: "reconciliation" } }) > 0;
   const action = (job.get("action") ?? "sync") as PublishAction;
   const beforeWrite = () => assertCurrentPublish(flight, aircraft, authorization, catalogSignature);
-  const reservedFlights = await LiveFlight.findAll({ where: { live_aircraft_id: aircraft.id, status: { [Op.in]: ["approved", "in_progress", ...REMOVAL_STATES] } }, order: [["scheduled_departure", "ASC"], ["id", "ASC"]] });
+  const reservedFlights = await LiveFlight.findAll({ where: { live_aircraft_id: aircraft.id, status: { [Op.in]: ["approved", "in_progress", ...REMOVAL_STATES] } }, order: [["queue_order", "ASC"], ["id", "ASC"]] });
   const localFlights: IfLocalFlight[] = reservedFlights.map(row => ({ public_id: row.public_id, departure: row.departure, arrival: row.arrival,
-    scheduled_departure: row.scheduled_departure, scheduled_arrival: row.scheduled_arrival, status: row.status, if_schedule_id: row.if_schedule_id,
+    scheduled_departure: row.scheduled_departure, scheduled_arrival: row.scheduled_arrival, queue_order: row.queue_order, status: row.status, if_schedule_id: row.if_schedule_id,
     last_published_payload: row.last_published_payload as PublishedPayload | null, revision: row.revision, published_revision: row.published_revision }));
   const result = await synchronizeIfFlight({ publicId: flight.public_id, remoteId: flight.if_schedule_id, schedules, desired,
     previous: flight.last_published_payload as PublishedPayload | null, action, uncertainCreation: uncertain, localFlights,
@@ -152,7 +152,7 @@ async function publishClaimedJob(job: IfLiveOutbox) {
   });
   if (desired && result.remoteId) {
     const currentSchedules = await getIfSchedules(token, aircraft.if_aircraft_id, { fresh: true });
-    const localOrder = await LiveFlight.findAll({ where: { live_aircraft_id: flight.live_aircraft_id, status: { [Op.in]: ["approved", "in_progress"] } }, attributes: ["public_id"], order: [["scheduled_departure", "ASC"], ["id", "ASC"]] });
+    const localOrder = await LiveFlight.findAll({ where: { live_aircraft_id: flight.live_aircraft_id, status: { [Op.in]: ["approved", "in_progress"] } }, attributes: ["public_id"], order: [["queue_order", "ASC"], ["id", "ASC"]] });
     const reorder = planIfSequence(currentSchedules, localOrder, result.remoteId, localFlights);
     if (reorder) { await beforeWrite(); await reorderIfSchedule(token, aircraft.if_aircraft_id, reorder.scheduleId, reorder.afterId); }
   }
@@ -195,7 +195,7 @@ async function publishCandidates(attemptedIds: number[], options: IfPublishOptio
             INNER JOIN if_live_outbox AS earlier_job ON earlier_job.flight_id = earlier_flight.id
             WHERE earlier_flight.live_aircraft_id = current_flight.live_aircraft_id
               AND earlier_flight.status = 'approved'
-              AND earlier_flight.scheduled_departure < current_flight.scheduled_departure
+              AND earlier_flight.queue_order < current_flight.queue_order
               AND earlier_job.state <> 'done'
           )
           AND NOT EXISTS (
@@ -215,8 +215,8 @@ async function publishCandidates(attemptedIds: number[], options: IfPublishOptio
             INNER JOIN if_live_outbox AS removal_job ON removal_job.flight_id = later_removal.id
             WHERE later_removal.live_aircraft_id = current_flight.live_aircraft_id
               AND later_removal.status IN ('cancelled', 'rejected', 'needs_review')
-              AND (later_removal.scheduled_departure > current_flight.scheduled_departure
-                OR (later_removal.scheduled_departure = current_flight.scheduled_departure AND later_removal.id > current_flight.id))
+              AND (COALESCE(later_removal.queue_order, later_removal.id) > COALESCE(current_flight.queue_order, current_flight.id)
+                OR (later_removal.queue_order = current_flight.queue_order AND later_removal.id > current_flight.id))
               AND removal_job.state <> 'done'
           )
         )
@@ -284,12 +284,12 @@ async function runBoundedIfLivePublisher(options: IfPublishOptions) {
           // Repeat selection dependencies under the mutex: an amendment or
           // cancellation may have arrived after the candidate snapshot.
           if (currentFlight.status === "approved") {
-            const earlierFlights = await LiveFlight.findAll({ where: { live_aircraft_id: currentFlight.live_aircraft_id, scheduled_departure: { [Op.lt]: currentFlight.scheduled_departure }, status: "approved" }, attributes: ["id"], transaction });
+            const earlierFlights = await LiveFlight.findAll({ where: { live_aircraft_id: currentFlight.live_aircraft_id, queue_order: { [Op.lt]: currentFlight.queue_order }, status: "approved" }, attributes: ["id"], transaction });
             if (earlierFlights.length && await IfLiveOutbox.count({ where: { flight_id: { [Op.in]: earlierFlights.map(row => row.id) }, state: { [Op.ne]: "done" } }, transaction }) > 0) return null;
           }
-          const removals = await LiveFlight.findAll({ where: { live_aircraft_id: currentFlight.live_aircraft_id, status: { [Op.in]: [...REMOVAL_STATES] } }, attributes: ["id", "scheduled_departure"], transaction });
-          const blockingRemovals = currentFlight.status === "approved" ? removals : removals.filter(row => row.scheduled_departure > currentFlight.scheduled_departure ||
-            (+row.scheduled_departure === +currentFlight.scheduled_departure && row.id > currentFlight.id));
+          const removals = await LiveFlight.findAll({ where: { live_aircraft_id: currentFlight.live_aircraft_id, status: { [Op.in]: [...REMOVAL_STATES] } }, attributes: ["id", "queue_order"], transaction });
+          const blockingRemovals = currentFlight.status === "approved" ? removals : removals.filter(row => (row.queue_order ?? row.id) > (currentFlight.queue_order ?? currentFlight.id) ||
+            (row.queue_order === currentFlight.queue_order && row.id > currentFlight.id));
           if (blockingRemovals.length && await IfLiveOutbox.count({ where: { flight_id: { [Op.in]: blockingRemovals.map(row => row.id) }, state: { [Op.ne]: "done" } }, transaction }) > 0) return null;
           await job.update({ state: "processing", attempts: job.attempts + 1, lease_until: new Date(Date.now() + LEASE_MS) }, { transaction });
           return job;

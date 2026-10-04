@@ -47,8 +47,8 @@ describe("temporary IF fleet position views", () => {
     expect(mocks.authorization).toHaveBeenCalledOnce();
     expect(mocks.fleet).toHaveBeenCalledWith("private-if-access-token", ORGANIZATION);
     expect(mocks.fleet).toHaveBeenCalledOnce(); expect(mocks.airports).toHaveBeenCalledOnce();
-    expect(mocks.position).toHaveBeenCalledWith("private-if-access-token", remote(2));
-    expect(mocks.position).toHaveBeenCalledWith("private-if-access-token", remote(1));
+    expect(mocks.position).toHaveBeenCalledWith("private-if-access-token", remote(2), { fresh: true });
+    expect(mocks.position).toHaveBeenCalledWith("private-if-access-token", remote(1), { fresh: true });
     expect(mocks.aircraft.findAll).toHaveBeenCalledWith({ where: { id: { [Op.in]: [2, 1] } }, attributes: ["id", "aircraft_id", "if_aircraft_id"], raw: true });
     expect(JSON.stringify(result)).not.toContain("private-");
     for (const table of [mocks.aircraft, mocks.connection]) for (const operation of [table.create, table.update, table.destroy]) expect(operation).not.toHaveBeenCalled();
@@ -84,7 +84,7 @@ describe("temporary IF fleet position views", () => {
     mocks.fleet.mockResolvedValue([foreign, { id: remote(4), organizationId: ORGANIZATION }]);
     const result = await loadIfAircraftPositions([1, 2, 3, 4]);
     expect(result.aircraft.map(row => row.code)).toEqual(["not_found", "binding", "binding", undefined]);
-    expect(mocks.position).toHaveBeenCalledOnce(); expect(mocks.position).toHaveBeenCalledWith("private-if-access-token", remote(4));
+    expect(mocks.position).toHaveBeenCalledOnce(); expect(mocks.position).toHaveBeenCalledWith("private-if-access-token", remote(4), { fresh: true });
   });
 
   it("does no IF authorization or fleet reads when every requested aircraft is missing or unlinked", async () => {

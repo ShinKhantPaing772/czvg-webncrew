@@ -37,8 +37,9 @@ export type ScheduledFlight = {
   callsign?: string | null;
   departure: string;
   arrival: string;
-  scheduled_departure: string;
-  scheduled_arrival: string;
+  queue_order?: number | null;
+  scheduled_departure: string | null;
+  scheduled_arrival: string | null;
   status: FlightStatus;
   notes?: string | null;
   review_reason?: string | null;
@@ -68,7 +69,7 @@ export type FlightInput = {
   callsign: string;
   departure: string;
   arrival: string;
-  scheduled_departure: string;
-  scheduled_arrival: string;
+  scheduled_departure: string | null;
+  scheduled_arrival: string | null;
   notes: string;
 };

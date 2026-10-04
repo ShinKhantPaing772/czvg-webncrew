@@ -26,14 +26,18 @@ import { IfLiveConnection, IfLiveOutbox, LiveAircraft, LiveFlight, LiveFlightMem
 
 const models: ModelStatic<Model>[] = [LiveAircraft, LiveFlight, LiveFlightMember, LiveScheduleEvent, IfLiveConnection, IfLiveOutbox];
 const schemas = [
-  { name: "live scheduling migration", sql: readFileSync(new URL("../../../migrations/20261002_live_scheduling.sql", import.meta.url), "utf8") },
+  { name: "live scheduling migrations", sql: readFileSync(new URL("../../../migrations/20261002_live_scheduling.sql", import.meta.url), "utf8") + "\n" + readFileSync(new URL("../../../migrations/20261004_optional_live_flight_times.sql", import.meta.url), "utf8") },
   { name: "fresh database schema", sql: readFileSync(new URL("../../../crewcenterdb.sql", import.meta.url), "utf8") },
 ];
 
 function tableColumns(sql: string, table: string) {
   const create = sql.match(new RegExp(`CREATE TABLE(?: IF NOT EXISTS)? \`${table}\` \\(([\\s\\S]*?)\\) ENGINE=InnoDB;`));
   if (!create) throw new Error(`Expected ${table} in the supplied SQL schema`);
-  return [...create[1].matchAll(/^\s*`([^`]+)`\s+/gm)].map(match => match[1]).sort();
+  const columns = [...create[1].matchAll(/^\s*`([^`]+)`\s+/gm)].map(match => match[1]);
+  for (const alter of sql.matchAll(new RegExp(`ALTER TABLE \`${table}\`([\\s\\S]*?);`, "g"))) {
+    columns.push(...[...alter[1].matchAll(/ADD COLUMN `([^`]+)`/g)].map(match => match[1]));
+  }
+  return columns.sort();
 }
 
 afterAll(async () => { await LiveAircraft.sequelize?.close(); });
@@ -58,7 +62,7 @@ describe("real Sequelize scheduling model field mappings", () => {
 
   it("keeps each nullable timestamp mapped to its own physical column", () => {
     const nullableTimestampModels: Array<[ModelStatic<Model>, string[]]> = [
-      [LiveFlight, ["reviewed_at", "actual_departure_at", "actual_arrival_at"]],
+      [LiveFlight, ["scheduled_departure", "scheduled_arrival", "reviewed_at", "actual_departure_at", "actual_arrival_at"]],
       [LiveFlightMember, ["reviewed_at"]],
       [IfLiveConnection, ["expires_at"]],
       [IfLiveOutbox, ["lease_until"]],

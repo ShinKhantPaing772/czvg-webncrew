@@ -4,7 +4,7 @@ import sequelize from "@/lib/database";
 import { models } from "@/lib/models";
 import { canAccessLiveScheduling, livePilotAwardId } from "./access";
 import { LiveAircraft, LiveFlight, LiveFlightMember, LiveScheduleEvent, IfLiveConnection, IfLiveOutbox } from "./models";
-import { SchedulingError, airport, text, validId, scheduledWindow, projectedOrigin, orderedQueue, overlaps, validateQueue, RESERVED_STATUSES } from "./policy";
+import { SchedulingError, airport, text, validId, scheduledWindow, projectedOrigin, orderedQueue, overlaps, hasScheduledWindow, validateQueue, RESERVED_STATUSES } from "./policy";
 import { getIfLiveConfig, IfLiveError } from "./infinite-flight/config";
 import { getIfAuthorizationSnapshot } from "./infinite-flight/connection";
 import { validateIfAircraftBinding } from "./infinite-flight/binding";
@@ -69,12 +69,24 @@ async function mutate<T>(actor: SchedulingActor, body: Body, work: (transaction:
     const aircraftId = flight?.live_aircraft_id ?? (body.live_aircraft_id ? validId(body.live_aircraft_id, "Aircraft") : null);
     const aircraft = aircraftId ? await LiveAircraft.findByPk(aircraftId, { transaction, lock: transaction.LOCK.UPDATE }) : null;
     if (aircraftId && !aircraft) throw new SchedulingError("Live aircraft not found", 404);
+    if (aircraft?.if_aircraft_id) {
+      const lock = await sequelize.query<{ available: number | null }>("SELECT IS_FREE_LOCK(:lockName) AS available", {
+        replacements: { lockName: `wnc_if_aircraft_${aircraft.id}` }, type: QueryTypes.SELECT, transaction,
+      });
+      if (Number(lock[0]?.available) !== 1) throw new SchedulingError("This aircraft's IF schedules are currently being updated. Try again when that operation finishes.", 409);
+    }
     return work(transaction, aircraft, flight);
   });
 }
 
 async function queue(aircraftId: number, transaction: Transaction, exclude?: number) {
-  return LiveFlight.findAll({ where: { live_aircraft_id: aircraftId, status: reserved, ...(exclude ? { id: { [Op.ne]: exclude } } : {}) }, order: [["scheduled_departure", "ASC"], ["id", "ASC"]], transaction });
+  return LiveFlight.findAll({ where: { live_aircraft_id: aircraftId, status: reserved, ...(exclude ? { id: { [Op.ne]: exclude } } : {}) }, order: [["queue_order", "ASC"], ["id", "ASC"]], transaction });
+}
+async function nextQueueOrder(aircraftId: number, transaction: Transaction) {
+  const last = await LiveFlight.findOne({ where: { live_aircraft_id: aircraftId }, attributes: ["queue_order"], order: [["queue_order", "DESC"]], transaction });
+  const next = Number(last?.queue_order ?? 0) + 1;
+  if (!Number.isSafeInteger(next) || next > 2_147_483_647) throw new SchedulingError("The aircraft queue cannot allocate another position; an administrator needs to review it", 503);
+  return next;
 }
 function activeAircraft(aircraft: LiveAircraft) {
   if (!aircraft.active) throw new SchedulingError("This aircraft is inactive", 409);
@@ -87,12 +99,13 @@ function requireState(flight: LiveFlight, ...states: string[]) {
 }
 function flightState(flight: LiveFlight) {
   return { captain_id: flight.captain_id, callsign: flight.callsign, departure: flight.departure, arrival: flight.arrival,
-    scheduled_departure: flight.scheduled_departure, scheduled_arrival: flight.scheduled_arrival, status: flight.status,
+    queue_order: flight.queue_order, scheduled_departure: flight.scheduled_departure, scheduled_arrival: flight.scheduled_arrival, status: flight.status,
     actual_arrival: flight.actual_arrival, notes: flight.notes, revision: flight.revision };
 }
 function flightFields(body: Body, current?: LiveFlight) {
   return {
-    ...scheduledWindow(body.scheduled_departure ?? current?.scheduled_departure.toISOString(), body.scheduled_arrival ?? current?.scheduled_arrival.toISOString()),
+    ...scheduledWindow(has(body, "scheduled_departure") ? body.scheduled_departure : current?.scheduled_departure?.toISOString() ?? null,
+      has(body, "scheduled_arrival") ? body.scheduled_arrival : current?.scheduled_arrival?.toISOString() ?? null),
     callsign: has(body, "callsign") ? text(body.callsign, 32, "Callsign") : current?.callsign ?? null,
     arrival: airport(body.arrival ?? current?.arrival)!,
     notes: has(body, "notes") ? text(body.notes, 3000, "Notes") : current?.notes ?? null,
@@ -105,6 +118,9 @@ async function checkPilotBookings(pilotIds: number[], flight: LiveFlight, transa
   const memberships = otherIds.length ? await LiveFlightMember.findAll({ where: { flight_id: { [Op.in]: otherIds }, status: "approved", pilot_id: { [Op.in]: pilotIds } }, transaction }) : [];
   for (const other of otherFlights) {
     if (!(pilotIds.includes(other.captain_id) || memberships.some(member => member.flight_id === other.id))) continue;
+    if (other.live_aircraft_id !== flight.live_aircraft_id && (!hasScheduledWindow(flight) || !hasScheduledWindow(other))) {
+      throw new SchedulingError(`A crew member is assigned to flight ${other.id} on another aircraft with unspecified times. Set both flights' times or resolve that assignment first`, 409);
+    }
     if (overlaps(flight, other) || (starting && other.status === "in_progress")) throw new SchedulingError(`A crew member is already assigned to flight ${other.id} during this time`, 409);
   }
 }
@@ -135,17 +151,18 @@ async function validateApproval(aircraft: LiveAircraft, flight: LiveFlight, tran
 async function repairQueue(aircraft: LiveAircraft, actor: SchedulingActor, transaction: Transaction) {
   const flights = await queue(aircraft.id, transaction);
   let origin = aircraft.current_airport;
-  let previous: LiveFlight | null = null;
+  let previousTimed: LiveFlight | null = null;
   for (const flight of flights) {
-    if (flight.status === "in_progress") { origin = flight.arrival; previous = flight; continue; }
-    if ((origin && flight.departure !== origin) || (previous && overlaps(previous, flight))) {
-      await flight.update({ status: "needs_review", review_reason: `Aircraft queue changed. Confirm the route from ${origin ?? "its actual airport"} and the flight times.` }, { transaction });
+    if (flight.status === "in_progress") { origin = flight.arrival; if (hasScheduledWindow(flight)) previousTimed = flight; continue; }
+    if ((origin && flight.departure !== origin) || (hasScheduledWindow(flight) && previousTimed &&
+        +new Date(flight.scheduled_departure) < +new Date(previousTimed.scheduled_arrival!))) {
+      await flight.update({ status: "needs_review", review_reason: `Aircraft queue changed. Confirm the route from ${origin ?? "its actual airport"} and any specified flight times.` }, { transaction });
       await bumpAndQueue(flight, aircraft, transaction);
       await event(aircraft, flight, actor, "chain_invalidated", { expected_origin: origin }, transaction);
       continue;
     }
     origin = flight.arrival;
-    previous = flight;
+    if (hasScheduledWindow(flight)) previousTimed = flight;
   }
 }
 
@@ -211,7 +228,7 @@ async function prepareIfStart(actor: SchedulingActor, body: Body) {
 }
 
 function ifLocalFlight(flight: LiveFlight): IfLocalFlight {
-  return { public_id: flight.public_id, departure: flight.departure, arrival: flight.arrival, scheduled_departure: flight.scheduled_departure,
+  return { public_id: flight.public_id, departure: flight.departure, arrival: flight.arrival, queue_order: flight.queue_order, scheduled_departure: flight.scheduled_departure,
     scheduled_arrival: flight.scheduled_arrival, status: flight.status, if_schedule_id: flight.if_schedule_id,
     last_published_payload: flight.last_published_payload as IfPublishedPayload | null, revision: flight.revision, published_revision: flight.published_revision };
 }
@@ -243,11 +260,11 @@ export async function requestFlight(actor: SchedulingActor, body: Body) {
     await eligible(actor.id, transaction);
     const fields = flightFields(body);
     const reservedFlights = await queue(aircraft.id, transaction);
-    const departure = projectedOrigin(aircraft.current_airport, reservedFlights, fields.scheduled_departure) ?? airport(body.departure)!;
+    const departure = projectedOrigin(aircraft.current_airport, reservedFlights) ?? airport(body.departure)!;
     if (departure === fields.arrival) throw new SchedulingError("Departure and destination must be different");
     const duplicate = await LiveFlight.findOne({ where: { captain_id: actor.id, live_aircraft_id: aircraft.id, status: "pending", departure, arrival: fields.arrival, scheduled_departure: fields.scheduled_departure, scheduled_arrival: fields.scheduled_arrival }, transaction });
     if (duplicate) throw new SchedulingError("This flight request already exists", 409);
-    const flight = await LiveFlight.create({ ...fields, public_id: randomUUID(), live_aircraft_id: aircraft.id, captain_id: actor.id, departure, status: "pending" }, { transaction });
+    const flight = await LiveFlight.create({ ...fields, public_id: randomUUID(), live_aircraft_id: aircraft.id, captain_id: actor.id, departure, queue_order: null, status: "pending" }, { transaction });
     await event(aircraft, flight, actor, "requested", fields, transaction);
     return { flight_id: flight.id };
   });
@@ -265,20 +282,21 @@ export async function changeFlight(actor: SchedulingActor, body: Body) {
     if (action === "edit") {
       requireCaptain(actor, flight); requireState(flight, "pending");
       const fields = flightFields(body, flight);
-      const departure = projectedOrigin(aircraft.current_airport, await queue(aircraft.id, transaction), fields.scheduled_departure) ?? airport(body.departure ?? flight.departure)!;
+      const departure = projectedOrigin(aircraft.current_airport, await queue(aircraft.id, transaction)) ?? airport(body.departure ?? flight.departure)!;
       if (departure === fields.arrival) throw new SchedulingError("Departure and destination must be different");
       await flight.update({ ...fields, departure }, { transaction });
     } else if (action === "approve" || action === "amend" || action === "reassign") {
       requireState(flight, "pending", "needs_review", "approved");
-      const wasApproved = flight.status === "approved";
+      const hadQueueOrder = flight.queue_order != null;
       const fields = flightFields(body, flight);
       const captainId = has(body, "captain_id") ? validId(body.captain_id, "Captain") : flight.captain_id;
       const departure = airport(body.departure ?? flight.departure)!;
       if (departure === fields.arrival) throw new SchedulingError("Departure and destination must be different");
-      await flight.update({ ...fields, departure, captain_id: captainId, reviewed_by: actor.id, reviewed_at: new Date(), review_reason: reason, status: "approved" }, { transaction });
+      const queueOrder = flight.queue_order ?? await nextQueueOrder(aircraft.id, transaction);
+      await flight.update({ ...fields, departure, queue_order: queueOrder, captain_id: captainId, reviewed_by: actor.id, reviewed_at: new Date(), review_reason: reason, status: "approved" }, { transaction });
       // Promoting a first officer must not consume another crew seat.
       await LiveFlightMember.update({ status: "withdrawn", reviewed_by: actor.id, reviewed_at: new Date() }, { where: { flight_id: flight.id, pilot_id: captainId }, transaction });
-      await validateApproval(aircraft, flight, transaction, wasApproved);
+      await validateApproval(aircraft, flight, transaction, hadQueueOrder);
       await bumpAndQueue(flight, aircraft, transaction);
       await repairQueue(aircraft, actor, transaction);
     } else if (action === "reject") {
@@ -433,7 +451,7 @@ export async function schedulingSnapshot(actor: SchedulingActor) {
   const awarded = new Set(grants.map(grant => Number(grant.pilotid)));
   const pilotMap = new Map(pilots.map(pilot => [pilot.id, { id: pilot.id, name: pilot.name, callsign: pilot.callsign, eligible: pilot.status === 1 && awarded.has(pilot.id), ifuserid: pilot.ifuserid }]));
   const allAircraft = await LiveAircraft.findAll({ order: [["registration", "ASC"]], raw: true });
-  const flights = await LiveFlight.findAll({ where: { [Op.or]: [{ status: { [Op.in]: ["pending", "approved", "in_progress", "needs_review"] } }, { updated_at: { [Op.gte]: new Date(Date.now() - 30 * 86400000) } }] }, order: [["scheduled_departure", "ASC"], ["id", "ASC"]], raw: true });
+  const flights = await LiveFlight.findAll({ where: { [Op.or]: [{ status: { [Op.in]: ["pending", "approved", "in_progress", "needs_review"] } }, { updated_at: { [Op.gte]: new Date(Date.now() - 30 * 86400000) } }] }, order: [["live_aircraft_id", "ASC"], ["queue_order", "ASC"], ["id", "ASC"]], raw: true });
   const memberships = flights.length ? await LiveFlightMember.findAll({ where: { flight_id: { [Op.in]: flights.map(flight => flight.id) } }, raw: true }) : [];
   const catalogMap = new Map(catalog.map(item => [item.id, item]));
   const aircraft = allAircraft.filter(item => actor.admin || item.active).map(item => ({
@@ -469,7 +487,9 @@ export function schedulingFailure(error: unknown) {
     console.error("[Scheduling] Database schema mismatch", { code: dbCode, identifier });
     return { status: 503, error: dbCode === "ER_NO_SUCH_TABLE"
       ? "Live scheduling needs its SQL migration. Apply migrations/20261002_live_scheduling.sql first."
-      : "Live scheduling has a database column mismatch. An administrator needs to check the deployed app and database schema." };
+      : identifier?.split(".").at(-1) === "queue_order"
+        ? "Live scheduling needs its optional-times migration. Apply migrations/20261004_optional_live_flight_times.sql first."
+        : "Live scheduling has a database column mismatch. An administrator needs to check the deployed app and database schema." };
   }
   console.error("[Scheduling] Operation failed", error instanceof Error ? error.name : "Unknown error");
   return { status: 500, error: "Unable to complete this scheduling operation" };

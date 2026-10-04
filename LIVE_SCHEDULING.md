@@ -27,13 +27,37 @@ unchanged.
    current ICAO airport. An unknown initial airport may be left empty: the pilot
    enters a departure, and first admin approval confirms that initial location.
 
-All input schedule times are UTC. Callsigns are optional. Every new flight needs
-admin approval; pending requests do not reserve the aircraft. Approved flights
+Apply `migrations/20261004_optional_live_flight_times.sql` once after the original
+migration and before deploying the optional-time scheduler. Back up the database
+and pause scheduling writes while it runs. It makes both planned times nullable,
+adds an explicit per-aircraft queue order, and backfills existing non-pending
+flights in their previous chronological order. Fresh installs include these
+fields in `crewcenterdb.sql`.
+
+Run the entire migration file in one connection. It temporarily disables only
+that session's safe-update mode for the queue backfill and restores the previous
+setting before adding constraints. If an earlier version added `queue_order`,
+then failed with error 1175 on the `UPDATE` and error 3819 on the final `ALTER`,
+run `migrations/20261004_optional_live_flight_times_repair.sql` once instead of
+rerunning the original file. Keep scheduling writes paused during recovery.
+This repair skips the successful column addition, backfills the legacy queue,
+and adds the remaining indexes/checks. Its verification query must return zero
+reserved flights without queue positions. Do not run the repair after a
+successful upgrade or after new queue assignments have been made.
+
+Planned times are optional; enter both UTC times or leave both unspecified.
+Callsigns are optional. Every new flight needs
+admin approval; pending requests reserve neither aircraft nor a queue position.
+Approval appends a new flight to the aircraft’s queue. Amending or reapproving an
+existing leg preserves its queue position. Approved flights
 allow their captain and two additional pilots. Captains or scheduling admins can
 approve crew, start a flight, and confirm its actual arrival. A flight must be the
 aircraft's next approved leg and its departure must match the actual location.
 Scheduled arrival times never move aircraft automatically. Aircraft and pilot
-booking conflicts are checked again inside the approval transaction.
+booking conflicts are checked again inside the approval transaction. Untimed
+legs follow the aircraft’s queue rather than a fabricated time interval. A pilot
+with an untimed reservation cannot also reserve another aircraft; add planned
+times or finish/cancel that reservation before accepting the other assignment.
 Pilots can edit or withdraw pending requests. Scheduling admins amend, reassign,
 or cancel approved flights.
 
@@ -151,8 +175,9 @@ binding are one validated transaction, so a failed binding leaves no partial
 local aircraft. Without identifier permission or a saved organization, this
 action still creates an unlinked local aircraft. A matching local registration
 is shown as already present and offered for linking instead of creating a
-duplicate. Drafts close when the temporary fleet expires, the organization
-changes, or IF read access is lost. No position or fetched schedule is imported.
+duplicate. Drafts close when the organization changes or IF read access is lost. The
+fleet is loaded/refreshed only by button, without polling; its snapshot remains
+visible and shows an age warning after 15 minutes. No position or fetched schedule is imported.
 
 Linking alone does not publish anything. Linked flights cannot start until
 their latest approved schedule and crew are published; keep a tail unlinked
@@ -163,42 +188,55 @@ Automatic unattended publishing additionally needs the protected worker.
 
 ### View aircraft locations
 
-Both scheduling pages automatically load **Last IF position** for linked
-aircraft in the **Live fleet** tab. Fleet cards show coordinates, ground/flight
-state, the last-reported UTC timestamp, and a map link. Up to six aircraft appear
-per page; a batch reads only those visible linked aircraft, with at most three
-position requests running together. Positions expire with their original
-60-second server cache and refresh while the page is visible and has been used
-within the last 15 minutes. **Refresh IF
-locations** and returning to the page also reload the view. A parked aircraft
-may have an older IF report; the report timestamp is not the fetch time.
+Only **Scheduling Administration → Live fleet** shows IF position details.
+**Refresh IF locations** fetches the visible linked aircraft on request; opening
+or returning to the page does not fetch positions. Six aircraft appear per page,
+with at most three position reads together. A successful snapshot remains in
+page memory, including during a failed transient refresh, and shows a warning
+when its last refresh is older than 60 seconds. There is no automatic polling.
+Access denial, a changed aircraft binding, or leaving the view clears the data.
 
-IF's position response contains no airport ICAO. For reported ground positions
-within five nautical miles of an unambiguous airport in IF's **3D airport list**,
-the card shows **Near ICAO (estimate)**. This list does not cover every airport.
-A missing airport-directory key or failed lookup leaves coordinates available;
-a missing position on one aircraft leaves the other aircraft available.
+Cards show coordinates, ground/flight state, the last-reported UTC timestamp,
+and a map link. IF’s report timestamp can be older for parked aircraft. Ground
+positions near an unambiguous airport in IF’s 3D airport directory show
+**Near ICAO (estimate)**. This is not a confirmed airport and the directory does
+not cover every airport. Failed directory lookup leaves coordinates available;
+one missing position does not hide other aircraft.
 
-**Confirmed airport** remains the local airport recorded by a pilot/admin on
-arrival or by an admin correction. Coordinates and nearby-airport estimates
-never overwrite it or change the approved flight chain. If IF shows a different
-nearby airport, confirm the actual airport and correct it through the admin
-aircraft editor before approving further flights. Manual aircraft continue to
-use confirmed airports. Position reads need a connected shared IF account and
-`IF_LIVE_PREVIEW_ENABLED=true`; automatic publishing and token revocation are
-not prerequisites. The existing `IF_API` key supplies optional airport estimates.
-No new migration or environment variable is required for this view.
+**Confirmed airport** remains the local airport recorded on arrival or corrected
+by an admin. IF positions and estimates never overwrite it. Positions require a
+connected account and the preview flag; publishing and token revocation are not
+prerequisites. The existing `IF_API` key supplies optional airport estimates.
+The pilot page and its position API do not expose IF positions.
 
-### View IF schedules and publish approved plans
+### View and edit IF schedules
 
-Both scheduling pages have **Live fleet → View schedules** on each local
-aircraft. Linked aircraft automatically load their IF itinerary when this dialog
-opens. The dialog shows local flight decisions and publishing states alongside
-IF routes, planned UTC times, lifecycle status, and assigned crew counts. Refresh
-reloads the IF view; fetched schedules expire from the interface within 60
-seconds. No IF response is imported into local flights or events. Schedule reads
-remain available even when IF has no persisted aircraft position. A Live Pilot
-award is required for pilot reads; scheduling admins can read without that award.
+Both scheduling pages have **Live fleet → View schedules**. **Load IF schedules**
+or **Refresh IF schedules** loads a linked aircraft’s itinerary on request.
+Opening the dialog does not fetch IF schedules. IF schedules display newest queue
+entries first; this presentation does not reorder the actual IF queue. The
+snapshot stays visible with a warning after 60 seconds, rather than disappearing.
+Schedules are page memory only, never imported into local flights or events.
+Pilot reads require the Live Pilot award; scheduling admins need no live award.
+
+Year-one IF dates mean no meaningful planned time was supplied and display as
+**Planned times not specified**. New local requests may leave times unspecified
+and append on approval. Explicit queue order controls airport continuity and
+which flight can start. The queue is independent of whether times are present.
+
+Scheduling admins may edit unfinished external IF flights with **Edit IF
+schedule**. Arrived flights (including a recorded actual arrival) and cancelled
+flights are locked server-side. Local app-managed flights use the local amendment
+controls, so local reservations and IF publication stay consistent. Direct IF
+edits preserve crew and queue position, check a freshly fetched version before
+writing, and share an aircraft lock with publishing and local mutations.
+
+The editor supports **Set planned times**. Untimed writes omit both planned fields
+and never fabricate a year-one or placeholder date. IF’s current preview guide
+marks these fields required, so upstream acceptance of omitted fields must be
+verified with the permitted test organization. If IF rejects an untimed write,
+the failure remains visible; add both planned times and retry. Local untimed
+scheduling works independently of that upstream limitation.
 
 Set `IF_LIVE_PREVIEW_ENABLED=true`,
 `IF_LIVE_DURABLE_BINDINGS_ALLOWED=true`, and
@@ -216,7 +254,8 @@ Only approved local decisions are published: flight approval/amendments and
 crew changes synchronize the complete schedule and assigned crew; cancellation
 and invalidated reservations remove application-managed IF bookings. Pending
 requests do not publish. Existing IF flights without a local link remain a
-temporary reference and are not silently adopted or edited. Conflict and
+temporary reference and are not silently adopted. Explicit admin edits are
+version-checked; automatic publishing never overwrites external flights. Conflict and
 uncertain-write recovery continue through the existing admin IF controls. The
 API provides no documented start/arrival mutation, so departure and actual
 arrival confirmation remain local. The latest revision must still publish before
@@ -315,10 +354,11 @@ migration, OAuth registration, and scheduler provisioning are operator steps.
 - Automated tests, TypeScript, and the production build passed; see the current
   task report for the latest test count.
 - Both pages were checked at desktop and mobile widths with fictional sample data.
-- Twelve isolated MySQL tests passed against a disposable MySQL 8.4 database,
+- Twenty isolated MySQL tests passed against disposable MySQL 8.4 databases,
   covering concurrent reservations/crew, actual candidate SQL/advisory locks,
-  and aircraft-specific publishing/expired-lease isolation.
-  The test container was removed afterward. These suites remain opt-in for normal
+  aircraft-specific publishing/expired-lease isolation, Workbench safe-update
+  mode, and recovery from a partially applied optional-times migration.
+  The test containers were removed afterward. These suites remain opt-in for normal
   test runs; rerun the command above when changing database or publishing logic.
 - Real IF OAuth/publishing was not exercised. No production migration, account
   connection, IF write, or deployment was performed; integration defaults off.

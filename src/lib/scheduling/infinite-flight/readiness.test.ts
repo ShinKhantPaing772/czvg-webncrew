@@ -23,6 +23,15 @@ function fixture() {
 }
 
 describe("fresh IF departure verification", () => {
+  it("allows the next published untimed schedule only after the same fresh route, crew and aircraft checks", () => {
+    const flight = { ...local, scheduled_departure: null, scheduled_arrival: null, queue_order: 1 };
+    const authored = buildIfPayload(flight, desired.crew);
+    const input = { ...fixture(), desired: authored, schedules: [{ ...remote, ...authored.schedule, scheduledDepartureUtc: "0001-01-01T00:00:00", scheduledArrivalUtc: "0001-01-01T00:00:00", sequence: 1 }],
+      localFlights: [{ ...flight, if_schedule_id: REMOTE_ID, last_published_payload: authored }] };
+    expect(() => assertIfDepartureReady(input)).not.toThrow();
+    input.schedules.unshift({ ...input.schedules[0], id: CAPTAIN_ID, briefing: "External", sequence: 0 });
+    expect(() => assertIfDepartureReady(input)).toThrow("preceding IF reservation");
+  });
   it("accepts the unchanged next schedule and crew at the confirmed departure airport", () => {
     expect(() => assertIfDepartureReady(fixture())).not.toThrow();
   });

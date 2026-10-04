@@ -30,7 +30,7 @@ LiveAircraft.init({
 export class LiveFlight extends Model {
   declare id: number; declare public_id: string; declare live_aircraft_id: number; declare captain_id: number;
   declare callsign: string | null; declare departure: string; declare arrival: string;
-  declare scheduled_departure: Date; declare scheduled_arrival: Date; declare status: string;
+  declare queue_order: number | null; declare scheduled_departure: Date | null; declare scheduled_arrival: Date | null; declare status: string;
   declare notes: string | null; declare reviewed_by: number | null; declare reviewed_at: Date | null;
   declare review_reason: string | null; declare actual_departure_at: Date | null;
   declare actual_arrival_at: Date | null; declare actual_arrival: string | null;
@@ -43,7 +43,8 @@ LiveFlight.init({
   live_aircraft_id: { type: DataTypes.INTEGER, allowNull: false }, captain_id: { type: DataTypes.INTEGER, allowNull: false },
   callsign: { type: DataTypes.STRING(32), allowNull: true },
   departure: { type: DataTypes.CHAR(4), allowNull: false }, arrival: { type: DataTypes.CHAR(4), allowNull: false },
-  scheduled_departure: { type: DataTypes.DATE(3), allowNull: false }, scheduled_arrival: { type: DataTypes.DATE(3), allowNull: false },
+  queue_order: { type: DataTypes.INTEGER, allowNull: true },
+  scheduled_departure: date(), scheduled_arrival: date(),
   status: { type: DataTypes.STRING(24), allowNull: false, defaultValue: "pending" },
   notes: { type: DataTypes.TEXT, allowNull: true }, reviewed_by: { type: DataTypes.INTEGER, allowNull: true }, reviewed_at: date(),
   review_reason: { type: DataTypes.STRING(500), allowNull: true }, actual_departure_at: date(), actual_arrival_at: date(),
@@ -53,7 +54,7 @@ LiveFlight.init({
   publishing_state: { type: DataTypes.STRING(24), allowNull: false, defaultValue: "local" },
   if_schedule_id: { type: DataTypes.CHAR(36), allowNull: true },
   error: { type: DataTypes.STRING(500), allowNull: true }, last_published_payload: { type: DataTypes.JSON, allowNull: true }, ...timestamps(),
-}, options("live_flights"));
+}, { ...options("live_flights"), indexes: [{ unique: true, fields: ["live_aircraft_id", "queue_order"] }, { fields: ["live_aircraft_id", "status", "queue_order"] }] });
 
 export class LiveFlightMember extends Model {
   declare id: number; declare flight_id: number; declare pilot_id: number; declare status: string;

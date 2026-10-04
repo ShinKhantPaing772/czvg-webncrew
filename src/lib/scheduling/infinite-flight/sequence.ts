@@ -1,10 +1,11 @@
 import { IfLiveError } from "./config";
-import { assertIfItinerary, scheduleMarker, type IfLocalFlight } from "./itinerary";
+import { assertIfItinerary, orderedIfSchedules, scheduleMarker, type IfLocalFlight } from "./itinerary";
 import type { IfSchedule } from "./types";
+import { ifScheduleTimeMs } from "./schedule-time";
 
 /** Move this app's current schedule only; preserve every external reservation's position. */
 export function planIfSequence(schedules: IfSchedule[], localOrder: { public_id: string }[], targetId: string, localFlights?: IfLocalFlight[]) {
-  const active = schedules.filter(row => ![9, 11].includes(row.status));
+  const active = orderedIfSchedules(schedules).filter(row => ![9, 11].includes(row.status));
   const desired: string[] = [];
   for (const flight of localOrder) {
     const marked = active.filter(row => row.briefing?.includes(scheduleMarker(flight.public_id)));
@@ -15,20 +16,19 @@ export function planIfSequence(schedules: IfSchedule[], localOrder: { public_id:
   if (!desired.includes(targetId)) throw new IfLiveError("The current IF schedule disappeared before order reconciliation", "reconciliation", 409);
   const targetIndex = active.findIndex(row => row.id === targetId);
   const moved = active[targetIndex];
-  const targetTime = Date.parse(moved.scheduledDepartureUtc);
-  if (!Number.isFinite(targetTime)) throw new IfLiveError("The IF reservation has an invalid departure time; review before reordering", "conflict", 409);
+  const targetTime = ifScheduleTimeMs(moved.scheduledDepartureUtc);
   for (let index = 0; index < active.length; index += 1) {
     const other = active[index];
     if (index === targetIndex || (desired.includes(other.id) && other.status === 1)) continue;
-    const otherTime = Date.parse(other.scheduledDepartureUtc);
-    if (!Number.isFinite(otherTime)) throw new IfLiveError("An external or active IF reservation has an invalid departure time; review the queue", "conflict", 409);
-    if ((otherTime > targetTime && index < targetIndex) || (otherTime < targetTime && index > targetIndex)) {
+    const otherTime = ifScheduleTimeMs(other.scheduledDepartureUtc);
+    if (otherTime !== null && targetTime !== null && ((otherTime > targetTime && index < targetIndex) || (otherTime < targetTime && index > targetIndex))) {
       throw new IfLiveError("The IF queue places this flight on the wrong side of an external or active reservation; review IF's queue before retrying", "conflict", 409);
     }
   }
   const targetLocal = localOrder.find(flight => moved.briefing?.includes(scheduleMarker(flight.public_id)));
-  assertIfItinerary({ schedules, localFlights, ...(localFlights && targetLocal ? { target: { publicId: targetLocal.public_id, desired: moved } } : {}) });
-  if (current.join("|") === desired.join("|")) return null;
+  const validate = (rows: IfSchedule[]) => assertIfItinerary({ schedules: rows.map((row, index) => ({ ...row, sequence: index + 1 })), localFlights,
+    ...(localFlights && targetLocal ? { target: { publicId: targetLocal.public_id, desired: moved } } : {}) });
+  if (current.join("|") === desired.join("|")) { validate(active); return null; }
   if (current.filter(id => id !== targetId).join("|") !== desired.filter(id => id !== targetId).join("|")) {
     throw new IfLiveError("Other IF legs differ from the local queue order; reconcile those flights first", "conflict", 409);
   }
@@ -45,5 +45,6 @@ export function planIfSequence(schedules: IfSchedule[], localOrder: { public_id:
   }
   const after = reordered[insertion - 1] ?? null;
   if (after && ![1, 6].includes(after.status)) throw new IfLiveError("IF's current reservation state prevents safe sequence reconciliation", "conflict", 409);
+  validate(reordered);
   return { scheduleId: targetId, afterId: after?.id ?? null };
 }

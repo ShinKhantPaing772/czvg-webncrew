@@ -405,7 +405,7 @@ describe("Infinite Flight organization linking", () => {
     expect(document.getElementById("tail-if-link")?.getAttribute("aria-checked")).toBe("true");
 
     bindingAllowed = false;
-    await act(async () => window.dispatchEvent(new Event("focus")));
+    await act(async () => button("Refresh status").click());
     const link = document.getElementById("tail-if-link") as HTMLButtonElement;
     expect(document.querySelector('[role="dialog"]')).not.toBeNull();
     expect(link.disabled).toBe(true); expect(link.getAttribute("aria-checked")).toBe("false");
@@ -489,20 +489,23 @@ describe("Infinite Flight organization linking", () => {
         : { success: true, data: { ...bindingReady, connection: disconnected ? { ...bindingReady.connection, state: "disconnected" } : bindingReady.connection } }));
       await render([], [], catalog); await act(async () => button("Load IF fleet").click());
       await act(async () => button("Add to local fleet").click()); expect(document.querySelector('[role="dialog"]')).not.toBeNull();
-      disconnected = true; await act(async () => vi.advanceTimersByTimeAsync(30_001));
+      disconnected = true; await act(async () => button("Refresh status").click());
       expect(document.querySelector('[role="dialog"]')).toBeNull();
       expect(mocks.fetch.mock.calls.some(call => call[0] === "/api/admin/scheduling")).toBe(false);
     } finally { vi.useRealTimers(); }
   });
 
-  it("closes the creation form when its temporary IF fleet view expires", async () => {
+  it("keeps fleet data and its creation draft visible after fifteen minutes with a stale warning and no polling", async () => {
     vi.useFakeTimers();
     try {
       mockFleet(); await render([], [], catalog); await act(async () => button("Load IF fleet").click());
       await act(async () => button("Add to local fleet").click()); expect(document.querySelector('[role="dialog"]')).not.toBeNull();
-      await act(async () => vi.advanceTimersByTimeAsync(60_001));
-      expect(document.querySelector('[role="dialog"]')).toBeNull();
-      expect(container.textContent).toContain("IF fleet view expired");
+      const reads = mocks.fetch.mock.calls.length;
+      await act(async () => vi.advanceTimersByTimeAsync(15 * 60_000 + 1));
+      expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+      expect(container.textContent).toContain("last refreshed more than 15 minutes ago");
+      expect(mocks.fetch).toHaveBeenCalledTimes(reads);
+      expect(container.textContent).toContain(remoteAircraft.registration);
       expect(mocks.fetch.mock.calls.some(call => call[0] === "/api/admin/scheduling")).toBe(false);
     } finally { vi.useRealTimers(); }
   });

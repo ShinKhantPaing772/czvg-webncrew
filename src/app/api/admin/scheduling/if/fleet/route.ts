@@ -17,12 +17,12 @@ export async function GET(request: Request) {
     if (!aircraft.some(row => row.id.toLowerCase() === aircraftId.toLowerCase())) throw new IfLiveError("The selected IF aircraft is not in this organization", "not_found", 404);
     let positionError: string | undefined;
     const [position, schedules] = await Promise.all([
-      getIfPosition(token, aircraftId).catch(error => {
+      getIfPosition(token, aircraftId, { fresh: true }).catch(error => {
         if (!(error instanceof IfLiveError) || error.code !== "position_unavailable") throw error;
         positionError = "IF has no persisted position for this aircraft.";
         return null;
       }),
-      getIfSchedules(token, aircraftId),
+      getIfSchedules(token, aircraftId, { fresh: true }),
     ]);
     return ifJson({ success: true, data: { position, schedules, ...(positionError ? { positionError } : {}) } });
   } catch (error) { return ifRouteError(error); }

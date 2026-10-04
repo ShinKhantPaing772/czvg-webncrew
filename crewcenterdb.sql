@@ -171,8 +171,9 @@ CREATE TABLE IF NOT EXISTS `live_flights` (
   `callsign` VARCHAR(32) NULL,
   `departure` CHAR(4) NOT NULL,
   `arrival` CHAR(4) NOT NULL,
-  `scheduled_departure` DATETIME(3) NOT NULL,
-  `scheduled_arrival` DATETIME(3) NOT NULL,
+  `queue_order` INT NULL,
+  `scheduled_departure` DATETIME(3) NULL,
+  `scheduled_arrival` DATETIME(3) NULL,
   `status` VARCHAR(24) NOT NULL DEFAULT 'pending',
   `notes` TEXT NULL,
   `reviewed_by` INT NULL,
@@ -190,9 +191,16 @@ CREATE TABLE IF NOT EXISTS `live_flights` (
   `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   `updated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   UNIQUE KEY `live_flights_public_id` (`public_id`),
-  KEY `live_flights_queue` (`live_aircraft_id`, `status`, `scheduled_departure`),
+  UNIQUE KEY `live_flights_queue_order` (`live_aircraft_id`, `queue_order`),
+  KEY `live_flights_queue` (`live_aircraft_id`, `status`, `queue_order`),
   KEY `live_flights_captain` (`captain_id`, `status`, `scheduled_departure`),
   KEY `live_flights_review` (`status`, `created_at`),
+  CONSTRAINT `live_flights_time_pair` CHECK (
+    (`scheduled_departure` IS NULL AND `scheduled_arrival` IS NULL)
+    OR (`scheduled_departure` IS NOT NULL AND `scheduled_arrival` IS NOT NULL AND `scheduled_arrival` > `scheduled_departure`)
+  ),
+  CONSTRAINT `live_flights_positive_queue_order` CHECK (`queue_order` IS NULL OR `queue_order` > 0),
+  CONSTRAINT `live_flights_reserved_queue_order` CHECK (`status` NOT IN ('approved', 'in_progress') OR `queue_order` IS NOT NULL),
   FOREIGN KEY (`live_aircraft_id`) REFERENCES `live_aircraft` (`id`),
   FOREIGN KEY (`captain_id`) REFERENCES `pilots` (`id`),
   FOREIGN KEY (`reviewed_by`) REFERENCES `pilots` (`id`)

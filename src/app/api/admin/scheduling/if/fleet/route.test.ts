@@ -45,7 +45,7 @@ describe("temporary admin IF fleet reads", () => {
     mocks.position.mockRejectedValue(new IfLiveError("private-provider-position-details", "position_unavailable", 409));
     const response = await GET(request()); expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ success: true, data: { position: null, schedules: [], positionError: "IF has no persisted position for this aircraft." } });
-    expect(mocks.schedules).toHaveBeenCalledWith("private-token", AIRCRAFT); expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(mocks.schedules).toHaveBeenCalledWith("private-token", AIRCRAFT, { fresh: true }); expect(response.headers.get("Cache-Control")).toBe("no-store");
   });
 
   it("preserves returned schedules despite a missing persisted position", async () => {

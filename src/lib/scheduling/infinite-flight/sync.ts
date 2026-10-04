@@ -1,6 +1,7 @@
 import { IfLiveError, isIfUuid } from "./config";
 import type { AuthoredIfPayload, IfCrew, IfSchedule, IfScheduleRequest } from "./types";
 import { assertIfItinerary, crewIsSubset, isIfTerminal, normalizedCrew, sameIfCrew, sameIfSchedule, scheduleMarker, type IfLocalFlight, type IfPublishedPayload } from "./itinerary";
+import { ifScheduleTimeMs } from "./schedule-time";
 export { sameIfCrew, sameIfSchedule, scheduleMarker } from "./itinerary";
 
 export type PublishAction = "sync" | "overwrite" | "recreate";
@@ -14,7 +15,7 @@ export type SyncApi = {
 };
 
 export function buildIfPayload(
-  flight: { id: number; public_id: string; callsign: string | null; departure: string; arrival: string; scheduled_departure: Date; scheduled_arrival: Date; notes: string | null },
+  flight: { id: number; public_id: string; callsign: string | null; departure: string; arrival: string; scheduled_departure: Date | null; scheduled_arrival: Date | null; notes: string | null },
   crew: IfCrew[],
 ): AuthoredIfPayload {
   if (!crew.length || crew.length > 3 || crew.filter(row => row.role === 0).length !== 1 ||
@@ -22,14 +23,18 @@ export function buildIfPayload(
     throw new IfLiveError("IF publishing requires one captain and at most two additional crew with distinct IF user IDs", "crew", 409);
   }
   const callsign = flight.callsign?.trim() || `WNC${flight.id}`;
-  const departure = flight.scheduled_departure.toISOString(); const arrival = flight.scheduled_arrival.toISOString();
-  if (!callsign || callsign.length > 32 || /[\u0000-\u001f\u007f]/.test(callsign) || !/^[A-Z0-9]{1,8}$/.test(flight.departure) || !/^[A-Z0-9]{1,8}$/.test(flight.arrival) || arrival <= departure) {
+  const departure = ifScheduleTimeMs(flight.scheduled_departure); const arrival = ifScheduleTimeMs(flight.scheduled_arrival);
+  if (!callsign || callsign.length > 32 || /[\u0000-\u001f\u007f]/.test(callsign) || !/^[A-Z0-9]{1,8}$/.test(flight.departure) || !/^[A-Z0-9]{1,8}$/.test(flight.arrival) ||
+      (flight.scheduled_departure !== null && departure === null) || (flight.scheduled_arrival !== null && arrival === null) ||
+      (departure === null) !== (arrival === null) || (departure !== null && arrival !== null && arrival <= departure)) {
     throw new IfLiveError("The local flight cannot be represented as an IF schedule", "validation", 409);
   }
   const notes = (flight.notes ?? "").replace(/\[WNC schedule:[0-9a-f-]+\]/gi, "").trim();
   const briefing = [notes, scheduleMarker(flight.public_id)].filter(Boolean).join("\n\n");
   if (briefing.length > 4000) throw new IfLiveError("Flight notes plus the IF schedule reference exceed 4000 characters", "validation", 409);
-  return { schedule: { callsign, flightType: 1, originIcao: flight.departure, destinationIcao: flight.arrival, scheduledDepartureUtc: departure, scheduledArrivalUtc: arrival, briefing, flightPlan: null }, crew: crew.map(row => ({ userId: row.userId.toLowerCase(), role: row.role })) };
+  return { schedule: { callsign, flightType: 1, originIcao: flight.departure, destinationIcao: flight.arrival,
+    ...(departure !== null && arrival !== null ? { scheduledDepartureUtc: new Date(departure).toISOString(), scheduledArrivalUtc: new Date(arrival).toISOString() } : {}),
+    briefing, flightPlan: null }, crew: crew.map(row => ({ userId: row.userId.toLowerCase(), role: row.role })) };
 }
 
 /** Pure reconciliation logic. checkpoint stores only the desired, app-authored payload. */

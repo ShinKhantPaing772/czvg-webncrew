@@ -16,7 +16,7 @@ const flight: ScheduledFlight = {
   status: "approved", revision: 2, if_schedule_id: "linked-schedule", publishing_state: "queued",
   captain: { id: 1, name: "Local Captain", callsign: "WNC1" }, members: [],
 };
-const remote = { id: "external-schedule", callsign: "EXTERNAL8", originIcao: "KJFK", destinationIcao: "EGLL", scheduledDepartureUtc: "2026-10-04T18:00:00Z", scheduledArrivalUtc: "2026-10-05T01:00:00Z", status: 8, crew: [{ userId: "if-user", role: 0 }] };
+const remote = { id: "external-schedule", callsign: "EXTERNAL8", originIcao: "KJFK", destinationIcao: "EGLL", scheduledDepartureUtc: "2026-10-04T18:00:00Z", scheduledArrivalUtc: "2026-10-05T01:00:00Z", status: 8, crew: [{ userId: "if-user", role: 0 }], sequence: 1, fingerprint: "a".repeat(64), managedFlightId: null, editable: true };
 function snapshot(overrides: Record<string, unknown> = {}) {
   return { schedules: [remote], loadedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 60000).toISOString(), publishingReady: true, publishingDisabledReasons: [], ...overrides };
 }
@@ -39,91 +39,153 @@ async function render(admin = false, tail = aircraft, flights = [flight]) {
 function button(label: string) {
   return Array.from(document.querySelectorAll("button")).find(item => item.textContent?.trim() === label)!;
 }
+async function load() { await act(async () => button("Load IF schedules").click()); }
 
 describe("aircraft IF schedule view", () => {
-  it("loads schedules by local aircraft ID for live pilots and shows external flights without publishing controls", async () => {
+  it("makes no automatic request on opening, elapsed time, focus, or visibility", async () => {
+    vi.useFakeTimers();
     await render();
+    await act(async () => {
+      window.dispatchEvent(new Event("focus")); document.dispatchEvent(new Event("visibilitychange"));
+      vi.advanceTimersByTime(120000);
+    });
+    expect(mocks.fetch).not.toHaveBeenCalled();
+    expect(button("Load IF schedules")).toBeDefined();
+    await load();
     expect(mocks.fetch).toHaveBeenCalledWith("/api/scheduling/if/schedules?aircraftId=12", expect.objectContaining({ cache: "no-store" }));
     expect(document.body.textContent).toContain("EXTERNAL8 · KJFK → EGLL");
     expect(document.body.textContent).toContain("Delayed");
     expect(document.body.textContent).toContain("Captain assigned");
     expect(document.body.textContent).toContain("No local flight link");
     expect(button("Publish queued flights")).toBeUndefined();
-    expect(mocks.fetch.mock.calls.every(([, options]) => !options.method || options.method === "GET")).toBe(true);
+    expect(button("Edit IF schedule")).toBeUndefined();
   });
   it("does not make an IF request for a local-only aircraft", async () => {
     await render(false, { ...aircraft, if_aircraft_id: null });
     expect(mocks.fetch).not.toHaveBeenCalled();
+    expect(button("Load IF schedules")).toBeUndefined();
     expect(document.body.textContent).toContain("This aircraft uses local scheduling");
     expect(document.body.textContent).toContain("LOCAL4 · CYYZ → KJFK");
   });
-  it("links an IF schedule to its local flight without offering external edits", async () => {
-    mocks.fetch.mockResolvedValue(Response.json({ success: true, data: snapshot({ schedules: [{ ...remote, id: "linked-schedule", status: 1 }] }) }));
-    await render();
+  it("routes a managed IF schedule to its local flight rather than direct IF edits", async () => {
+    mocks.fetch.mockResolvedValue(Response.json({ success: true, data: snapshot({ schedules: [{ ...remote, id: "linked-schedule", status: 1, managedFlightId: flight.id, editable: false }] }) }));
+    await render(true); await load();
     expect(document.body.textContent).toContain("Linked to Crew Center");
-    await act(async () => button("View local flight").click());
+    expect(button("Edit IF schedule")).toBeUndefined();
+    await act(async () => button("View or amend local flight").click());
     expect(select).toHaveBeenCalledWith(flight);
     expect(mocks.fetch).toHaveBeenCalledTimes(1);
   });
-  it("expires temporary schedules within sixty seconds without hiding local flights", async () => {
+  it("keeps schedules visible after sixty seconds, warns, and only reloads on request", async () => {
     vi.useFakeTimers();
-    await render();
+    await render(); await load();
     await act(async () => vi.advanceTimersByTime(60000));
-    expect(document.body.textContent).not.toContain("EXTERNAL8");
-    expect(document.body.textContent).toContain("temporary IF schedules expired");
+    expect(document.body.textContent).toContain("EXTERNAL8");
+    expect(document.body.textContent).toContain("last refresh is over 60 seconds old");
+    expect(document.body.textContent).toContain("Last successful refresh:");
     expect(document.body.textContent).toContain("LOCAL4");
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+    await act(async () => button("Refresh IF schedules").click());
+    expect(document.body.textContent).not.toContain("last refresh is over 60 seconds old");
+    expect(mocks.fetch).toHaveBeenCalledTimes(2);
+  });
+  it("preserves the last successful schedules when an upstream refresh fails", async () => {
+    await render(); await load();
+    mocks.fetch.mockResolvedValue(Response.json({ success: false, error: "IF is temporarily unavailable" }, { status: 503 }));
     await act(async () => button("Refresh IF schedules").click());
     expect(document.body.textContent).toContain("EXTERNAL8");
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain("IF is temporarily unavailable");
+    expect(document.body.textContent).toContain("LOCAL4");
   });
-  it("clears schedules on a denied refresh while keeping local flights available", async () => {
-    await render();
-    mocks.fetch.mockResolvedValue(Response.json({ success: false, error: "Live Pilot award required" }, { status: 403 }));
+  it.each([401, 403])("clears schedules on a denied refresh (%s) while keeping local flights available", async status => {
+    await render(); await load();
+    mocks.fetch.mockResolvedValue(Response.json({ success: false, error: "Live Pilot award required" }, { status }));
     await act(async () => button("Refresh IF schedules").click());
     expect(document.body.textContent).not.toContain("EXTERNAL8");
     expect(document.querySelector('[role="alert"]')?.textContent).toContain("Live Pilot award required");
     expect(document.body.textContent).toContain("LOCAL4");
   });
+  it("clears schedules when the server reports the aircraft binding changed", async () => {
+    await render(); await load();
+    mocks.fetch.mockResolvedValue(Response.json({ success: false, code: "connection_changed", error: "Aircraft link changed" }, { status: 409 }));
+    await act(async () => button("Refresh IF schedules").click());
+    expect(document.body.textContent).not.toContain("EXTERNAL8");
+  });
   it("reports an empty IF itinerary without treating it as a failed read", async () => {
     mocks.fetch.mockResolvedValue(Response.json({ success: true, data: snapshot({ schedules: [] }) }));
-    await render();
+    await render(); await load();
     expect(document.body.textContent).toContain("No schedules returned by IF");
     expect(document.querySelector('[role="alert"]')).toBeNull();
   });
-  it("publishes only the selected aircraft's queued jobs with admin authentication and refreshes both views", async () => {
+  it("shows highest queue sequences first and never treats year-one defaults as real flight times", async () => {
+    mocks.fetch.mockResolvedValue(Response.json({ success: true, data: snapshot({ schedules: [
+      { ...remote, id: "first", callsign: "FIRST", sequence: 1, scheduledDepartureUtc: "0001-01-01T00:00:00Z", scheduledArrivalUtc: "0001-01-01T00:00:00Z" },
+      { ...remote, id: "third", callsign: "THIRD", sequence: 3 },
+      { ...remote, id: "second", callsign: "SECOND", sequence: 2 },
+    ] }) }));
+    await render(); await load();
+    const text = document.querySelector('[aria-label="Infinite Flight schedules"]')!.textContent!;
+    expect(text.indexOf("THIRD")).toBeLessThan(text.indexOf("SECOND"));
+    expect(text.indexOf("SECOND")).toBeLessThan(text.indexOf("FIRST"));
+    expect(text).toContain("Planned times not specified");
+    expect(text).not.toContain("Jan 1,");
+  });
+  it("reverses the provider's order when queue sequences are absent", async () => {
+    mocks.fetch.mockResolvedValue(Response.json({ success: true, data: snapshot({ schedules: [
+      { ...remote, id: "old", callsign: "OLD", sequence: null }, { ...remote, id: "new", callsign: "NEW", sequence: null },
+    ] }) }));
+    await render(); await load();
+    const text = document.querySelector('[aria-label="Infinite Flight schedules"]')!.textContent!;
+    expect(text.indexOf("NEW")).toBeLessThan(text.indexOf("OLD"));
+  });
+  it("offers admin external edits only for editable flights and explicitly locks arrived flights", async () => {
+    mocks.fetch.mockResolvedValue(Response.json({ success: true, data: snapshot({ schedules: [remote,
+      { ...remote, id: "done", callsign: "ARRIVED", status: 11, editable: false },
+    ] }) }));
+    await render(true); await load();
+    expect(document.body.textContent).toContain("Arrived flights are locked.");
+    expect(Array.from(document.querySelectorAll("button")).filter(item => item.textContent?.trim() === "Edit IF schedule")).toHaveLength(1);
+    await act(async () => button("Edit IF schedule").click());
+    expect(document.body.textContent).toContain("Edit Infinite Flight schedule");
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+  });
+  it("publishes only the selected aircraft's queued jobs without an implicit schedule reload", async () => {
     mocks.fetch.mockImplementation(async (path: string) => Response.json({ success: true, data: path.endsWith("/publish") ? { processed: 2, published: 1, disabled: false, states: { published: 1, conflict: 1 } } : snapshot() }));
-    await render(true);
+    await render(true); await load();
     expect(mocks.fetch).toHaveBeenCalledWith("/api/admin/scheduling/if/schedules?aircraftId=12", expect.any(Object));
     await act(async () => button("Publish queued flights").click());
     expect(mocks.fetch).toHaveBeenCalledWith("/api/admin/scheduling/if/publish", expect.objectContaining({ method: "POST", body: JSON.stringify({ aircraftId: 12 }) }));
     expect(refresh).toHaveBeenCalledOnce();
     expect(document.body.textContent).toContain("1 of 2 processed jobs synchronized with IF");
     expect(document.body.textContent).toContain("1 conflict");
-    expect(mocks.fetch.mock.calls.filter(([path]) => path.includes("/schedules?")).length).toBe(2);
+    expect(mocks.fetch.mock.calls.filter(([path]) => path.includes("/schedules?")).length).toBe(1);
   });
-  it("blocks publishing when its configuration is unavailable while allowing reads", async () => {
+  it("blocks publishing when its configuration is unavailable while allowing requested reads", async () => {
     mocks.fetch.mockResolvedValue(Response.json({ success: true, data: snapshot({ publishingReady: false, publishingDisabledReasons: ["Automatic IF publishing is disabled"] }) }));
-    await render(true);
+    await render(true); await load();
     expect(button("Publish queued flights").disabled).toBe(true);
     expect(document.body.textContent).toContain("Automatic IF publishing is disabled");
     expect(document.body.textContent).toContain("EXTERNAL8");
   });
-  it("ignores a previous aircraft's response after the selected aircraft changes", async () => {
+  it("ignores a previous aircraft's response after the selected aircraft changes without loading the new aircraft", async () => {
     let release!: (value: Response) => void;
     mocks.fetch.mockImplementationOnce(() => new Promise<Response>(resolve => { release = resolve; }));
-    await render();
+    await render(); await load();
     await render(false, { ...aircraft, id: 13, registration: "C-NEXT", if_aircraft_id: "other-aircraft" });
     await act(async () => release(Response.json({ success: true, data: snapshot({ schedules: [{ ...remote, callsign: "STALE" }] }) })));
     expect(document.body.textContent).not.toContain("STALE");
     expect(document.body.textContent).toContain("C-NEXT");
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+    expect(button("Load IF schedules")).toBeDefined();
   });
-  it("does not replace a new aircraft's schedules when an earlier publication finishes", async () => {
+  it("does not update a new aircraft's schedules when an earlier publication finishes", async () => {
     let release!: (value: Response) => void;
     mocks.fetch.mockImplementation(async (path: string) => path.endsWith("/publish")
       ? new Promise<Response>(resolve => { release = resolve; })
       : Response.json({ success: true, data: snapshot({ schedules: [{ ...remote, callsign: path.endsWith("=13") ? "NEW13" : "OLD12" }] }) }));
-    await render(true);
+    await render(true); await load();
     await act(async () => button("Publish queued flights").click());
-    await render(true, { ...aircraft, id: 13, registration: "C-NEXT" });
+    await render(true, { ...aircraft, id: 13, registration: "C-NEXT" }); await load();
     await act(async () => release(Response.json({ success: true, data: { processed: 1, published: 1, disabled: false } })));
     expect(document.body.textContent).toContain("NEW13");
     expect(document.body.textContent).not.toContain("OLD12");

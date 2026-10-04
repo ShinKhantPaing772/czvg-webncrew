@@ -34,6 +34,7 @@ type Row = Record<string, any>;
 type TableName = "Pilot" | "Aircraft" | "AwardGranted" | "LiveAircraft" | "LiveFlight" | "LiveFlightMember" | "LiveScheduleEvent" | "IfLiveConnection" | "IfLiveOutbox";
 let rows: Record<TableName, Row[]>;
 let eligiblePilots: Set<number>;
+let ifAircraftLockFree: number | null;
 const captain = { id: 1, admin: false };
 const administrator = { id: 9, admin: true };
 const transaction = { LOCK: { UPDATE: "UPDATE" } };
@@ -109,9 +110,12 @@ function installTable(name: TableName) {
 }
 
 function flight(overrides: Row = {}) {
+  const aircraftId = overrides.live_aircraft_id ?? 1;
+  const nextOrder = Math.max(0, ...rows.LiveFlight.filter(row => row.live_aircraft_id === aircraftId).map(row => row.queue_order ?? 0)) + 1;
   const row = {
     id: rows.LiveFlight.length + 1, live_aircraft_id: 1, captain_id: 1,
     departure: "CYYZ", arrival: "KJFK", scheduled_departure: at(10), scheduled_arrival: at(12),
+    queue_order: overrides.status === "pending" ? null : nextOrder,
     status: "approved", callsign: null, notes: null, revision: 1, published_revision: 0,
     publishing_state: "local", if_schedule_id: null, updated_at: new Date(), ...overrides,
     public_id: `40000000-0000-0000-0000-${String(rows.LiveFlight.length + 1).padStart(12, "0")}`,
@@ -136,7 +140,8 @@ beforeEach(() => {
   };
   for (const name of Object.keys(rows) as TableName[]) installTable(name);
   mocks.eligible.mockReset().mockImplementation(async id => eligiblePilots.has(id));
-  mocks.query.mockReset().mockResolvedValue([{ name: "live_scheduling_mutex" }]);
+  ifAircraftLockFree = 1;
+  mocks.query.mockReset().mockImplementation(async (sql: string) => sql.includes("IS_FREE_LOCK") ? [{ available: ifAircraftLockFree }] : [{ name: "live_scheduling_mutex" }]);
   mocks.transaction.mockReset().mockImplementation(async (_options, work) => {
     const before = structuredClone(rows);
     try { return await work(transaction); }
@@ -156,6 +161,12 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe("database setup diagnostics", () => {
+  it("identifies the optional-times migration for a missing queue order column", () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(schedulingFailure({ original: { code: "ER_BAD_FIELD_ERROR", sqlMessage: "Unknown column 'LiveFlight.queue_order' in 'field list'" } })).toEqual({
+      status: 503, error: "Live scheduling needs its optional-times migration. Apply migrations/20261004_optional_live_flight_times.sql first.",
+    });
+  });
   it("keeps an IF authorization failure separate from the pilot's site access", () => {
     expect(schedulingFailure(new IfLiveError("Reconnect the organization's IF account", "reauth_required", 401))).toEqual({ status: 503, error: "Reconnect the organization's IF account" });
   });
@@ -176,6 +187,61 @@ describe("database setup diagnostics", () => {
 });
 
 describe("flight proposals", () => {
+  it("stores an untimed proposal without reserving a queue position and assigns one only on approval", async () => {
+    await requestFlight(captain, proposal({ scheduled_departure: null, scheduled_arrival: null }));
+    expect(rows.LiveFlight[0]).toMatchObject({ scheduled_departure: null, scheduled_arrival: null, queue_order: null, status: "pending" });
+    await changeFlight(administrator, { action: "approve", flight_id: 1 });
+    expect(rows.LiveFlight[0]).toMatchObject({ queue_order: 1, status: "approved", scheduled_departure: null, scheduled_arrival: null });
+    expect(rows.LiveAircraft[0].current_airport).toBe("CYYZ");
+  });
+
+  it("appends approval after existing aircraft reservations and completed history without using dates", async () => {
+    flight({ status: "completed", queue_order: 7 });
+    flight({ departure: "CYYZ", arrival: "KBOS", queue_order: 8, scheduled_departure: null, scheduled_arrival: null });
+    await requestFlight(captain, { live_aircraft_id: 1, arrival: "CYUL" });
+    expect(rows.LiveFlight[2].departure).toBe("KBOS");
+    await changeFlight(administrator, { action: "approve", flight_id: 3 });
+    expect(rows.LiveFlight[2]).toMatchObject({ queue_order: 9, status: "approved" });
+    await changeFlight(administrator, { action: "amend", flight_id: 3, notes: "Updated notes" });
+    expect(rows.LiveFlight[2].queue_order).toBe(9);
+  });
+
+  it("allows an administrator to clear both planned times while preserving the aircraft queue", async () => {
+    flight();
+    await changeFlight(administrator, { action: "amend", flight_id: 1, scheduled_departure: null, scheduled_arrival: null });
+    expect(rows.LiveFlight[0]).toMatchObject({ queue_order: 1, scheduled_departure: null, scheduled_arrival: null, status: "approved" });
+    await expect(changeFlight(administrator, { action: "amend", flight_id: 1, scheduled_departure: at(10).toISOString() })).rejects.toMatchObject({ status: 400 });
+    expect(rows.LiveFlight[0].scheduled_departure).toBeNull();
+  });
+
+  it("rejects local changes to an IF aircraft while its schedule writer holds the aircraft lock", async () => {
+    rows.LiveAircraft[0].if_aircraft_id = IF_AIRCRAFT;
+    const pending = flight({ status: "pending" });
+    ifAircraftLockFree = 0;
+    await expect(changeFlight(administrator, { flight_id: pending.id, action: "approve" })).rejects.toMatchObject({ status: 409 });
+    expect(rows.LiveFlight[0].status).toBe("pending");
+    expect(rows.LiveScheduleEvent).toHaveLength(0);
+    expect(rows.IfLiveOutbox).toHaveLength(0);
+    expect(mocks.query).toHaveBeenCalledWith("SELECT IS_FREE_LOCK(:lockName) AS available", expect.objectContaining({
+      transaction, replacements: { lockName: "wnc_if_aircraft_1" },
+    }));
+  });
+
+  it("fails closed when IF aircraft lock ownership cannot be checked", async () => {
+    rows.LiveAircraft[0].if_aircraft_id = IF_AIRCRAFT;
+    ifAircraftLockFree = null;
+    await expect(requestFlight(captain, proposal())).rejects.toMatchObject({ status: 409 });
+    expect(rows.LiveFlight).toHaveLength(0);
+    expect(rows.LiveScheduleEvent).toHaveLength(0);
+  });
+
+  it("allows manual aircraft requests without querying an IF writer lock", async () => {
+    ifAircraftLockFree = 0;
+    await requestFlight(captain, proposal());
+    expect(rows.LiveFlight).toHaveLength(1);
+    expect(mocks.query.mock.calls.some(([sql]) => sql.includes("IS_FREE_LOCK"))).toBe(false);
+  });
+
   it("accepts an optional callsign and fallback origin without prematurely moving the aircraft", async () => {
     rows.LiveAircraft[0].current_airport = null;
     await requestFlight(captain, proposal({ departure: " cyyz " }));
@@ -251,6 +317,24 @@ describe("captain and administrator authority", () => {
 });
 
 describe("crew eligibility and capacity", () => {
+  it("rejects untimed cross-aircraft captain commitments but allows a continuous same-aircraft queue", async () => {
+    flight({ scheduled_departure: null, scheduled_arrival: null });
+    flight({ live_aircraft_id: 2, status: "pending", scheduled_departure: at(20), scheduled_arrival: at(21) });
+    rows.LiveAircraft.push({ ...rows.LiveAircraft[0], id: 2, registration: "C-OTHER" });
+    await expect(changeFlight(administrator, { action: "approve", flight_id: 2 })).rejects.toThrow("unspecified times");
+    await requestFlight(captain, { live_aircraft_id: 1, arrival: "KBOS" });
+    await changeFlight(administrator, { action: "approve", flight_id: 3 });
+    expect(rows.LiveFlight[2]).toMatchObject({ status: "approved", queue_order: 2, departure: "KJFK" });
+  });
+
+  it("blocks a crew join approval when either aircraft's reservation has unspecified times", async () => {
+    flight({ scheduled_departure: null, scheduled_arrival: null });
+    member(2);
+    flight({ live_aircraft_id: 2, captain_id: 2, scheduled_departure: at(20), scheduled_arrival: at(21) });
+    await expect(changeFlight(captain, { action: "approve_join", flight_id: 1, member_id: 1 })).rejects.toThrow("unspecified times");
+    expect(rows.LiveFlightMember[0].status).toBe("pending");
+  });
+
   it("admits at most two additional approved crew while pending requests consume no seats", async () => {
     flight(); member(2, "approved"); member(3); member(4);
     await changeFlight(captain, { flight_id: 1, action: "approve_join", member_id: 2 });
@@ -576,7 +660,7 @@ describe("start and completion policies", () => {
 
   it("expires a departure check that waited too long for local locks", async () => {
     vi.useFakeTimers(); linkedFlight();
-    mocks.query.mockImplementation(async () => { vi.setSystemTime(Date.now() + 31_000); return [{ name: "live_scheduling_mutex" }]; });
+    mocks.query.mockImplementation(async (sql: string) => { vi.setSystemTime(Date.now() + 31_000); return sql.includes("IS_FREE_LOCK") ? [{ available: 1 }] : [{ name: "live_scheduling_mutex" }]; });
     await expect(changeFlight(captain, { flight_id: 1, action: "start" })).rejects.toThrow("changed during the departure check");
     expect(rows.LiveFlight[0].status).toBe("approved");
   });

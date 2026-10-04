@@ -99,7 +99,7 @@ export function loadIfAircraftPositions(aircraftIds: number[]) {
         }
         try {
           if (ifBudgetRemainingMs() < 750) throw new IfLiveError("", "budget", 503, 15);
-          const snapshot = await getIfPositionSnapshot(authorization.token, remoteId!);
+          const snapshot = await getIfPositionSnapshot(authorization.token, remoteId!, { fresh: true });
           if (!Number.isFinite(snapshot.expiresAt)) throw new IfLiveError("", "invalid_response", 502);
           const position: IfPositionView = { state: snapshot.position.state, isOnGround: snapshot.position.isOnGround,
             latitude: snapshot.position.latitude, longitude: snapshot.position.longitude, updatedAt: snapshot.position.updatedAt };

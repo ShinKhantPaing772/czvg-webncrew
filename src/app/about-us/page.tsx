@@ -5,40 +5,7 @@ import { ArrowRight, Building2, Globe2, Plane } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
-
-const airlines = [
-  {
-    name: "China Southern Airlines",
-    logo: "https://upload.wikimedia.org/wikipedia/en/b/b4/China_Southern_Airlines_logo.svg",
-    description:
-      "Our flagship carrier with extensive domestic and international routes.",
-  },
-  {
-    name: "Xiamen Air",
-    logo: "https://upload.wikimedia.org/wikipedia/en/c/c8/XiamenAir.svg",
-    description: "Based in Xiamen, serving destinations across Asia and beyond.",
-  },
-  {
-    name: "Chongqing Airlines",
-    logo: "https://upload.wikimedia.org/wikipedia/commons/0/0f/Chongqing_Airlines_logo.png",
-    description: "Operating from Chongqing to cities throughout China.",
-  },
-  {
-    name: "Chengdu Airlines",
-    logo: "https://upload.wikimedia.org/wikipedia/en/c/c1/Chengdu_Airlines_logo.png",
-    description: "Focused on routes from Chengdu to major Chinese cities.",
-  },
-  {
-    name: "Hebei Airlines",
-    logo: "https://upload.wikimedia.org/wikipedia/en/0/0b/HebeiAirLogo.png",
-    description: "Connecting Hebei province with destinations across China.",
-  },
-  {
-    name: "Jiangxi Air",
-    logo: "https://upload.wikimedia.org/wikipedia/en/4/4a/Jiangxi_Air_logo.svg",
-    description: "Serving routes from Nanchang to major Chinese destinations.",
-  },
-];
+import { groupAirlines } from "@/lib/group-airlines";
 
 const facts = [
   { icon: Building2, label: "Founded", value: "July 2021" },
@@ -120,33 +87,37 @@ export default function AboutPage() {
         <section className="site-section bg-slate-50">
           <div className="site-container">
             <div className="max-w-3xl">
-              <p className="site-eyebrow">Airlines we operate</p>
+              <p className="site-eyebrow">Our group airlines</p>
               <h2 className="site-heading mt-3">
-                Six carriers, one connected virtual group.
+                One group, one connected aviation network.
               </h2>
+              <p className="site-copy mt-5">
+                Our virtual group represents the passenger and cargo airlines
+                within the China Southern Air Holding network.
+              </p>
             </div>
             <div className="mt-10 grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
-              {airlines.map((airline) => (
-                <div key={airline.name} className="site-card p-5">
+              {groupAirlines.map((airline) => (
+                <article key={airline.name} className="site-card p-5">
                   <div className="flex h-28 items-center justify-center rounded-md bg-slate-50 p-4">
                     <Image
                       src={airline.logo}
                       alt={`${airline.name} logo`}
                       width={180}
                       height={90}
-                      unoptimized={airline.logo.startsWith(
-                        "https://upload.wikimedia.org"
-                      )}
-                      className="max-h-20 w-full object-contain"
+                      className="h-20 w-full object-contain"
                     />
                   </div>
                   <h3 className="mt-5 text-lg font-bold text-slate-950">
                     {airline.name}
                   </h3>
+                  {airline.type === "cargo" && (
+                    <span className="site-badge mt-2">CARGO</span>
+                  )}
                   <p className="mt-2 text-sm leading-6 text-slate-600">
                     {airline.description}
                   </p>
-                </div>
+                </article>
               ))}
             </div>
           </div>

@@ -29,6 +29,7 @@ afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 async function submit() {
@@ -37,7 +38,104 @@ async function submit() {
   await act(async () => { form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
 }
 
+async function change(selector: string, value: string) {
+  const field = document.querySelector(selector) as HTMLInputElement | HTMLSelectElement;
+  await act(async () => {
+    if (field instanceof HTMLSelectElement) {
+      field.value = value; field.dispatchEvent(new Event("change", { bubbles: true }));
+    } else {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(field, value);
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+  });
+}
+async function toggleTimes() {
+  await act(async () => (document.querySelector('input[type="checkbox"]') as HTMLInputElement).click());
+}
+
 describe("live flight request form", () => {
+  it("suggests optional UTC times after the last approved arrival and derives that leg's destination", async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-02T08:00:00Z"));
+    const save = vi.fn().mockResolvedValue(undefined);
+    const queue: ScheduledFlight[] = [
+      { ...flight, id: 2, status: "approved", departure: "KJFK", arrival: "EGLL", scheduled_departure: "2026-10-02T12:00:00Z", scheduled_arrival: "2026-10-02T18:30:30Z" },
+      { ...flight, status: "approved" },
+      { ...flight, id: 3, status: "pending", departure: "EGLL", arrival: "LFPG", scheduled_departure: "2026-10-03T20:00:00Z", scheduled_arrival: "2026-10-03T21:00:00Z" },
+    ];
+    await act(async () => root.render(<FlightForm data={{ ...data, flights: queue }} onClose={vi.fn()} onSave={save} />));
+    await toggleTimes();
+    expect((document.querySelector("#flight-departure-time") as HTMLInputElement).value).toBe("2026-10-02T18:31");
+    expect((document.querySelector("#flight-arrival-time") as HTMLInputElement).value).toBe("2026-10-02T19:31");
+    expect((document.querySelector("#flight-departure") as HTMLInputElement).value).toBe("EGLL");
+    await change("#flight-arrival", "LFPG");
+    await submit();
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ departure: "EGLL", arrival: "LFPG", scheduled_departure: "2026-10-02T18:31:00.000Z" }));
+  });
+
+  it("recalculates suggested times when a new request selects another aircraft", async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-02T08:00:00Z"));
+    const fleetData: SchedulingData = { ...data,
+      aircraft: [...data.aircraft, { ...data.aircraft[0], id: 2, registration: "C-WNCC", current_airport: "CYVR" }],
+      flights: [{ ...flight, status: "in_progress" }],
+    };
+    await act(async () => root.render(<FlightForm data={fleetData} onClose={vi.fn()} onSave={vi.fn()} />));
+    await toggleTimes();
+    expect((document.querySelector("#flight-departure-time") as HTMLInputElement).value).toBe("2026-10-02T11:30");
+    await change("#flight-aircraft", "2");
+    expect((document.querySelector("#flight-departure-time") as HTMLInputElement).value).toBe("2026-10-02T09:00");
+    expect((document.querySelector("#flight-arrival-time") as HTMLInputElement).value).toBe("2026-10-02T10:00");
+    expect((document.querySelector("#flight-departure") as HTMLInputElement).value).toBe("CYVR");
+  });
+
+  it("lets a new request restore suggested times without making manual times mandatory to enter", async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-02T08:00:00Z"));
+    await act(async () => root.render(<FlightForm data={{ ...data, flights: [] }} onClose={vi.fn()} onSave={vi.fn()} />));
+    await toggleTimes();
+    await change("#flight-departure-time", "2026-10-05T20:00");
+    const suggested = [...document.querySelectorAll("button")].find(button => button.textContent === "Use suggested times")!;
+    await act(async () => suggested.click());
+    expect((document.querySelector("#flight-departure-time") as HTMLInputElement).value).toBe("2026-10-02T09:00");
+    expect((document.querySelector("#flight-arrival-time") as HTMLInputElement).value).toBe("2026-10-02T10:00");
+  });
+
+  it("submits a new flight with unspecified times without assigning hidden clock values", async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    const untimed = { ...flight, status: "approved" as const, queue_order: 5, scheduled_departure: null, scheduled_arrival: null };
+    await act(async () => root.render(<FlightForm data={{ ...data, flights: [untimed] }} onClose={vi.fn()} onSave={save} />));
+    expect(document.querySelector("#flight-departure-time")).toBeNull();
+    expect((document.querySelector("#flight-departure") as HTMLInputElement).value).toBe("KJFK");
+    await change("#flight-arrival", "KBOS");
+    await submit();
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ departure: "KJFK", arrival: "KBOS", scheduled_departure: null, scheduled_arrival: null }));
+  });
+
+  it("keeps suggested times after earlier timed reservations when the final queued leg is untimed", async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-02T08:00:00Z"));
+    const reserved: ScheduledFlight[] = [{ ...flight, status: "approved", queue_order: 1 },
+      { ...flight, id: 2, status: "approved", queue_order: 2, departure: "KJFK", arrival: "KBOS", scheduled_departure: null, scheduled_arrival: null }];
+    await act(async () => root.render(<FlightForm data={{ ...data, flights: reserved }} onClose={vi.fn()} onSave={vi.fn()} />));
+    await toggleTimes();
+    expect((document.querySelector("#flight-departure-time") as HTMLInputElement).value).toBe("2026-10-02T11:30");
+    expect((document.querySelector("#flight-departure") as HTMLInputElement).value).toBe("KBOS");
+  });
+
+  it("lets existing planned flights explicitly clear both times", async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    await act(async () => root.render(<FlightForm data={data} flight={flight} onClose={vi.fn()} onSave={save} />));
+    await toggleTimes();
+    await submit();
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ scheduled_departure: null, scheduled_arrival: null }));
+  });
+
+  it("requires both UTC times when the optional times checkbox is selected", async () => {
+    const save = vi.fn();
+    await act(async () => root.render(<FlightForm data={data} flight={flight} onClose={vi.fn()} onSave={save} />));
+    await change("#flight-arrival-time", "");
+    await submit();
+    expect(save).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain("both UTC times");
+  });
+
   it("submits UTC dates and an optional callsign without changing the edited aircraft", async () => {
     const save = vi.fn().mockResolvedValue(undefined);
     const close = vi.fn();

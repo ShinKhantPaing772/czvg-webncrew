@@ -24,7 +24,7 @@ beforeEach(() => {
   vi.stubEnv("IF_LIVE_CLIENT_ID", "ifc_test"); vi.stubEnv("IF_LIVE_CLIENT_SECRET", "client-secret"); vi.stubEnv("IF_LIVE_TOKEN_ENCRYPTION_KEY", Buffer.alloc(32, 7).toString("base64"));
   vi.stubEnv("IF_LIVE_REDIRECT_URI", "https://example.com/api/admin/scheduling/if/callback"); vi.stubEnv("IF_LIVE_REVOCATION_URL", "https://api.infiniteflight.com/supported-test-revoke");
   job = { id: 1, flight_id: 1, revision: 1, state: "queued", attempts: 0, next_attempt_at: new Date(0), get: vi.fn(() => "sync"), update: vi.fn(async function(this: any, values: any) { Object.assign(this, values); return this; }) };
-  flight = { id: 1, public_id: UUID, live_aircraft_id: 7, captain_id: 42, callsign: null, departure: "CYYZ", arrival: "CYVR", scheduled_departure: new Date("2026-10-04T10:00:00Z"), scheduled_arrival: new Date("2026-10-04T15:00:00Z"), status: "approved", notes: null, revision: 1, published_revision: 0, publishing_state: "queued", if_schedule_id: null, last_published_payload: null, update: vi.fn(async function(this: any, values: any) { Object.assign(this, values); return this; }) };
+  flight = { id: 1, public_id: UUID, live_aircraft_id: 7, queue_order: 1, captain_id: 42, callsign: null, departure: "CYYZ", arrival: "CYVR", scheduled_departure: new Date("2026-10-04T10:00:00Z"), scheduled_arrival: new Date("2026-10-04T15:00:00Z"), status: "approved", notes: null, revision: 1, published_revision: 0, publishing_state: "queued", if_schedule_id: null, last_published_payload: null, update: vi.fn(async function(this: any, values: any) { Object.assign(this, values); return this; }) };
   lockTransaction = { LOCK: { UPDATE: "UPDATE" }, commit: vi.fn(async () => undefined) };
   mocks.transaction.mockImplementation(async (callback: any) => callback ? callback(lockTransaction) : lockTransaction);
   mocks.query.mockImplementation(async (query: string, options: any) => query.includes("FROM if_live_outbox AS pending")
@@ -43,6 +43,22 @@ beforeEach(() => {
 afterEach(() => { vi.resetAllMocks(); vi.unstubAllEnvs(); });
 
 describe("IF durable publishing worker", () => {
+  it("publishes an untimed local flight without transmitting placeholder or null timestamps", async () => {
+    flight.scheduled_departure = null; flight.scheduled_arrival = null;
+    const payload = buildIfPayload(flight, [{ userId: UUID, role: 0 }]);
+    const remote = { ...payload.schedule, id: REMOTE_ID, aircraftId: UUID, organizationId: UUID, status: 1, scheduledDepartureUtc: "0001-01-01T00:00:00", scheduledArrivalUtc: "0001-01-01T00:00:00", crew: [] };
+    mocks.schedules.mockReset().mockResolvedValueOnce([]).mockResolvedValue([remote]); mocks.create.mockResolvedValue(remote); mocks.putCrew.mockResolvedValue({ ...remote, crew: payload.crew });
+    expect(await runIfLivePublisher()).toMatchObject({ published: 1, states: { published: 1 } });
+    expect(mocks.create.mock.calls[0][2]).not.toHaveProperty("scheduledDepartureUtc"); expect(mocks.create.mock.calls[0][2]).not.toHaveProperty("scheduledArrivalUtc");
+    const stored = mocks.liveFlight.update.mock.calls.find(([values]) => values.last_published_payload)?.[0].last_published_payload;
+    expect(stored.schedule).not.toHaveProperty("scheduledDepartureUtc"); expect(JSON.stringify(stored)).not.toContain("0001-01-01");
+  });
+  it("preserves local untimed approval when IF requires planned times and denies the write", async () => {
+    flight.scheduled_departure = null; flight.scheduled_arrival = null;
+    mocks.create.mockRejectedValue(new IfLiveError("IF rejected the operation (error 10)", "upstream_rejected", 400));
+    expect(await runIfLivePublisher()).toMatchObject({ published: 0, states: { failed: 1 } });
+    expect(mocks.create).toHaveBeenCalledOnce(); expect(flight.status).toBe("approved"); expect(mocks.putCrew).not.toHaveBeenCalled();
+  });
   it("does no queue or IF work until all integration gates are enabled", async () => {
     vi.stubEnv("IF_LIVE_DURABLE_BINDINGS_ALLOWED", "false");
     expect(await runIfLivePublisher()).toMatchObject({ disabled: true, processed: 0 }); expect(mocks.outbox.findAll).not.toHaveBeenCalled(); expect(mocks.token).not.toHaveBeenCalled();
@@ -103,10 +119,10 @@ describe("IF durable publishing worker", () => {
     const nextRemoteId = "50000000-0000-0000-0000-000000000005";
     const payload = buildIfPayload(flight, [{ userId: UUID, role: 0 }]);
     const current = { ...payload.schedule, id: REMOTE_ID, aircraftId: UUID, organizationId: UUID, status: 1, crew: payload.crew };
-    const nextPayload = buildIfPayload({ ...flight, id: 2, public_id: nextPublicId, departure: "CYVR", arrival: "CYYZ", scheduled_departure: new Date("2026-10-04T16:00:00Z"), scheduled_arrival: new Date("2026-10-04T21:00:00Z") }, payload.crew);
+    const nextPayload = buildIfPayload({ ...flight, id: 2, public_id: nextPublicId, queue_order: 2, departure: "CYVR", arrival: "CYYZ", scheduled_departure: new Date("2026-10-04T16:00:00Z"), scheduled_arrival: new Date("2026-10-04T21:00:00Z") }, payload.crew);
     const next = { ...current, ...nextPayload.schedule, id: nextRemoteId };
     mocks.schedules.mockReset().mockResolvedValueOnce([next]).mockResolvedValue([next, current]);
-    mocks.liveFlight.findAll.mockImplementation(async (options: any) => options.attributes?.[0] === "id" ? [] : typeof options.where.status === "object" ? [flight, { ...flight, id: 2, public_id: nextPublicId, departure: "CYVR", arrival: "CYYZ", scheduled_departure: new Date(nextPayload.schedule.scheduledDepartureUtc), scheduled_arrival: new Date(nextPayload.schedule.scheduledArrivalUtc), if_schedule_id: nextRemoteId, last_published_payload: nextPayload, published_revision: 1 }] : []);
+    mocks.liveFlight.findAll.mockImplementation(async (options: any) => options.attributes?.[0] === "id" ? [] : typeof options.where.status === "object" ? [flight, { ...flight, id: 2, public_id: nextPublicId, queue_order: 2, departure: "CYVR", arrival: "CYYZ", scheduled_departure: new Date(nextPayload.schedule.scheduledDepartureUtc!), scheduled_arrival: new Date(nextPayload.schedule.scheduledArrivalUtc!), if_schedule_id: nextRemoteId, last_published_payload: nextPayload, published_revision: 1 }] : []);
     const result = await runIfLivePublisher(); expect(result.published).toBe(1);
     expect(mocks.reorder).toHaveBeenCalledWith("if-access-token", UUID, REMOTE_ID, null);
     expect(mocks.schedules).toHaveBeenNthCalledWith(1, "if-access-token", UUID, { fresh: true });
@@ -142,7 +158,7 @@ describe("IF durable publishing worker", () => {
     await runIfLivePublisher();
     const [sql, options] = selectionQueries()[0];
     expect(sql).toContain("IS_FREE_LOCK(CONCAT('wnc_if_aircraft_', current_flight.live_aircraft_id)) = 1");
-    expect(sql).toContain("earlier_flight.scheduled_departure < current_flight.scheduled_departure");
+    expect(sql).toContain("earlier_flight.queue_order < current_flight.queue_order");
     expect(sql).toContain("earlier_job.state <> 'done'");
     expect(String(sql).indexOf("NOT EXISTS")).toBeLessThan(String(sql).indexOf("LIMIT :limit"));
     expect(options).toMatchObject({ mapToModel: true, replacements: { limit: 10, maxAttempts: 5 } });
@@ -172,13 +188,13 @@ describe("IF durable publishing worker", () => {
     expect(mocks.query.mock.calls.some(([sql]) => String(sql).includes("RELEASE_LOCK"))).toBe(true);
   });
 
-  it("uses the current flight times when checking a predecessor after selection", async () => {
-    const amendedDeparture = new Date("2026-10-04T12:00:00Z");
-    mocks.liveFlight.findByPk.mockImplementation(async (_id: number, options: any) => options?.transaction ? { ...flight, scheduled_departure: amendedDeparture } : flight);
+  it("uses the current queue position when checking a predecessor after selection", async () => {
+    const amendedOrder = 20;
+    mocks.liveFlight.findByPk.mockImplementation(async (_id: number, options: any) => options?.transaction ? { ...flight, queue_order: amendedOrder } : flight);
     mocks.liveFlight.findAll.mockResolvedValue([{ id: 99 }]); mocks.outbox.count.mockResolvedValue(1);
     expect(await runIfLivePublisher()).toMatchObject({ processed: 0 });
     const lookup = mocks.liveFlight.findAll.mock.calls[0][0];
-    expect(lookup.where.scheduled_departure[Op.lt]).toEqual(amendedDeparture);
+    expect(lookup.where.queue_order[Op.lt]).toEqual(amendedOrder);
     expect(mocks.create).not.toHaveBeenCalled();
   });
 
@@ -307,7 +323,7 @@ describe.runIf(Boolean(process.env.SCHEDULING_TEST_DATABASE_URL?.trim()))("IF pu
     sqlDatabase = new Sequelize(databaseUrl, { logging: false, pool: { max: 2, min: 0 }, retry: { max: 0 } });
     sqlTransaction = await sqlDatabase.transaction();
     // Temporary tables shadow these names only on this pinned connection.
-    await sqlDatabase.query("CREATE TEMPORARY TABLE live_flights (id INT PRIMARY KEY, live_aircraft_id INT NOT NULL, revision INT NOT NULL, status VARCHAR(24) NOT NULL, scheduled_departure DATETIME(3) NOT NULL, KEY flight_queue (live_aircraft_id, status, scheduled_departure))", { transaction: sqlTransaction });
+    await sqlDatabase.query("CREATE TEMPORARY TABLE live_flights (id INT PRIMARY KEY, live_aircraft_id INT NOT NULL, revision INT NOT NULL, status VARCHAR(24) NOT NULL, scheduled_departure DATETIME(3) NULL, queue_order INT NULL, KEY flight_queue (live_aircraft_id, status, queue_order))", { transaction: sqlTransaction });
     await sqlDatabase.query("CREATE TEMPORARY TABLE if_live_outbox (id INT PRIMARY KEY, flight_id INT NOT NULL, revision INT NOT NULL, state VARCHAR(24) NOT NULL, attempts INT NOT NULL, next_attempt_at DATETIME(3) NOT NULL, created_at DATETIME(3) NOT NULL, lease_until DATETIME(3) NULL, KEY flight_revision (flight_id, revision), KEY ready (state, next_attempt_at))", { transaction: sqlTransaction });
     for (const tables of [flightTables, outboxTables]) for (const table of tables.slice(1)) await sqlDatabase.query(`CREATE TEMPORARY TABLE ${table} LIKE ${tables[0]}`, { transaction: sqlTransaction });
   }, 20_000);
@@ -328,11 +344,11 @@ describe.runIf(Boolean(process.env.SCHEDULING_TEST_DATABASE_URL?.trim()))("IF pu
     const flights = jobs.map(row => ({ ...flight, id: row.flight_id, live_aircraft_id: row.id <= 10 ? busyTail : healthyTail,
       revision: options.superseded && row.id <= 10 ? 2 : 1 }));
     for (const row of flights) {
-      await sqlDatabase.query("INSERT INTO live_flights VALUES (:id, :tail, :revision, 'approved', '2026-10-04 10:00:00')", { replacements: { id: row.id, tail: row.live_aircraft_id, revision: row.revision }, transaction: sqlTransaction });
+      await sqlDatabase.query("INSERT INTO live_flights VALUES (:id, :tail, :revision, 'approved', '2026-10-04 10:00:00', 1)", { replacements: { id: row.id, tail: row.live_aircraft_id, revision: row.revision }, transaction: sqlTransaction });
       await sqlDatabase.query("INSERT INTO if_live_outbox VALUES (:id, :id, 1, 'queued', 0, '2000-01-01', :created, NULL)", { replacements: { id: row.id, created: new Date(1000 * row.id) }, transaction: sqlTransaction });
     }
     if (options.predecessor || options.removal) {
-      await sqlDatabase.query("INSERT INTO live_flights VALUES (99, :tail, 1, :status, '2026-10-04 09:00:00')", { replacements: { tail: busyTail, status: options.removal ? "needs_review" : "approved" }, transaction: sqlTransaction });
+      await sqlDatabase.query("INSERT INTO live_flights VALUES (99, :tail, 1, :status, '2026-10-04 09:00:00', 0)", { replacements: { tail: busyTail, status: options.removal ? "needs_review" : "approved" }, transaction: sqlTransaction });
       await sqlDatabase.query("INSERT INTO if_live_outbox VALUES (99, 99, 1, 'conflict', 1, '2000-01-01', '2000-01-01', NULL)", { transaction: sqlTransaction });
     }
     await copyFixtureTables();
@@ -346,8 +362,8 @@ describe.runIf(Boolean(process.env.SCHEDULING_TEST_DATABASE_URL?.trim()))("IF pu
     mocks.outbox.findAll.mockImplementation(async (queryOptions: any) => queryOptions.where.state === "processing" ? [] : jobs.slice(0, queryOptions.limit));
     mocks.outbox.findByPk.mockImplementation(async (id: number) => jobs.find(row => row.id === id));
     mocks.liveFlight.findByPk.mockImplementation(async (id: number) => flights.find(row => row.id === id));
-    mocks.liveFlight.findAll.mockImplementation(async (queryOptions: any) => queryOptions.attributes?.includes("scheduled_departure")
-      ? options.removal && queryOptions.where.live_aircraft_id === busyTail ? [{ id: 99, scheduled_departure: new Date("2026-10-04T09:00:00Z") }] : []
+    mocks.liveFlight.findAll.mockImplementation(async (queryOptions: any) => queryOptions.attributes?.includes("queue_order")
+      ? options.removal && queryOptions.where.live_aircraft_id === busyTail ? [{ id: 99, queue_order: 0 }] : []
       : typeof queryOptions.where.status === "object" ? [{ public_id: UUID }]
       : options.predecessor && queryOptions.where.live_aircraft_id === busyTail ? [{ id: 99 }] : []);
     mocks.outbox.count.mockImplementation(async (queryOptions: any) => (options.predecessor || options.removal) && typeof queryOptions.where.flight_id === "object" ? 1 : 0);
@@ -423,7 +439,7 @@ describe.runIf(Boolean(process.env.SCHEDULING_TEST_DATABASE_URL?.trim()))("IF pu
     expect(mocks.outbox.findByPk).toHaveBeenCalledWith(11, expect.anything());
   });
 
-  it("selects removals downstream first, including a tied departure's larger flight ID", async () => {
+  it("selects removals downstream first, including a tied queue position's larger flight ID", async () => {
     const jobs = await arrangeWindow();
     await sqlDatabase.query("UPDATE live_flights SET status = 'needs_review' WHERE id <= 10", { transaction: sqlTransaction });
     await copyFixtureTables();
@@ -439,11 +455,11 @@ describe.runIf(Boolean(process.env.SCHEDULING_TEST_DATABASE_URL?.trim()))("IF pu
 });
 
 describe("IF cascade removal queue claims", () => {
-  const removalLookup = (options: any) => options.attributes?.includes("scheduled_departure");
+  const removalLookup = (options: any) => options.attributes?.includes("queue_order");
 
   it.each(["queued", "failed", "conflict", "reconciliation"])("rechecks a %s removal before claiming an approved flight", async state => {
     const original = mocks.liveFlight.findAll.getMockImplementation()!;
-    mocks.liveFlight.findAll.mockImplementation(async (options: any) => removalLookup(options) ? [{ id: 99, scheduled_departure: new Date("2026-10-05T10:00:00Z"), state }] : original(options));
+    mocks.liveFlight.findAll.mockImplementation(async (options: any) => removalLookup(options) ? [{ id: 99, queue_order: 2, state }] : original(options));
     mocks.outbox.count.mockImplementation(async (options: any) => options.where.flight_id?.[Op.in]?.includes(99) ? 1 : 0);
     expect(await runIfLivePublisher()).toMatchObject({ processed: 0 });
     expect(job.update).not.toHaveBeenCalled(); expect(mocks.token).not.toHaveBeenCalled();
@@ -451,12 +467,12 @@ describe("IF cascade removal queue claims", () => {
   });
 
   it.each([
-    { id: 99, departure: "2026-10-04T11:00:00Z" },
-    { id: 99, departure: "2026-10-04T10:00:00Z" },
-  ])("waits for downstream removal $id at $departure before deleting its predecessor", async ({ id, departure }) => {
+    { id: 99, order: 2 },
+    { id: 99, order: 1 },
+  ])("waits for downstream removal $id at queue position $order before deleting its predecessor", async ({ id, order }) => {
     flight.status = "cancelled";
     const original = mocks.liveFlight.findAll.getMockImplementation()!;
-    mocks.liveFlight.findAll.mockImplementation(async (options: any) => removalLookup(options) ? [{ id, scheduled_departure: new Date(departure) }] : original(options));
+    mocks.liveFlight.findAll.mockImplementation(async (options: any) => removalLookup(options) ? [{ id, queue_order: order }] : original(options));
     mocks.outbox.count.mockResolvedValue(1);
     expect(await runIfLivePublisher()).toMatchObject({ processed: 0 });
     expect(job.update).not.toHaveBeenCalled(); expect(mocks.remove).not.toHaveBeenCalled();
@@ -466,7 +482,7 @@ describe("IF cascade removal queue claims", () => {
     flight.status = "cancelled";
     mocks.schedules.mockReset().mockResolvedValue([]);
     const original = mocks.liveFlight.findAll.getMockImplementation()!;
-    mocks.liveFlight.findAll.mockImplementation(async (options: any) => removalLookup(options) ? [{ id: 99, scheduled_departure: new Date("2026-10-04T09:00:00Z") }] : original(options));
+    mocks.liveFlight.findAll.mockImplementation(async (options: any) => removalLookup(options) ? [{ id: 99, queue_order: 0 }] : original(options));
     mocks.outbox.count.mockImplementation(async (options: any) => typeof options.where.flight_id === "object" ? 1 : 0);
     expect(await runIfLivePublisher()).toMatchObject({ processed: 1, published: 1 });
     expect(job.update).toHaveBeenCalledWith(expect.objectContaining({ state: "processing" }), expect.anything());
@@ -474,14 +490,14 @@ describe("IF cascade removal queue claims", () => {
 
   it("does not wait for completed removal jobs", async () => {
     const original = mocks.liveFlight.findAll.getMockImplementation()!;
-    mocks.liveFlight.findAll.mockImplementation(async (options: any) => removalLookup(options) ? [{ id: 99, scheduled_departure: new Date("2026-10-05T10:00:00Z") }] : original(options));
+    mocks.liveFlight.findAll.mockImplementation(async (options: any) => removalLookup(options) ? [{ id: 99, queue_order: 2 }] : original(options));
     mocks.outbox.count.mockResolvedValue(0);
     expect(await runIfLivePublisher()).toMatchObject({ processed: 1, published: 1 });
   });
 
   it("retires stale jobs even while their aircraft has a blocked removal", async () => {
     job.revision = 0;
-    mocks.liveFlight.findAll.mockResolvedValue([{ id: 99, scheduled_departure: new Date("2026-10-05T10:00:00Z") }]);
+    mocks.liveFlight.findAll.mockResolvedValue([{ id: 99, queue_order: 2 }]);
     mocks.outbox.count.mockResolvedValue(1);
     expect(await runIfLivePublisher()).toMatchObject({ processed: 0 });
     expect(job.update).toHaveBeenCalledWith({ state: "done", lease_until: null }, expect.anything());

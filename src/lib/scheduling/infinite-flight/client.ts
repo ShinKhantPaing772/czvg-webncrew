@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { IF_LIVE_BASE_URL, IF_LIVE_CACHE_MS, IfLiveError, isIfUuid } from "./config";
 import type { IfAircraft, IfAirport, IfContentAircraft, IfContentDirectory, IfContentLivery, IfOrganization, IfPosition, IfPositionView, IfSchedule, IfScheduleRequest, IfCrew } from "./types";
 import { ifRequestTimeoutMs } from "./request-budget";
+import { isUnsetIfScheduleTime, meaningfulIfScheduleTime } from "./schedule-time";
 
 const cache = new Map<string, { data: unknown; expiresAt: number; timer: ReturnType<typeof setTimeout> }>();
 const pending = new Map<string, Promise<unknown>>();
@@ -112,7 +113,8 @@ function list<T>(value: unknown, valid: (entry: any) => boolean): T[] {
 function validSchedule(entry: any) {
   return entry && isIfUuid(entry.id) && isIfUuid(entry.aircraftId) && isIfUuid(entry.organizationId) && Number.isInteger(entry.status) && typeof entry.callsign === "string" &&
     typeof entry.originIcao === "string" && typeof entry.destinationIcao === "string" &&
-    typeof entry.scheduledDepartureUtc === "string" && typeof entry.scheduledArrivalUtc === "string" &&
+    (isUnsetIfScheduleTime(entry.scheduledDepartureUtc) || meaningfulIfScheduleTime(entry.scheduledDepartureUtc) !== null) &&
+    (isUnsetIfScheduleTime(entry.scheduledArrivalUtc) || meaningfulIfScheduleTime(entry.scheduledArrivalUtc) !== null) &&
     Array.isArray(entry.crew) && entry.crew.every((crew: any) => isIfUuid(crew.userId) && (crew.role === 0 || crew.role === 1));
 }
 
@@ -143,12 +145,14 @@ export async function getIfPosition(token: string, aircraftId: string, options: 
 }
 
 /** UI snapshots expire with the original cached response, even after later callers read it. */
-export async function getIfPositionSnapshot(token: string, aircraftId: string): Promise<{ position: IfPositionView; expiresAt: number }> {
+export async function getIfPositionSnapshot(token: string, aircraftId: string, options: IfReadOptions = {}): Promise<{ position: IfPositionView; expiresAt: number }> {
   const instanceId = id(aircraftId);
-  const value = await getIfPosition(token, instanceId);
+  const value = await getIfPosition(token, instanceId, options);
+  const position = { state: value.state, isOnGround: value.isOnGround, latitude: value.latitude, longitude: value.longitude, updatedAt: value.updatedAt };
+  if (options.fresh) return { position, expiresAt: Date.now() + IF_LIVE_CACHE_MS };
   const entry = cache.get(cacheKey(token, `/live/aircraft/${instanceId}/position`));
   if (!entry || entry.expiresAt <= Date.now()) throw new IfLiveError("The temporary IF position expired; refresh to load it again", "unavailable", 503, 15);
-  return { position: { state: value.state, isOnGround: value.isOnGround, latitude: value.latitude, longitude: value.longitude, updatedAt: value.updatedAt }, expiresAt: entry.expiresAt };
+  return { position, expiresAt: entry.expiresAt };
 }
 
 /** The stable content directory uses the existing server API key, never the organization's OAuth token. */

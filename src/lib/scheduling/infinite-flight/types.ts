@@ -9,8 +9,8 @@ export type IfAirport = { icao: string; latitude: number; longitude: number };
 export type IfCrew = { userId: string; role: 0 | 1 };
 export type IfScheduleRequest = {
   callsign: string; flightType: number; originIcao: string; destinationIcao: string;
-  scheduledDepartureUtc: string; scheduledArrivalUtc: string; briefing: string | null; flightPlan: string | null;
+  scheduledDepartureUtc?: string | null; scheduledArrivalUtc?: string | null; briefing: string | null; flightPlan: string | null;
 };
-export type IfSchedule = IfScheduleRequest & { id: string; aircraftId: string; organizationId: string; status: number; crew: IfCrew[]; sequence?: number; updatedAt?: string };
+export type IfSchedule = IfScheduleRequest & { id: string; aircraftId: string; organizationId: string; status: number; crew: IfCrew[]; sequence?: number; updatedAt?: string; actualDepartureUtc?: string | null; actualArrivalUtc?: string | null };
 /** App-authored fields only. Never save a fetched IF response in this type. */
 export type AuthoredIfPayload = { schedule: IfScheduleRequest; crew: IfCrew[] };

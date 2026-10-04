@@ -88,7 +88,7 @@ export function SchedulingWorkspace({ admin = false }: { admin?: boolean }) {
       if (!["all", "upcoming", "attention", "history"].includes(statusFilter) && flight.status !== statusFilter) return false;
       const tail = data.aircraft.find((item) => item.id === flight.live_aircraft_id);
       return !search || [tail?.registration, tail?.name, flight.departure, flight.arrival, flight.callsign, flight.captain?.name, flight.captain?.callsign].some((value) => value?.toLowerCase().includes(search));
-    }).sort((first, second) => new Date(first.scheduled_departure).getTime() - new Date(second.scheduled_departure).getTime());
+    }).sort((first, second) => first.live_aircraft_id - second.live_aircraft_id || (first.queue_order ?? Number.MAX_SAFE_INTEGER) - (second.queue_order ?? Number.MAX_SAFE_INTEGER) || first.id - second.id);
   }, [data, query, tab, aircraftFilter, statusFilter]);
 
   async function act(body: Record<string, unknown>, message: string) {
@@ -141,7 +141,7 @@ export function SchedulingWorkspace({ admin = false }: { admin?: boolean }) {
         <TabsContent value="fleet" className="space-y-4">
           <LiveFleet aircraft={data.aircraft} admin={admin} onAdd={() => setAircraftEditor({})} onEdit={aircraft => setAircraftEditor({ aircraft })} onRequest={aircraft => setFlightForm({ aircraftId: aircraft.id })} onSchedules={aircraft => setScheduleAircraftId(aircraft.id)} />
         </TabsContent>
-        {admin && <TabsContent value="if"><InfiniteFlightPanel aircraft={data.aircraft} flights={data.flights} pilots={data.pilots} catalog={data.catalog} onRefresh={refresh} /></TabsContent>}
+        {admin && <TabsContent value="if"><InfiniteFlightPanel aircraft={data.aircraft} flights={data.flights} pilots={data.pilots} catalog={data.catalog} onRefresh={refresh} onSchedules={setScheduleAircraftId} /></TabsContent>}
       </Tabs>
     </>}
     {data && selectedFlight && <FlightDetail flight={selectedFlight} aircraft={data.aircraft.find((item) => item.id === selectedFlight.live_aircraft_id)} pilotId={data.pilotId} admin={admin} busy={busy} error={actionError} onClose={() => setDetailId(null)} onEdit={() => { setFlightForm({ flight: selectedFlight }); setDetailId(null); }} onAsk={ask} onAct={(body, message) => { void act(body, message).catch(() => undefined); }} />}

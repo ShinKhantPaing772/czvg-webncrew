@@ -65,6 +65,19 @@ describe("IF operational cache and transport", () => {
     vi.stubGlobal("fetch", vi.fn(async () => result([{ ...scheduleBody, id: UUID, status: 1, crew: [], ...change }])));
     return expect(getIfSchedules("secret", UUID, { fresh: true })).rejects.toMatchObject({ code: "invalid_response", status: 502 });
   });
+  it.each([
+    { scheduledDepartureUtc: "0001-01-01T00:00:00", scheduledArrivalUtc: "0001-01-01T00:00:00" },
+    { scheduledDepartureUtc: "0001-01-01T00:00:00.0000000Z", scheduledArrivalUtc: "0001-01-01T00:00:00.0000000Z" },
+    { scheduledDepartureUtc: null, scheduledArrivalUtc: null },
+    { scheduledDepartureUtc: undefined, scheduledArrivalUtc: undefined },
+  ])("reads genuine unset IF times without inventing a scheduled interval: %j", async change => {
+    vi.stubGlobal("fetch", vi.fn(async () => result([{ ...scheduleBody, id: UUID, aircraftId: UUID, organizationId: UUID, status: 1, crew: [], ...change }])));
+    await expect(getIfSchedules("secret", UUID, { fresh: true })).resolves.toHaveLength(1);
+  });
+  it.each(["not-a-time", "2026-10-06T10:00:00", 123])("rejects malformed provider times instead of treating them as untimed: %j", async scheduledDepartureUtc => {
+    vi.stubGlobal("fetch", vi.fn(async () => result([{ ...scheduleBody, id: UUID, aircraftId: UUID, organizationId: UUID, status: 1, crew: [], scheduledDepartureUtc }])));
+    await expect(getIfSchedules("secret", UUID, { fresh: true })).rejects.toMatchObject({ code: "invalid_response" });
+  });
   it("bypasses an earlier fleet cache for binding and departure checks", async () => {
     const fetcher = vi.fn().mockResolvedValueOnce(result(fleet)).mockResolvedValueOnce(result([{ ...fleet[0], isFleetActiveSlot: false }])); vi.stubGlobal("fetch", fetcher);
     await getIfFleet("secret", UUID); await getIfFleet("secret", UUID); expect(fetcher).toHaveBeenCalledOnce();
@@ -124,6 +137,14 @@ describe("IF operational cache and transport", () => {
     vi.advanceTimersByTime(20_001);
     const renewed = await getIfPositionSnapshot("secret", UUID);
     expect(renewed.expiresAt).toBe(Date.now() + IF_LIVE_CACHE_MS); expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+  it("refreshes a requested position without reusing an earlier cached or pending UI result", async () => {
+    const fetcher = vi.fn().mockResolvedValueOnce(result(position)).mockResolvedValueOnce(result({ ...position, latitude: 49.1967, lastPilotUsername: "Private" })); vi.stubGlobal("fetch", fetcher);
+    await getIfPositionSnapshot("secret", UUID);
+    vi.advanceTimersByTime(10_000);
+    const refreshed = await getIfPositionSnapshot("secret", UUID, { fresh: true });
+    expect(refreshed).toEqual({ position: { state: 1, isOnGround: true, latitude: 49.1967, longitude: position.longitude, updatedAt: position.updatedAt }, expiresAt: Date.now() + IF_LIVE_CACHE_MS });
+    expect(fetcher).toHaveBeenCalledTimes(2);
   });
   it("does not cache an invalid or missing position before a successful retry", async () => {
     const fetcher = vi.fn().mockResolvedValueOnce(result({ ...position, latitude: 91 })).mockResolvedValueOnce(result(null)).mockResolvedValueOnce(result(position)); vi.stubGlobal("fetch", fetcher);

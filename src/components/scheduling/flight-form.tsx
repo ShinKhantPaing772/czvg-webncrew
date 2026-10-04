@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { FlightInput, ScheduledFlight, SchedulingData } from "./types";
-import { departureForTime, errorMessage, inputToIso, utcInput } from "./utils";
+import { errorMessage, inputToIso, utcInput } from "./utils";
+import { orderedQueue, projectedOrigin, RESERVED_STATUSES } from "@/lib/scheduling/policy";
 
 type Props = {
   data: SchedulingData;
@@ -19,33 +20,43 @@ type Props = {
   onSave: (input: FlightInput) => Promise<void>;
 };
 
+function suggestedTimes(data: SchedulingData, aircraftId: number) {
+  const reserved = orderedQueue(data.flights.filter((flight) => flight.live_aircraft_id === aircraftId &&
+    RESERVED_STATUSES.includes(flight.status as "approved" | "in_progress")));
+  const lastArrival = Math.max(0, ...reserved.map((flight) => flight.scheduled_arrival ? Date.parse(flight.scheduled_arrival) : 0).filter(Number.isFinite));
+  // Round up because datetime-local inputs only retain minute precision.
+  const start = Math.ceil(Math.max(Date.now() + 60 * 60 * 1000, Number.isFinite(lastArrival) ? lastArrival : 0) / 60_000) * 60_000;
+  return { scheduled_departure: utcInput(new Date(start).toISOString()), scheduled_arrival: utcInput(new Date(start + 60 * 60 * 1000).toISOString()) };
+}
+
 export function FlightForm({ data, flight, aircraftId, admin, onClose, onSave }: Props) {
   const [form, setForm] = useState(() => {
-    const departure = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-    const arrival = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+    const selectedId = flight?.live_aircraft_id || aircraftId || data.aircraft.find((item) => item.active)?.id || 0;
     return {
-      live_aircraft_id: String(flight?.live_aircraft_id || aircraftId || data.aircraft.find((item) => item.active)?.id || ""),
+      live_aircraft_id: selectedId ? String(selectedId) : "",
       callsign: flight?.callsign || "", departure: flight?.departure || "", arrival: flight?.arrival || "",
-      scheduled_departure: utcInput(flight?.scheduled_departure || departure),
-      scheduled_arrival: utcInput(flight?.scheduled_arrival || arrival), notes: flight?.notes || "",
+      scheduled_departure: flight?.scheduled_departure ? utcInput(flight.scheduled_departure) : "",
+      scheduled_arrival: flight?.scheduled_arrival ? utcInput(flight.scheduled_arrival) : "", notes: flight?.notes || "",
     };
   });
+  const [withTimes, setWithTimes] = useState(Boolean(flight?.scheduled_departure && flight.scheduled_arrival));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const aircraft = data.aircraft.find((item) => item.id === Number(form.live_aircraft_id));
-  const inferredDeparture = departureForTime(aircraft, data.flights, inputToIso(form.scheduled_departure) || "", flight?.id);
+  const inferredDeparture = aircraft ? projectedOrigin(aircraft.current_airport,
+    data.flights.filter((item) => item.live_aircraft_id === aircraft.id), flight?.queue_order, flight?.id) || "" : "";
   const departure = inferredDeparture || form.departure;
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     setError("");
-    const scheduledDeparture = inputToIso(form.scheduled_departure);
-    const scheduledArrival = inputToIso(form.scheduled_arrival);
-    if (!aircraft || !scheduledDeparture || !scheduledArrival) {
-      setError("Choose an aircraft and enter both scheduled times.");
+    const scheduledDeparture = withTimes ? inputToIso(form.scheduled_departure) : null;
+    const scheduledArrival = withTimes ? inputToIso(form.scheduled_arrival) : null;
+    if (!aircraft || (withTimes && (!scheduledDeparture || !scheduledArrival))) {
+      setError("Choose an aircraft and enter both UTC times, or leave times unspecified.");
       return;
     }
-    if (new Date(scheduledArrival) <= new Date(scheduledDeparture)) {
+    if (scheduledDeparture && scheduledArrival && new Date(scheduledArrival) <= new Date(scheduledDeparture)) {
       setError("Scheduled arrival must be after departure.");
       return;
     }
@@ -71,20 +82,24 @@ export function FlightForm({ data, flight, aircraftId, admin, onClose, onSave }:
     <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
       <DialogHeader>
         <DialogTitle>{flight ? admin ? "Amend flight" : "Edit flight request" : "Request a flight"}</DialogTitle>
-        <DialogDescription>{flight && admin ? "Changes are checked against the aircraft’s flight sequence and published to IF when linked." : "Your request needs admin approval. All scheduled times are in UTC."}</DialogDescription>
+        <DialogDescription>{flight && admin ? "Changes are checked against the aircraft’s flight sequence and published to IF when linked." : "Your request needs admin approval and joins the end of the aircraft’s approved flight sequence. UTC times are optional."}</DialogDescription>
       </DialogHeader>
       <form onSubmit={submit} className="space-y-4">
         {error && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
         <div className="space-y-2">
           <Label htmlFor="flight-aircraft">Aircraft</Label>
-          <select id="flight-aircraft" value={form.live_aircraft_id} onChange={(event) => setForm({ ...form, live_aircraft_id: event.target.value, departure: "" })} required disabled={saving || Boolean(flight)} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
+          <select id="flight-aircraft" value={form.live_aircraft_id} onChange={(event) => setForm({ ...form, live_aircraft_id: event.target.value, departure: "", ...(!flight && withTimes ? suggestedTimes(data, Number(event.target.value)) : {}) })} required disabled={saving || Boolean(flight)} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
             <option value="">Select an aircraft</option>
             {data.aircraft.filter((item) => item.active || item.id === flight?.live_aircraft_id).map((item) => <option key={item.id} value={item.id} disabled={!item.active}>{item.registration} · {item.name}{!item.active ? " (inactive)" : ""}</option>)}
           </select>
         </div>
+        <div className="space-y-2 rounded-md border bg-muted/20 p-3"><label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={withTimes} disabled={saving} onChange={(event) => {
+          setWithTimes(event.target.checked);
+          if (event.target.checked && (!form.scheduled_departure || !form.scheduled_arrival)) setForm({ ...form, ...suggestedTimes(data, Number(form.live_aircraft_id)) });
+        }} />Set UTC times (optional)</label><p className="text-xs text-muted-foreground">Without times, this flight follows the aircraft’s queue. An untimed crew assignment prevents reservations on another aircraft.</p>{withTimes && !flight && <div className="flex flex-wrap items-center justify-between gap-2"><p className="max-w-sm text-xs text-muted-foreground">Suggested times follow the queue’s planned arrivals with a one-hour slot. Adjust them to fit your flight.</p><Button type="button" variant="outline" size="sm" disabled={saving || !aircraft} onClick={() => setForm({ ...form, ...suggestedTimes(data, Number(form.live_aircraft_id)) })}>Use suggested times</Button></div>}</div>
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2"><Label htmlFor="flight-departure-time">Scheduled departure (UTC)</Label><Input id="flight-departure-time" type="datetime-local" value={form.scheduled_departure} onChange={(event) => setForm({ ...form, scheduled_departure: event.target.value })} required disabled={saving} /></div>
-          <div className="space-y-2"><Label htmlFor="flight-arrival-time">Scheduled arrival (UTC)</Label><Input id="flight-arrival-time" type="datetime-local" value={form.scheduled_arrival} onChange={(event) => setForm({ ...form, scheduled_arrival: event.target.value })} required disabled={saving} /></div>
+          {withTimes && <><div className="space-y-2"><Label htmlFor="flight-departure-time">Scheduled departure (UTC)</Label><Input id="flight-departure-time" type="datetime-local" value={form.scheduled_departure} onChange={(event) => setForm({ ...form, scheduled_departure: event.target.value })} required disabled={saving} /></div>
+          <div className="space-y-2"><Label htmlFor="flight-arrival-time">Scheduled arrival (UTC)</Label><Input id="flight-arrival-time" type="datetime-local" value={form.scheduled_arrival} onChange={(event) => setForm({ ...form, scheduled_arrival: event.target.value })} required disabled={saving} /></div></>}
           <div className="space-y-2"><Label htmlFor="flight-departure">Departure airport</Label><Input id="flight-departure" placeholder="ICAO" value={departure} onChange={(event) => setForm({ ...form, departure: event.target.value.toUpperCase() })} maxLength={4} required readOnly={Boolean(inferredDeparture)} disabled={saving} /><p className="text-xs text-muted-foreground">{inferredDeparture ? "Based on the aircraft’s location and earlier approved flights." : "Location is unknown. Enter the actual departure airport for review."}</p></div>
           <div className="space-y-2"><Label htmlFor="flight-arrival">Destination airport</Label><Input id="flight-arrival" placeholder="ICAO" value={form.arrival} onChange={(event) => setForm({ ...form, arrival: event.target.value.toUpperCase() })} maxLength={4} required disabled={saving} /></div>
         </div>

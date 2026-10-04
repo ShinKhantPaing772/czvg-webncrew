@@ -15,6 +15,15 @@ function row(index: number, overrides: Partial<IfSchedule> = {}): IfSchedule {
 }
 
 describe("safe IF schedule sequence reconciliation", () => {
+  it("uses the local queue to reconcile untimed managed legs while retaining the route", () => {
+    const noTimes = { scheduledDepartureUtc: "0001-01-01T00:00:00", scheduledArrivalUtc: "0001-01-01T00:00:00" };
+    expect(planIfSequence([row(1, noTimes), row(0, noTimes)], local.slice(0, 2), remoteIds[0])).toEqual({ scheduleId: remoteIds[0], afterId: null });
+  });
+  it("keeps an untimed external prefix and refuses to cross it during reordering", () => {
+    const noTimes = { scheduledDepartureUtc: "0001-01-01T00:00:00", scheduledArrivalUtc: "0001-01-01T00:00:00" };
+    expect(planIfSequence([row(3, noTimes), row(1, noTimes), row(0, noTimes)], local.slice(0, 2), remoteIds[0])).toEqual({ scheduleId: remoteIds[0], afterId: remoteIds[3] });
+    expect(() => planIfSequence([row(1, noTimes), row(3, noTimes), row(0, noTimes)], local.slice(0, 2), remoteIds[0])).toThrow("external or active");
+  });
   it("does not write when managed reservations already follow the local queue", () => {
     expect(planIfSequence([row(0), row(1), row(2)], local, remoteIds[1])).toBeNull();
   });
