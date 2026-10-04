@@ -1,6 +1,7 @@
 export type IfOrganization = { id: string; name: string; status?: number };
 export type IfAircraft = { id: string; aircraftId: string; organizationId: string; registration: string; isFleetActiveSlot: boolean; visibility: number; status?: number };
 export type IfPosition = { id: string; state: number; isOnGround: boolean; latitude: number; longitude: number; updatedAt: string; [key: string]: unknown };
+export type IfPositionView = Pick<IfPosition, "state" | "isOnGround" | "latitude" | "longitude" | "updatedAt">;
 export type IfContentAircraft = { id: string; name: string };
 export type IfContentLivery = { id: string; aircraftID: string; aircraftName: string; liveryName: string };
 export type IfContentDirectory = { aircraft: IfContentAircraft[]; liveries: IfContentLivery[] };

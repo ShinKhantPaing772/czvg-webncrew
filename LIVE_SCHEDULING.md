@@ -161,6 +161,34 @@ catalog entries and pilot/admin-confirmed airports remain the local source of
 truth. Publishing requires the publishing flag and permitted durable identifiers.
 Automatic unattended publishing additionally needs the protected worker.
 
+### View aircraft locations
+
+Both scheduling pages automatically load **Last IF position** for linked
+aircraft in the **Live fleet** tab. Fleet cards show coordinates, ground/flight
+state, the last-reported UTC timestamp, and a map link. Up to six aircraft appear
+per page; a batch reads only those visible linked aircraft, with at most three
+position requests running together. Positions expire with their original
+60-second server cache and refresh while the page is visible and has been used
+within the last 15 minutes. **Refresh IF
+locations** and returning to the page also reload the view. A parked aircraft
+may have an older IF report; the report timestamp is not the fetch time.
+
+IF's position response contains no airport ICAO. For reported ground positions
+within five nautical miles of an unambiguous airport in IF's **3D airport list**,
+the card shows **Near ICAO (estimate)**. This list does not cover every airport.
+A missing airport-directory key or failed lookup leaves coordinates available;
+a missing position on one aircraft leaves the other aircraft available.
+
+**Confirmed airport** remains the local airport recorded by a pilot/admin on
+arrival or by an admin correction. Coordinates and nearby-airport estimates
+never overwrite it or change the approved flight chain. If IF shows a different
+nearby airport, confirm the actual airport and correct it through the admin
+aircraft editor before approving further flights. Manual aircraft continue to
+use confirmed airports. Position reads need a connected shared IF account and
+`IF_LIVE_PREVIEW_ENABLED=true`; automatic publishing and token revocation are
+not prerequisites. The existing `IF_API` key supplies optional airport estimates.
+No new migration or environment variable is required for this view.
+
 ### View IF schedules and publish approved plans
 
 Both scheduling pages have **Live fleet → View schedules** on each local

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clearIfLiveCache, createIfSchedule, getIfAirport, getIfContentDirectory, getIfFleet, getIfOrganizations, getIfPosition, getIfSchedules, reorderIfSchedule } from "./client";
+import { clearIfLiveCache, createIfSchedule, getIf3DAirports, getIf3DAirportsSnapshot, getIfAirport, getIfContentDirectory, getIfFleet, getIfOrganizations, getIfPosition, getIfPositionSnapshot, getIfSchedules, reorderIfSchedule } from "./client";
 import { IF_LIVE_CACHE_MS } from "./config";
 
 const UUID = "10000000-0000-0000-0000-000000000001";
@@ -100,6 +100,51 @@ describe("IF operational cache and transport", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(result(invalid)));
     await expect(getIfPosition("secret", UUID, { fresh: true })).rejects.toMatchObject({ code: "invalid_response", status: 502 });
   });
+  it.each([false, 0, "", [], undefined].map(value => ({ value })))("treats malformed falsy position $value as an invalid response rather than a missing position", async ({ value }) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(result(value)));
+    await expect(getIfPositionSnapshot("secret", UUID)).rejects.toMatchObject({ code: "invalid_response", status: 502 });
+  });
+  it.each(["2026-10-03T10:00:00", "2026-10-03", "10/03/2026 10:00:00Z", "2026-10-03T10:00:00+99:99"])("rejects a position timestamp without a supported explicit timezone: %s", async updatedAt => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(result({ ...position, updatedAt })));
+    await expect(getIfPosition("secret", UUID)).rejects.toMatchObject({ code: "invalid_response", status: 502 });
+  });
+  it.each(["2026-10-03T10:00:00Z", "2026-10-03T10:00:00.1234567Z", "2026-10-03T10:00:00+02:00"])("accepts the documented position date-time with an explicit timezone: %s", async updatedAt => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(result({ ...position, updatedAt })));
+    await expect(getIfPositionSnapshot("secret", UUID)).resolves.toMatchObject({ position: { updatedAt } });
+  });
+  it("returns only allowlisted position fields without restarting an existing cache lifetime", async () => {
+    const originalTime = Date.now();
+    const fetcher = vi.fn(async () => result({ ...position, lastPilotId: CONTENT_ID, lastPilotUsername: "Private username", altitude: 0, providerMetadata: "Private metadata" })); vi.stubGlobal("fetch", fetcher);
+    const first = await getIfPositionSnapshot("secret", UUID);
+    expect(first).toEqual({ position: { state: 1, isOnGround: true, latitude: position.latitude, longitude: position.longitude, updatedAt: position.updatedAt }, expiresAt: originalTime + IF_LIVE_CACHE_MS });
+    vi.advanceTimersByTime(40_000);
+    const later = await getIfPositionSnapshot("secret", UUID);
+    expect(later.expiresAt).toBe(first.expiresAt); expect(later.expiresAt - Date.now()).toBe(20_000);
+    expect(fetcher).toHaveBeenCalledOnce();
+    vi.advanceTimersByTime(20_001);
+    const renewed = await getIfPositionSnapshot("secret", UUID);
+    expect(renewed.expiresAt).toBe(Date.now() + IF_LIVE_CACHE_MS); expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+  it("does not cache an invalid or missing position before a successful retry", async () => {
+    const fetcher = vi.fn().mockResolvedValueOnce(result({ ...position, latitude: 91 })).mockResolvedValueOnce(result(null)).mockResolvedValueOnce(result(position)); vi.stubGlobal("fetch", fetcher);
+    await expect(getIfPositionSnapshot("secret", UUID)).rejects.toMatchObject({ code: "invalid_response" });
+    await expect(getIfPositionSnapshot("secret", UUID)).rejects.toMatchObject({ code: "position_unavailable" });
+    await expect(getIfPositionSnapshot("secret", UUID)).resolves.toMatchObject({ position: { latitude: position.latitude } });
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+  it("evicts a cached position if a caller corrupted its validated fields", async () => {
+    const fetcher = vi.fn().mockResolvedValueOnce(result(position)).mockResolvedValueOnce(result({ ...position, latitude: 49.1967 })); vi.stubGlobal("fetch", fetcher);
+    const cached = await getIfPosition("secret", UUID); cached.latitude = 91;
+    await expect(getIfPositionSnapshot("secret", UUID)).rejects.toMatchObject({ code: "invalid_response" });
+    await expect(getIfPositionSnapshot("secret", UUID)).resolves.toMatchObject({ position: { latitude: 49.1967 } });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+  it("deduplicates position snapshots for a credential but never shares them with another credential", async () => {
+    const fetcher = vi.fn(async () => result(position)); vi.stubGlobal("fetch", fetcher);
+    const [left, right] = await Promise.all([getIfPositionSnapshot("one", UUID), getIfPositionSnapshot("one", UUID)]);
+    expect(left).toEqual(right); expect(fetcher).toHaveBeenCalledOnce();
+    await getIfPositionSnapshot("two", UUID); expect(fetcher).toHaveBeenCalledTimes(2);
+  });
   it("uses the documented reorder payload and invalidates the cached queue", async () => {
     const fetcher = vi.fn().mockResolvedValueOnce(Response.json({ errorCode: 0, result: [] })).mockResolvedValueOnce(Response.json({ errorCode: 0, result: true })).mockResolvedValueOnce(Response.json({ errorCode: 0, result: [] })); vi.stubGlobal("fetch", fetcher);
     await getIfSchedules("secret", UUID); await reorderIfSchedule("secret", UUID, UUID, null); await getIfSchedules("secret", UUID);
@@ -110,6 +155,50 @@ describe("IF operational cache and transport", () => {
 });
 
 describe("IF content and airport directory transport", () => {
+  it("loads only documented 3D-airport coordinates with the server API key and a temporary cache", async () => {
+    vi.stubEnv("IF_API", "directory-secret");
+    const airports = [{ icao: "cyyz", latitude: position.latitude, longitude: position.longitude, name: "Unpersisted airport name", country: { name: "Canada" }, has3dBuildings: true }];
+    const fetcher = vi.fn(async (_url: string, _options: RequestInit) => result(airports)); vi.stubGlobal("fetch", fetcher);
+    await expect(getIf3DAirports()).resolves.toEqual([{ icao: "CYYZ", latitude: position.latitude, longitude: position.longitude }]);
+    expect(fetcher.mock.calls[0][0]).toBe("https://api.infiniteflight.com/public/v2/airports");
+    expect(fetcher.mock.calls[0][1]).toMatchObject({ method: "GET", redirect: "error", headers: { Authorization: "Bearer directory-secret" } });
+    await getIf3DAirports(); expect(fetcher).toHaveBeenCalledOnce();
+    await getIf3DAirports({ fresh: true }); expect(fetcher).toHaveBeenCalledTimes(2);
+    vi.advanceTimersByTime(IF_LIVE_CACHE_MS + 1); await getIf3DAirports(); expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+  it("preserves the original 3D directory expiry when a later position view uses its cached airport estimates", async () => {
+    vi.stubEnv("IF_API", "directory-secret");
+    const originalTime = Date.now();
+    const fetcher = vi.fn(async () => result([{ icao: "CYYZ", latitude: position.latitude, longitude: position.longitude, name: "Unpersisted metadata" }])); vi.stubGlobal("fetch", fetcher);
+    const airports = await getIf3DAirports();
+    vi.advanceTimersByTime(50_000);
+    const snapshot = await getIf3DAirportsSnapshot();
+    expect(snapshot).toEqual({ airports, expiresAt: originalTime + IF_LIVE_CACHE_MS });
+    expect(snapshot.expiresAt - Date.now()).toBe(10_000); expect(fetcher).toHaveBeenCalledOnce();
+    vi.advanceTimersByTime(10_001);
+    const renewed = await getIf3DAirportsSnapshot();
+    expect(renewed.expiresAt).toBe(Date.now() + IF_LIVE_CACHE_MS); expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+  it.each([
+    null, {}, [{ icao: "../airport", latitude: 0, longitude: 0 }], [{ icao: "CYYZ", latitude: "43.67", longitude: 0 }],
+    [{ icao: "CYYZ", latitude: 91, longitude: 0 }], [{ icao: "CYYZ", latitude: 0, longitude: -181 }],
+    [{ icao: "CYYZ", latitude: 0, longitude: 0 }, { icao: "cyyz", latitude: 1, longitude: 1 }],
+  ].map(value => ({ value })))("rejects malformed or ambiguous 3D-airport directory responses: $value", async ({ value }) => {
+    vi.stubEnv("IF_API", "directory-secret"); vi.stubGlobal("fetch", vi.fn().mockResolvedValue(result(value)));
+    await expect(getIf3DAirports()).rejects.toMatchObject({ code: "invalid_response", status: 502 });
+  });
+  it("permits an empty 3D directory and retries after an invalid directory without retaining it", async () => {
+    vi.stubEnv("IF_API", "directory-secret");
+    const fetcher = vi.fn().mockResolvedValueOnce(result([{ icao: "CYYZ", latitude: 91, longitude: 0 }])).mockResolvedValueOnce(result([])); vi.stubGlobal("fetch", fetcher);
+    await expect(getIf3DAirports()).rejects.toMatchObject({ code: "invalid_response" });
+    await expect(getIf3DAirports()).resolves.toEqual([]); expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+  it("reports missing or rejected directory access without leaking provider content or treating it as OAuth expiry", async () => {
+    vi.stubEnv("IF_API", ""); const fetcher = vi.fn(); vi.stubGlobal("fetch", fetcher);
+    await expect(getIf3DAirports()).rejects.toMatchObject({ code: "configuration", message: expect.stringContaining("IF_API") }); expect(fetcher).not.toHaveBeenCalled();
+    vi.stubEnv("IF_API", "directory-secret"); fetcher.mockResolvedValue(new Response("Private provider data directory-secret", { status: 403 }));
+    await expect(getIf3DAirports()).rejects.toMatchObject({ code: "configuration", status: 403, uncertainWrite: false, message: expect.stringContaining("server's IF_API key") });
+  });
   it("reads documented content directories with only the existing server API key", async () => {
     vi.stubEnv("IF_API", "directory-secret");
     const fetcher = vi.fn().mockResolvedValueOnce(result([{ id: CONTENT_ID, name: "Airbus A320" }])).mockResolvedValueOnce(result([{ id: UUID, aircraftID: CONTENT_ID, aircraftName: "Airbus A320", liveryName: "Our airline" }])); vi.stubGlobal("fetch", fetcher);
