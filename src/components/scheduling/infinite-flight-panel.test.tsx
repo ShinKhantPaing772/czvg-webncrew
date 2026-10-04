@@ -7,12 +7,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ fetch: vi.fn() }));
 vi.mock("@/lib/utils/api", () => ({ authFetch: mocks.fetch }));
 import { InfiniteFlightPanel } from "./infinite-flight-panel";
-import type { LiveAircraft, ScheduledFlight } from "./types";
+import type { LiveAircraft, ScheduledFlight, SchedulingData } from "./types";
 
 const ready = {
   enabled: true, configured: true, autoPublishEnabled: false, durableBindingsAllowed: false,
   disabledReasons: [], canDisconnect: true, connection: null,
   revocationConfigured: true, publishingReady: false, publishingDisabledReasons: ["Automatic IF publishing is disabled"], disconnectMode: "revoke",
+  bindingReady: false, bindingDisabledReasons: ["Durable IF mapping retention has not been authorized"],
   oauthSetup: {
     callbackUrl: "https://ifczvg.com/oauth/callback",
     checks: [
@@ -27,13 +28,20 @@ const ready = {
 const noRevocation = {
   ...ready, revocationConfigured: false, disconnectMode: "local", autoPublishEnabled: true, durableBindingsAllowed: true,
   publishingReady: false, publishingDisabledReasons: ["Automatic IF publishing requires a supported OAuth revocation URL"],
+  bindingReady: true, bindingDisabledReasons: [] as string[],
   oauthSetup: { ...ready.oauthSetup, checks: ready.oauthSetup.checks.map(check => ({ ...check, ready: check.id !== "revocation" })) },
 };
 let root: Root;
 let container: HTMLDivElement;
+const refresh = vi.fn(async () => {});
+const catalog: SchedulingData["catalog"] = [{ id: 1, name: "Airbus A320", liveryname: "Our airline" }];
+const organizationId = "12345678-1234-1234-1234-123456789abc";
+const remoteAircraft = { id: "12345678-1234-1234-1234-123456789abd", aircraftId: "type", organizationId, registration: "C-TEST", isFleetActiveSlot: true, visibility: 1 };
+const bindingReady = { ...noRevocation, autoPublishEnabled: false, connection: { state: "connected", organizationId, expiresAt: null } };
 
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
   window.history.replaceState(null, "", "/crew/admin/scheduling");
   mocks.fetch.mockImplementation(async () => Response.json({ success: true, data: ready }));
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
@@ -41,11 +49,32 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount()); container.remove(); vi.resetAllMocks(); vi.unstubAllGlobals();
 });
-async function render(aircraft: LiveAircraft[] = [], flights: ScheduledFlight[] = []) {
-  await act(async () => root.render(<InfiniteFlightPanel aircraft={aircraft} flights={flights} onRefresh={vi.fn()} />));
+async function render(aircraft: LiveAircraft[] = [], flights: ScheduledFlight[] = [], aircraftCatalog: SchedulingData["catalog"] = []) {
+  await act(async () => root.render(<InfiniteFlightPanel aircraft={aircraft} flights={flights} catalog={aircraftCatalog} onRefresh={refresh} />));
 }
 function button(label: string) {
   return Array.from(document.querySelectorAll("button")).find((item) => item.textContent?.trim() === label)!;
+}
+async function change(id: string, value: string) {
+  const field = document.getElementById(id) as HTMLInputElement | HTMLSelectElement;
+  await act(async () => {
+    if (field instanceof HTMLSelectElement) {
+      field.value = value; field.dispatchEvent(new Event("change", { bubbles: true }));
+    } else {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(field, value);
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+  });
+}
+async function fillAircraft() {
+  await change("tail-registration", "C-OWN"); await change("tail-catalog", "1"); await change("tail-airport", "CYYZ");
+}
+function mockFleet(status = bindingReady, remote = remoteAircraft) {
+  mocks.fetch.mockImplementation(async (path: string) => Response.json(path === "/api/admin/scheduling"
+    ? { success: true }
+    : path.includes("/fleet?") ? { success: true, data: { aircraft: [remote] } }
+    : path.endsWith("/fleet") ? { success: true, data: { organizations: [{ id: organizationId, name: "Our org" }] } }
+    : { success: true, data: status }));
 }
 
 describe("Infinite Flight organization linking", () => {
@@ -154,7 +183,7 @@ describe("Infinite Flight organization linking", () => {
     await act(async () => button("Load IF fleet").click());
     expect(container.textContent).toContain("C-TEST");
     expect(button("Link aircraft").disabled).toBe(true);
-    expect(container.textContent).toContain("Enable automatic publishing");
+    expect(container.textContent).toContain("IF permission to save the aircraft identifiers");
   });
 
   it("allows connecting without a revocation URL and presents revocation as optional", async () => {
@@ -168,7 +197,7 @@ describe("Infinite Flight organization linking", () => {
     expect(container.textContent).toContain("requires a supported OAuth revocation URL");
   });
 
-  it("permits temporary reads but blocks linking and recovery when publishing requires revocation", async () => {
+  it("keeps binding and temporary reads available while recovery requires publishing readiness", async () => {
     const organizationId = "12345678-1234-1234-1234-123456789abc";
     const remoteId = "remote-tail";
     const tail: LiveAircraft = { id: 1, aircraft_id: 1, registration: "C-LOCAL", name: "Airbus A320", active: true, current_airport: "CYYZ", if_aircraft_id: remoteId };
@@ -184,7 +213,7 @@ describe("Infinite Flight organization linking", () => {
     expect(button("Disconnect").disabled).toBe(false);
     await act(async () => button("Load IF fleet").click());
     expect(button("Link aircraft").disabled).toBe(true);
-    expect((container.querySelector('[aria-label="Local aircraft for C-TEST"]') as HTMLSelectElement).disabled).toBe(true);
+    expect((container.querySelector('[aria-label="Local aircraft for C-TEST"]') as HTMLSelectElement).disabled).toBe(false);
     expect(button("View IF status").disabled).toBe(false);
     await act(async () => button("View IF status").click());
     expect(button("Retry or reconcile").disabled).toBe(true);
@@ -225,5 +254,158 @@ describe("Infinite Flight organization linking", () => {
     await act(async () => confirm.click());
     expect(container.textContent).toContain("authorization was not revoked at Infinite Flight");
     expect(container.textContent).not.toContain("authorization revoked");
+  });
+
+  it("creates and links a locally authored aircraft while automatic publishing and revocation are disabled", async () => {
+    mockFleet(); await render([], [], catalog);
+    await act(async () => button("Load IF fleet").click());
+    expect(button("Add to local fleet").disabled).toBe(false);
+    await act(async () => button("Add to local fleet").click());
+    const registration = document.getElementById("tail-registration") as HTMLInputElement;
+    expect(registration.value).toBe(""); expect(registration.placeholder).toBe("C-TEST");
+    expect(document.getElementById("tail-if-link")?.getAttribute("aria-checked")).toBe("true");
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Flights for a linked aircraft must be published");
+    await fillAircraft(); await act(async () => button("Add aircraft").click());
+    const request = mocks.fetch.mock.calls.find(call => call[0] === "/api/admin/scheduling")!;
+    expect(request[1].method).toBe("POST");
+    expect(JSON.parse(request[1].body)).toEqual({ action: "add_aircraft", registration: "C-OWN", aircraft_id: 1, current_airport: "CYYZ", active: true, if_aircraft_id: remoteAircraft.id });
+    expect(refresh).toHaveBeenCalledOnce(); expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(container.textContent).toContain("Aircraft added to the local fleet and linked to Infinite Flight");
+  });
+
+  it("permits unlinked creation when durable IF bindings are unavailable and sends no IF identifier", async () => {
+    mockFleet({ ...bindingReady, bindingReady: false, durableBindingsAllowed: false, bindingDisabledReasons: ["Durable IF mapping retention has not been authorized"] });
+    await render([], [], catalog); await act(async () => button("Load IF fleet").click());
+    expect(button("Add to local fleet").disabled).toBe(false);
+    await act(async () => button("Add to local fleet").click());
+    const link = document.getElementById("tail-if-link") as HTMLButtonElement;
+    expect(link.disabled).toBe(true); expect(link.getAttribute("aria-checked")).toBe("false");
+    await fillAircraft(); await act(async () => button("Add aircraft").click());
+    const request = mocks.fetch.mock.calls.find(call => call[0] === "/api/admin/scheduling")!;
+    expect(JSON.parse(request[1].body)).toEqual({ action: "add_aircraft", registration: "C-OWN", aircraft_id: 1, current_airport: "CYYZ", active: true });
+    expect(container.textContent).toContain("Aircraft added to the local fleet for manual scheduling");
+  });
+
+  it("lets an admin choose local scheduling even when IF binding is available", async () => {
+    mockFleet(); await render([], [], catalog); await act(async () => button("Load IF fleet").click());
+    await act(async () => button("Add to local fleet").click());
+    await act(async () => (document.getElementById("tail-if-link") as HTMLButtonElement).click());
+    await fillAircraft(); await act(async () => button("Add aircraft").click());
+    const request = mocks.fetch.mock.calls.find(call => call[0] === "/api/admin/scheduling")!;
+    expect(JSON.parse(request[1].body)).not.toHaveProperty("if_aircraft_id");
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it("switches an open form to manual creation when refreshed binding permission is removed", async () => {
+    let bindingAllowed = true;
+    mocks.fetch.mockImplementation(async (path: string) => Response.json(path === "/api/admin/scheduling"
+      ? { success: true }
+      : path.includes("/fleet?") ? { success: true, data: { aircraft: [remoteAircraft] } }
+      : { success: true, data: { ...bindingReady, bindingReady: bindingAllowed, durableBindingsAllowed: bindingAllowed, bindingDisabledReasons: bindingAllowed ? [] : ["Durable IF mapping retention has not been authorized"] } }));
+    await render([], [], catalog); await act(async () => button("Load IF fleet").click());
+    await act(async () => button("Add to local fleet").click()); await fillAircraft();
+    expect(document.getElementById("tail-if-link")?.getAttribute("aria-checked")).toBe("true");
+
+    bindingAllowed = false;
+    await act(async () => window.dispatchEvent(new Event("focus")));
+    const link = document.getElementById("tail-if-link") as HTMLButtonElement;
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(link.disabled).toBe(true); expect(link.getAttribute("aria-checked")).toBe("false");
+    expect((document.getElementById("tail-registration") as HTMLInputElement).value).toBe("C-OWN");
+    expect(button("Add aircraft").disabled).toBe(false);
+    await act(async () => button("Add aircraft").click());
+
+    const request = mocks.fetch.mock.calls.find(call => call[0] === "/api/admin/scheduling")!;
+    expect(JSON.parse(request[1].body)).toEqual({ action: "add_aircraft", registration: "C-OWN", aircraft_id: 1, current_airport: "CYYZ", active: true });
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(container.textContent).toContain("Aircraft added to the local fleet for manual scheduling");
+  });
+
+  it("selects an existing registration case-insensitively and links it without creating a duplicate", async () => {
+    const tail: LiveAircraft = { id: 1, aircraft_id: 1, registration: "c-test", name: "Airbus A320", active: true, current_airport: "CYYZ" };
+    mockFleet(); await render([tail], [], catalog); await act(async () => button("Load IF fleet").click());
+    expect(container.textContent).toContain("Already in local fleet");
+    expect(button("Add to local fleet")).toBeUndefined();
+    expect((container.querySelector('[aria-label="Local aircraft for C-TEST"]') as HTMLSelectElement).value).toBe("1");
+    expect(button("Link aircraft").disabled).toBe(false);
+    await act(async () => button("Link aircraft").click());
+    const request = mocks.fetch.mock.calls.find(call => call[0] === "/api/admin/scheduling")!;
+    expect(request[1].method).toBe("PATCH");
+    expect(JSON.parse(request[1].body)).toEqual({ action: "edit_aircraft", live_aircraft_id: 1, if_aircraft_id: remoteAircraft.id });
+    expect(container.textContent).toContain("C-TEST linked to the local fleet");
+  });
+
+  it("keeps failed creation in the form and permits a corrected retry", async () => {
+    let attempts = 0;
+    mocks.fetch.mockImplementation(async (path: string) => path === "/api/admin/scheduling"
+      ? ++attempts === 1 ? Response.json({ success: false, error: "Selected IF aircraft differs from the local catalog" }, { status: 409 }) : Response.json({ success: true })
+      : Response.json(path.includes("/fleet?") ? { success: true, data: { aircraft: [remoteAircraft] } } : { success: true, data: bindingReady }));
+    await render([], [], catalog); await act(async () => button("Load IF fleet").click());
+    await act(async () => button("Add to local fleet").click()); await fillAircraft();
+    await act(async () => button("Add aircraft").click());
+    expect(document.querySelector('[role="dialog"] [role="alert"]')?.textContent).toContain("differs from the local catalog");
+    expect((document.getElementById("tail-registration") as HTMLInputElement).value).toBe("C-OWN");
+    expect(button("Add aircraft").disabled).toBe(false); expect(refresh).not.toHaveBeenCalled();
+    await act(async () => (document.getElementById("tail-if-link") as HTMLButtonElement).click());
+    await act(async () => button("Add aircraft").click());
+    const requests = mocks.fetch.mock.calls.filter(call => call[0] === "/api/admin/scheduling");
+    expect(requests).toHaveLength(2); expect(JSON.parse(requests[1][1].body)).not.toHaveProperty("if_aircraft_id");
+    expect(document.querySelector('[role="dialog"]')).toBeNull(); expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  it("keeps aircraft linking disabled until the viewed organization is saved while allowing local creation", async () => {
+    mockFleet({ ...bindingReady, connection: { ...bindingReady.connection, organizationId: "different-org" } });
+    await render([], [], catalog); await act(async () => button("Load organizations").click());
+    await change("if-organization", organizationId); await act(async () => button("Load IF fleet").click());
+    expect((container.querySelector('[aria-label="Local aircraft for C-TEST"]') as HTMLSelectElement).disabled).toBe(true);
+    expect(button("Add to local fleet").disabled).toBe(false);
+    expect(container.textContent).toContain("Save this organization before linking");
+    await act(async () => button("Add to local fleet").click());
+    expect((document.getElementById("tail-if-link") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("requires a local catalog before opening an IF fleet creation form", async () => {
+    mockFleet(); await render(); await act(async () => button("Load IF fleet").click());
+    expect(button("Add to local fleet").disabled).toBe(true);
+    expect(container.textContent).toContain("Add an aircraft type to the local catalog");
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it("allows local creation from an IF aircraft in storage without offering an IF binding", async () => {
+    mockFleet(bindingReady, { ...remoteAircraft, isFleetActiveSlot: false });
+    await render([], [], catalog); await act(async () => button("Load IF fleet").click());
+    expect(container.textContent).toContain("IF fleet aircraft in storage");
+    expect((container.querySelector('[aria-label="Local aircraft for C-TEST"]') as HTMLSelectElement).disabled).toBe(true);
+    expect(button("Add to local fleet").disabled).toBe(false);
+    await act(async () => button("Add to local fleet").click());
+    expect((document.getElementById("tail-if-link") as HTMLButtonElement).disabled).toBe(true);
+    expect(document.getElementById("tail-if-link")?.getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("closes a creation form when a refreshed status reports the IF account disconnected", async () => {
+    vi.useFakeTimers();
+    try {
+      let disconnected = false;
+      mocks.fetch.mockImplementation(async (path: string) => Response.json(path.includes("/fleet?")
+        ? { success: true, data: { aircraft: [remoteAircraft] } }
+        : { success: true, data: { ...bindingReady, connection: disconnected ? { ...bindingReady.connection, state: "disconnected" } : bindingReady.connection } }));
+      await render([], [], catalog); await act(async () => button("Load IF fleet").click());
+      await act(async () => button("Add to local fleet").click()); expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+      disconnected = true; await act(async () => vi.advanceTimersByTimeAsync(30_001));
+      expect(document.querySelector('[role="dialog"]')).toBeNull();
+      expect(mocks.fetch.mock.calls.some(call => call[0] === "/api/admin/scheduling")).toBe(false);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("closes the creation form when its temporary IF fleet view expires", async () => {
+    vi.useFakeTimers();
+    try {
+      mockFleet(); await render([], [], catalog); await act(async () => button("Load IF fleet").click());
+      await act(async () => button("Add to local fleet").click()); expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+      await act(async () => vi.advanceTimersByTimeAsync(60_001));
+      expect(document.querySelector('[role="dialog"]')).toBeNull();
+      expect(container.textContent).toContain("IF fleet view expired");
+      expect(mocks.fetch.mock.calls.some(call => call[0] === "/api/admin/scheduling")).toBe(false);
+    } finally { vi.useRealTimers(); }
   });
 });

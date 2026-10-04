@@ -18,6 +18,7 @@ export async function ifIntegrationStatus() {
     enabled: config.previewEnabled, autoPublishEnabled: config.autoPublishEnabled,
     durableBindingsAllowed: config.durableBindingsAllowed, configured: config.configured,
     disabledReasons: config.disabledReasons,
+    bindingReady: config.bindingReady, bindingDisabledReasons: config.bindingDisabledReasons,
     revocationConfigured: config.revocationConfigured, publishingReady: config.publishingReady,
     publishingDisabledReasons: config.publishingDisabledReasons,
     oauthSetup: config.oauthSetup, canDisconnect, disconnectMode: config.revocationUrl ? "revoke" : "local",

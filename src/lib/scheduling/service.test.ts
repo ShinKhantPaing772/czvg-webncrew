@@ -299,7 +299,7 @@ describe("persistent aircraft chain repair", () => {
     rows.IfLiveConnection.push({ id: 1, organization_id: IF_ORGANIZATION, state: "connected", access_token_encrypted: "test-encrypted", connected_by: 9 });
   }
 
-  it("uses the same normalized publishing flags as OAuth when binding aircraft", async () => {
+  it("uses normalized OAuth and retention flags when binding aircraft", async () => {
     configuredIfPublishing();
     await changeAircraft(administrator, { action: "edit_aircraft", live_aircraft_id: 1, if_aircraft_id: "12345678-1234-1234-1234-123456789abc" });
     expect(rows.LiveAircraft[0].if_aircraft_id).toBe("12345678-1234-1234-1234-123456789abc");
@@ -327,16 +327,85 @@ describe("persistent aircraft chain repair", () => {
     expect(rows.LiveAircraft[0].if_aircraft_id).toBeNull();
   });
 
-  it("rejects binding when OAuth lacks a supported revocation configuration", async () => {
+  it("allows validated bindings without a supported revocation endpoint", async () => {
     configuredIfPublishing(); vi.stubEnv("IF_LIVE_REVOCATION_URL", "");
-    await expect(changeAircraft(administrator, { action: "edit_aircraft", live_aircraft_id: 1, if_aircraft_id: "12345678-1234-1234-1234-123456789abc" })).rejects.toMatchObject({ status: 409 });
-    expect(rows.LiveAircraft[0].if_aircraft_id).toBeNull();
+    await changeAircraft(administrator, { action: "edit_aircraft", live_aircraft_id: 1, if_aircraft_id: IF_AIRCRAFT });
+    expect(rows.LiveAircraft[0].if_aircraft_id).toBe(IF_AIRCRAFT);
+    expect(mocks.ifBinding).toHaveBeenCalledOnce();
   });
 
-  it("keeps aircraft on local scheduling during OAuth testing without automatic publishing", async () => {
+  it("allows validated bindings while automatic publishing is disabled", async () => {
     configuredIfPublishing(); vi.stubEnv("IF_LIVE_AUTO_PUBLISH_ENABLED", "false");
-    await expect(changeAircraft(administrator, { action: "edit_aircraft", live_aircraft_id: 1, if_aircraft_id: "12345678-1234-1234-1234-123456789abc" })).rejects.toMatchObject({ status: 409 });
+    await changeAircraft(administrator, { action: "edit_aircraft", live_aircraft_id: 1, if_aircraft_id: IF_AIRCRAFT });
+    expect(rows.LiveAircraft[0].if_aircraft_id).toBe(IF_AIRCRAFT);
+    expect(mocks.ifBinding).toHaveBeenCalledOnce();
+  });
+
+  it("rejects binding without permission to retain IF identifiers before fetching the fleet", async () => {
+    configuredIfPublishing(); vi.stubEnv("IF_LIVE_DURABLE_BINDINGS_ALLOWED", "false");
+    await expect(changeAircraft(administrator, { action: "edit_aircraft", live_aircraft_id: 1, if_aircraft_id: IF_AIRCRAFT })).rejects.toThrow("Durable IF mapping retention has not been authorized");
     expect(rows.LiveAircraft[0].if_aircraft_id).toBeNull();
+    expect(mocks.ifToken).not.toHaveBeenCalled();
+    expect(mocks.ifBinding).not.toHaveBeenCalled();
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
+  it("creates a reviewed local aircraft and validated IF binding atomically without publishing or importing IF metadata", async () => {
+    configuredIfPublishing(); vi.stubEnv("IF_LIVE_AUTO_PUBLISH_ENABLED", "false"); vi.stubEnv("IF_LIVE_REVOCATION_URL", "");
+    mocks.ifBinding.mockResolvedValue({ id: IF_AIRCRAFT, registration: "REMOTE-TAIL", visibility: 1, position: { latitude: 50, longitude: 60 } });
+    const result = await changeAircraft(administrator, { action: "add_aircraft", registration: " c-reviewed ", aircraft_id: 1, current_airport: " cyyz ", active: true, if_aircraft_id: IF_AIRCRAFT });
+    expect(result).toEqual({ live_aircraft_id: 2 });
+    expect(rows.LiveAircraft[1]).toEqual({ id: 2, registration: "C-REVIEWED", aircraft_id: 1, current_airport: "CYYZ", active: true,
+      if_aircraft_id: IF_AIRCRAFT, location_updated_by: 9, location_updated_at: expect.any(Date) });
+    expect(mocks.ifBinding).toHaveBeenCalledWith({ token: "test-if-access", organizationId: IF_ORGANIZATION, ifAircraftId: IF_AIRCRAFT, catalog: expect.objectContaining({ id: 1 }) });
+    expect(mocks.LiveAircraft.create).toHaveBeenCalledWith(expect.objectContaining({ registration: "C-REVIEWED", if_aircraft_id: IF_AIRCRAFT }), { transaction });
+    expect(mocks.LiveScheduleEvent.create).toHaveBeenCalledWith(expect.objectContaining({ live_aircraft_id: 2, actor_id: 9, action: "aircraft_added" }), { transaction });
+    expect(rows.IfLiveOutbox).toHaveLength(0);
+  });
+
+  it("denies a pilot creating a linked fleet entry before accessing the connected IF account", async () => {
+    configuredIfPublishing();
+    await expect(changeAircraft(captain, { action: "add_aircraft", registration: "C-NEW", aircraft_id: 1, current_airport: "CYYZ", if_aircraft_id: IF_AIRCRAFT })).rejects.toMatchObject({ status: 403 });
+    expect(mocks.ifToken).not.toHaveBeenCalled(); expect(mocks.ifBinding).not.toHaveBeenCalled();
+    expect(rows.LiveAircraft).toHaveLength(1); expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects a new fleet entry before saving when the IF aircraft does not match the reviewed catalog", async () => {
+    configuredIfPublishing(); mocks.ifBinding.mockRejectedValue(new IfLiveError("The selected IF aircraft is a different aircraft type from the local catalog entry", "binding", 409));
+    await expect(changeAircraft(administrator, { action: "add_aircraft", registration: "C-NEW", aircraft_id: 1, current_airport: "CYYZ", if_aircraft_id: IF_AIRCRAFT })).rejects.toMatchObject({ status: 409 });
+    expect(rows.LiveAircraft).toHaveLength(1); expect(rows.LiveScheduleEvent).toHaveLength(0);
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects a new fleet entry if the IF organization changes during binding validation", async () => {
+    configuredIfPublishing(); mocks.ifBinding.mockImplementation(async () => { rows.IfLiveConnection[0].organization_id = IF_AIRCRAFT; });
+    await expect(changeAircraft(administrator, { action: "add_aircraft", registration: "C-NEW", aircraft_id: 1, current_airport: "CYYZ", if_aircraft_id: IF_AIRCRAFT })).rejects.toThrow("changed during validation");
+    expect(rows.LiveAircraft).toHaveLength(1); expect(rows.LiveScheduleEvent).toHaveLength(0);
+  });
+
+  it("rechecks retained-identifier permission before saving a newly validated binding", async () => {
+    configuredIfPublishing(); mocks.ifBinding.mockImplementation(async () => { vi.stubEnv("IF_LIVE_DURABLE_BINDINGS_ALLOWED", "false"); });
+    await expect(changeAircraft(administrator, { action: "add_aircraft", registration: "C-NEW", aircraft_id: 1, current_airport: "CYYZ", if_aircraft_id: IF_AIRCRAFT })).rejects.toThrow("Durable IF mapping retention has not been authorized");
+    expect(rows.LiveAircraft).toHaveLength(1); expect(rows.LiveScheduleEvent).toHaveLength(0);
+  });
+
+  it("rolls back both aircraft creation and its binding if the audit event cannot be saved", async () => {
+    configuredIfPublishing(); mocks.LiveScheduleEvent.create.mockRejectedValueOnce(new Error("Audit write failed"));
+    await expect(changeAircraft(administrator, { action: "add_aircraft", registration: "C-NEW", aircraft_id: 1, current_airport: "CYYZ", if_aircraft_id: IF_AIRCRAFT })).rejects.toThrow("Audit write failed");
+    expect(rows.LiveAircraft).toHaveLength(1); expect(rows.LiveAircraft[0].if_aircraft_id).toBeNull();
+    expect(rows.IfLiveOutbox).toHaveLength(0);
+  });
+
+  it("keeps a linked approval queued for later publishing and blocks start while publishing is disabled", async () => {
+    configuredIfPublishing(); vi.stubEnv("IF_LIVE_AUTO_PUBLISH_ENABLED", "false"); vi.stubEnv("IF_LIVE_REVOCATION_URL", "");
+    await changeAircraft(administrator, { action: "edit_aircraft", live_aircraft_id: 1, if_aircraft_id: IF_AIRCRAFT });
+    flight({ status: "pending" });
+    await changeFlight(administrator, { action: "approve", flight_id: 1 });
+    expect(rows.LiveFlight[0]).toMatchObject({ status: "approved", publishing_state: "disabled", revision: 2, published_revision: 0 });
+    expect(rows.IfLiveOutbox).toEqual([expect.objectContaining({ flight_id: 1, revision: 2, state: "queued" })]);
+    await expect(changeFlight(captain, { action: "start", flight_id: 1 })).rejects.toThrow("latest schedule and crew are published to IF");
+    expect(rows.LiveFlight[0].status).toBe("approved");
+    expect(mocks.ifSchedules).not.toHaveBeenCalled(); expect(mocks.ifPosition).not.toHaveBeenCalled();
   });
 
   it("allows unbinding completed IF history while preserving its identifiers", async () => {

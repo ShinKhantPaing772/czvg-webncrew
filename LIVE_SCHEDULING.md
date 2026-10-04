@@ -58,7 +58,7 @@ Configure these **server-only** environment variables:
 | --- | --- |
 | `IF_LIVE_PREVIEW_ENABLED` | `true` to enable admin OAuth linking and temporary reads; default `false` |
 | `IF_LIVE_AUTO_PUBLISH_ENABLED` | `true` to enable the publishing worker; default `false` |
-| `IF_LIVE_DURABLE_BINDINGS_ALLOWED` | `true` only after IF permits retained integration identifiers; default `false` |
+| `IF_LIVE_DURABLE_BINDINGS_ALLOWED` | `true` after IF permits retained integration identifiers; enables aircraft linking independently of publishing; default `false` |
 | `IF_LIVE_CLIENT_ID` | Approved confidential OAuth client ID |
 | `IF_LIVE_CLIENT_SECRET` | Client secret |
 | `IF_LIVE_REDIRECT_URI` | Exact registered callback on the domain used for the admin page; see below |
@@ -127,18 +127,37 @@ before deleting the local credentials. Keep the original client credentials
 and encryption key until revocation succeeds; errors preserve the local tokens
 for retry. Preview access and callback configuration may be disabled during
 revocation. An invalid nonempty revocation URL is rejected rather than silently
-treated as successful revocation. Aircraft binding and automatic publishing
-remain unavailable while a supported revocation URL is absent.
+treated as successful revocation. Automatic publishing remains unavailable
+while a supported revocation URL is absent; aircraft linking does not require it.
 
 In **Scheduling Administration → Infinite Flight**, connect an IF
 organization owner/admin, then load organizations and temporarily view the fleet.
-After IF permits durable identifier retention, a supported revocation URL is
-configured, and automatic publishing is enabled, select the organization and
-explicitly bind each local
-aircraft to its persistent IF aircraft. Ordinary pilots need no IF OAuth login;
+After IF permits durable identifier retention, set
+`IF_LIVE_DURABLE_BINDINGS_ALLOWED=true`, save the organization, and explicitly
+bind each local aircraft to its persistent IF aircraft. Linking works with
+automatic publishing disabled and the revocation URL unset. The page shows
+separate reasons when linking or publishing is unavailable. Ordinary pilots need no IF OAuth login;
 their existing `pilots.ifuserid` identifies them. Crew must already belong to the
 IF organization. Organization invitations and aircraft creation/relocation in IF
 remain outside this application.
+
+Each fetched IF aircraft also has **Add to local fleet**. Enter the local
+registration, select an existing catalog type/livery, and confirm its airport
+(or leave it unknown). IF registration is shown as a temporary reference, not
+copied automatically. Choose whether to link the new aircraft; creation and
+binding are one validated transaction, so a failed binding leaves no partial
+local aircraft. Without identifier permission or a saved organization, this
+action still creates an unlinked local aircraft. A matching local registration
+is shown as already present and offered for linking instead of creating a
+duplicate. Drafts close when the temporary fleet expires, the organization
+changes, or IF read access is lost. No position or fetched schedule is imported.
+
+Linking alone does not publish anything. Linked flights cannot start until
+their latest approved schedule and crew are published; keep a tail unlinked
+for local-only scheduling until publishing is enabled. Existing aircraft
+catalog entries and pilot/admin-confirmed airports remain the local source of
+truth. Automatic publishing still requires the supported revocation URL,
+publishing flag, permitted durable identifiers, and protected worker.
 
 Binding checks current organization ownership, active fleet status, and the local
 catalog's `ifaircraftid` and `ifliveryid` against IF's official content directory.

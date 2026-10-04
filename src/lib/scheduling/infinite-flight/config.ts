@@ -57,6 +57,10 @@ export function getIfLiveConfig() {
     if (revocationUrl) disabledReasons.push("The configured IF OAuth revocation URL is invalid");
   }
   try { tokenEncryptionKey(); encryptionReady = true; } catch { disabledReasons.push("The IF token encryption key is missing or invalid"); }
+  const bindingDisabledReasons = [
+    ...disabledReasons,
+    ...(!durableBindingsAllowed ? ["Durable IF mapping retention has not been authorized"] : []),
+  ];
   const publishingDisabledReasons = [
     ...disabledReasons,
     ...(!autoPublishEnabled ? ["Automatic IF publishing is disabled"] : []),
@@ -73,6 +77,7 @@ export function getIfLiveConfig() {
   return {
     previewEnabled, autoPublishEnabled, durableBindingsAllowed, clientId, clientSecret, redirectUri, revocationUrl,
     configured: disabledReasons.length === 0, disabledReasons, oauthSetup,
+    bindingReady: bindingDisabledReasons.length === 0, bindingDisabledReasons,
     revocationConfigured: revocationReady, publishingReady: publishingDisabledReasons.length === 0, publishingDisabledReasons,
   };
 }

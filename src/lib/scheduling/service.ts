@@ -223,7 +223,7 @@ async function prepareIfBinding(body: Body) {
   const catalogId = has(body, "aircraft_id") ? validId(body.aircraft_id, "Aircraft type") : aircraft?.aircraft_id;
   if (!binding || (!has(body, "if_aircraft_id") && catalogId === aircraft?.aircraft_id)) return null;
   const config = getIfLiveConfig();
-  if (!config.publishingReady) throw new SchedulingError(`IF aircraft binding is unavailable: ${config.publishingDisabledReasons.join("; ")}`, 409);
+  if (!config.bindingReady) throw new SchedulingError(`IF aircraft binding is unavailable: ${config.bindingDisabledReasons.join("; ")}`, 409);
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(binding)) throw new SchedulingError("Invalid persistent IF aircraft ID");
   return withIfRequestBudget(20_000, async () => {
     const { token, connection } = await connectedIfAccount();
@@ -381,7 +381,7 @@ export async function changeAircraft(actor: SchedulingActor, body: Body) {
       const binding = text(body.if_aircraft_id, 36, "IF aircraft ID")?.toLowerCase() ?? null;
       if (binding) {
         const config = getIfLiveConfig();
-        if (!config.publishingReady) throw new SchedulingError(`IF aircraft binding is unavailable: ${config.publishingDisabledReasons.join("; ")}`, 409);
+        if (!config.bindingReady) throw new SchedulingError(`IF aircraft binding is unavailable: ${config.bindingDisabledReasons.join("; ")}`, 409);
         if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(binding)) throw new SchedulingError("Invalid persistent IF aircraft ID");
         const connection = await IfLiveConnection.findByPk(1, { transaction });
         if (!connection?.organization_id || connection.state !== "connected") throw new SchedulingError("Connect an IF organization first", 409);

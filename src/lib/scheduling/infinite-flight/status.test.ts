@@ -24,7 +24,7 @@ afterEach(() => { vi.unstubAllEnvs(); });
 describe("IF integration setup status", () => {
   it("keeps disconnect available with preview and callback disabled", async () => {
     const status = await ifIntegrationStatus();
-    expect(status).toMatchObject({ configured: false, enabled: false, canDisconnect: true, disconnectMode: "revoke", revocationConfigured: true, publishingReady: false, oauthSetup: { callbackUrl: null } });
+    expect(status).toMatchObject({ configured: false, enabled: false, bindingReady: false, canDisconnect: true, disconnectMode: "revoke", revocationConfigured: true, publishingReady: false, oauthSetup: { callbackUrl: null } });
     expect(JSON.stringify(status)).not.toContain("hidden-client-secret");
     expect(JSON.stringify(status)).not.toContain("hidden-encrypted-token");
     expect(JSON.stringify(status)).not.toContain("hidden-refresh-token");
@@ -39,9 +39,22 @@ describe("IF integration setup status", () => {
     vi.stubEnv("IF_LIVE_REDIRECT_URI", "https://ifczvg.com/oauth/callback");
     vi.stubEnv("IF_LIVE_REVOCATION_URL", "  ");
     const status = await ifIntegrationStatus();
-    expect(status).toMatchObject({ configured: true, disabledReasons: [], revocationConfigured: false, publishingReady: false, canDisconnect: true, disconnectMode: "local" });
+    expect(status).toMatchObject({ configured: true, disabledReasons: [], bindingReady: true, bindingDisabledReasons: [], revocationConfigured: false, publishingReady: false, canDisconnect: true, disconnectMode: "local" });
     expect(status.publishingDisabledReasons).toEqual(["Automatic IF publishing requires a supported OAuth revocation URL"]);
     expect(status.oauthSetup.checks.find(check => check.id === "revocation")).toMatchObject({ ready: false, required: false });
+  });
+  it("exposes binding readiness independently of publishing readiness without sensitive setup values", async () => {
+    vi.stubEnv("IF_LIVE_PREVIEW_ENABLED", "true");
+    vi.stubEnv("IF_LIVE_REDIRECT_URI", "https://ifczvg.com/oauth/callback");
+    vi.stubEnv("IF_LIVE_AUTO_PUBLISH_ENABLED", "false");
+    vi.stubEnv("IF_LIVE_REVOCATION_URL", "");
+    const status = await ifIntegrationStatus();
+    expect(status).toMatchObject({ configured: true, bindingReady: true, bindingDisabledReasons: [], publishingReady: false });
+    expect(JSON.stringify(status)).not.toContain("hidden-client-secret");
+    expect(JSON.stringify(status)).not.toContain("hidden-encrypted-token");
+    expect(JSON.stringify(status)).not.toContain(Buffer.alloc(32, 7).toString("base64"));
+    vi.stubEnv("IF_LIVE_DURABLE_BINDINGS_ALLOWED", "false");
+    expect(await ifIntegrationStatus()).toMatchObject({ configured: true, bindingReady: false, bindingDisabledReasons: ["Durable IF mapping retention has not been authorized"] });
   });
   it("keeps local disconnect available without client credentials or an encryption key", async () => {
     vi.stubEnv("IF_LIVE_REVOCATION_URL", "");

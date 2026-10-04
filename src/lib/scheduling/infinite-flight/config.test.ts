@@ -63,7 +63,7 @@ describe("IF OAuth configuration", () => {
   ])("keeps OAuth ready with a $label revocation URL while disabling publishing", ({ value }) => {
     vi.stubEnv("IF_LIVE_REVOCATION_URL", value);
     const config = getIfLiveConfig();
-    expect(config).toMatchObject({ configured: true, disabledReasons: [], revocationConfigured: false, publishingReady: false });
+    expect(config).toMatchObject({ configured: true, disabledReasons: [], bindingReady: true, bindingDisabledReasons: [], revocationConfigured: false, publishingReady: false });
     expect(config.publishingDisabledReasons).toEqual(["Automatic IF publishing requires a supported OAuth revocation URL"]);
     expect(config.oauthSetup.checks.find(check => check.id === "revocation")).toMatchObject({ ready: false, required: false });
     expect(() => requireIfLiveConfig()).not.toThrow();
@@ -91,6 +91,21 @@ describe("IF OAuth configuration", () => {
     expect(config).toMatchObject({ configured: true, revocationConfigured: true, publishingReady: false });
     expect(config.publishingDisabledReasons).toEqual(["Automatic IF publishing is disabled", "Durable IF mapping retention has not been authorized"]);
     expect(() => requireIfLiveConfig(true)).toThrow(expect.objectContaining({ code: "disabled" }));
+  });
+  it("permits retained aircraft bindings while automatic publishing and revocation are unavailable", () => {
+    vi.stubEnv("IF_LIVE_AUTO_PUBLISH_ENABLED", "false");
+    vi.stubEnv("IF_LIVE_REVOCATION_URL", "");
+    expect(getIfLiveConfig()).toMatchObject({ configured: true, bindingReady: true, bindingDisabledReasons: [], publishingReady: false });
+    expect(() => requireIfLiveConfig(true)).toThrow(expect.objectContaining({ code: "disabled" }));
+  });
+  it("requires permission to retain mappings independently of OAuth and publishing", () => {
+    vi.stubEnv("IF_LIVE_DURABLE_BINDINGS_ALLOWED", "false");
+    expect(getIfLiveConfig()).toMatchObject({ configured: true, bindingReady: false, bindingDisabledReasons: ["Durable IF mapping retention has not been authorized"], publishingReady: false });
+    expect(() => requireIfLiveConfig()).not.toThrow();
+  });
+  it("requires OAuth readiness for bindings even when durable mappings are authorized", () => {
+    vi.stubEnv("IF_LIVE_CLIENT_SECRET", "");
+    expect(getIfLiveConfig()).toMatchObject({ configured: false, bindingReady: false, bindingDisabledReasons: ["Infinite Flight OAuth client credentials are missing"] });
   });
   it("permits publishing once OAuth, retained identifiers, automatic publishing and revocation are ready", () => {
     expect(getIfLiveConfig()).toMatchObject({ configured: true, revocationConfigured: true, publishingReady: true, publishingDisabledReasons: [] });
