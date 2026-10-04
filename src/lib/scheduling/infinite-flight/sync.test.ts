@@ -21,6 +21,10 @@ function apiFor(payload = authored()): SyncApi {
 function input(overrides: Partial<Parameters<typeof synchronizeIfFlight>[0]> = {}) {
   return { publicId: PUBLIC_ID, remoteId: null, schedules: [], desired: authored(), previous: null, action: "sync" as const, uncertainCreation: false, api: apiFor(), checkpoint: vi.fn(async () => undefined), ...overrides };
 }
+function expectNoWrites(value: ReturnType<typeof input>) {
+  expect(value.api.create).not.toHaveBeenCalled(); expect(value.api.update).not.toHaveBeenCalled(); expect(value.api.remove).not.toHaveBeenCalled();
+  expect(value.api.putCrew).not.toHaveBeenCalled(); expect(value.api.removeCrew).not.toHaveBeenCalled(); expect(value.checkpoint).not.toHaveBeenCalled();
+}
 
 describe("IF reconciliation", () => {
   it("authors a stable marker and callsign without changing optional local input", () => {
@@ -84,9 +88,63 @@ describe("IF reconciliation", () => {
   });
   it("permits adjacent reservations and ignores cancelled or arrived history", async () => {
     const value = input({ schedules: [
-      { ...schedule(), id: FO, briefing: "Next booking", scheduledDepartureUtc: "2026-10-04T15:00:00Z", scheduledArrivalUtc: "2026-10-04T17:00:00Z" },
+      { ...schedule(), id: FO, briefing: "Previous booking", originIcao: "KBOS", destinationIcao: "CYYZ", scheduledDepartureUtc: "2026-10-04T08:00:00Z", scheduledArrivalUtc: "2026-10-04T10:00:00Z" },
       { ...schedule(), id: CAPTAIN, briefing: "Cancelled", status: 9 }, { ...schedule(), id: PUBLIC_ID, briefing: "Arrived", status: 11 },
     ] });
+    await synchronizeIfFlight(value); expect(value.api.create).toHaveBeenCalledOnce();
+  });
+  it.each(["sync", "overwrite", "recreate"] as const)("rejects a non-overlapping foreign predecessor that leaves the aircraft at the wrong airport during %s", async action => {
+    const external = { ...schedule(), id: FO, briefing: "External booking", destinationIcao: "KJFK", scheduledDepartureUtc: "2026-10-04T05:00:00Z", scheduledArrivalUtc: "2026-10-04T09:00:00Z" };
+    const value = input({ schedules: [external], action });
+    await expect(synchronizeIfFlight(value)).rejects.toMatchObject({ code: "conflict", message: expect.stringContaining("discontinuous") });
+    expectNoWrites(value);
+  });
+  it("rejects a successor departing from the wrong airport before changing an owned reservation", async () => {
+    const external = { ...schedule(), id: FO, briefing: "External booking", originIcao: "KJFK", destinationIcao: "KLAX", scheduledDepartureUtc: "2026-10-04T16:00:00Z", scheduledArrivalUtc: "2026-10-04T21:00:00Z" };
+    const desired = { ...authored(), schedule: { ...authored().schedule, callsign: "CHANGED" } };
+    const value = input({ remoteId: REMOTE_ID, previous: authored(), desired, schedules: [schedule(), external] });
+    await expect(synchronizeIfFlight(value)).rejects.toMatchObject({ code: "conflict", message: expect.stringContaining("discontinuous") });
+    expectNoWrites(value);
+  });
+  it("checks the amended route rather than the previously published route", async () => {
+    const next = { ...schedule(), id: FO, briefing: "External booking", originIcao: "CYVR", destinationIcao: "KLAX", scheduledDepartureUtc: "2026-10-04T16:00:00Z", scheduledArrivalUtc: "2026-10-04T21:00:00Z" };
+    const desired = { ...authored(), schedule: { ...authored().schedule, destinationIcao: "KJFK" } };
+    const value = input({ remoteId: REMOTE_ID, previous: authored(), desired, schedules: [schedule(), next] });
+    await expect(synchronizeIfFlight(value)).rejects.toMatchObject({ code: "conflict", message: expect.stringContaining("discontinuous") });
+    expectNoWrites(value);
+  });
+  it("keeps an unpublished local successor in the combined route", async () => {
+    const next = { ...flight, public_id: FO, departure: "CYVR", arrival: "KJFK", scheduled_departure: new Date("2026-10-04T16:00:00Z"), scheduled_arrival: new Date("2026-10-04T18:00:00Z") };
+    const external = { ...schedule(), id: CAPTAIN, briefing: "Later external booking", originIcao: "KJFK", destinationIcao: "KBOS", scheduledDepartureUtc: "2026-10-04T19:00:00Z", scheduledArrivalUtc: "2026-10-04T21:00:00Z" };
+    const value = input({ remoteId: REMOTE_ID, previous: authored(), schedules: [schedule(), external], localFlights: [flight, next] });
+    await synchronizeIfFlight(value); expect(value.api.create).not.toHaveBeenCalled(); expect(value.api.update).not.toHaveBeenCalled();
+  });
+  it("waits for an unpublished earlier local bridge before publishing its successor", async () => {
+    const earlier = { ...flight, public_id: FO, departure: "KJFK", arrival: "CYYZ", scheduled_departure: new Date("2026-10-04T08:00:00Z"), scheduled_arrival: new Date("2026-10-04T10:00:00Z") };
+    const external = { ...schedule(), id: CAPTAIN, briefing: "External predecessor", destinationIcao: "KJFK", scheduledDepartureUtc: "2026-10-04T05:00:00Z", scheduledArrivalUtc: "2026-10-04T07:00:00Z" };
+    const value = input({ schedules: [external], localFlights: [earlier, flight] });
+    await expect(synchronizeIfFlight(value)).rejects.toMatchObject({ code: "predecessor_pending" }); expectNoWrites(value);
+  });
+  it("waits for an earlier local amendment to publish even when its old IF route remains compatible", async () => {
+    const earlier = { ...flight, public_id: FO, departure: "KJFK", arrival: "CYYZ", scheduled_departure: new Date("2026-10-04T08:00:00Z"), scheduled_arrival: new Date("2026-10-04T10:00:00Z"), revision: 2, published_revision: 1 };
+    const remote = { ...schedule(), id: CAPTAIN, briefing: scheduleMarker(FO), originIcao: "KJFK", destinationIcao: "CYYZ", scheduledDepartureUtc: "2026-10-04T08:00:00Z", scheduledArrivalUtc: "2026-10-04T10:00:00Z" };
+    const value = input({ schedules: [remote], localFlights: [earlier, flight] });
+    await expect(synchronizeIfFlight(value)).rejects.toMatchObject({ code: "predecessor_pending" }); expectNoWrites(value);
+  });
+  it("does not substitute local routes for an externally edited managed predecessor", async () => {
+    const earlier = { ...flight, public_id: FO, departure: "KJFK", arrival: "CYYZ", scheduled_departure: new Date("2026-10-04T08:00:00Z"), scheduled_arrival: new Date("2026-10-04T10:00:00Z") };
+    const expected = buildIfPayload(earlier, authored().crew);
+    const value = input({ schedules: [{ ...schedule(expected), id: CAPTAIN, destinationIcao: "CYVR" }], localFlights: [{ ...earlier, last_published_payload: expected }, flight] });
+    await expect(synchronizeIfFlight(value)).rejects.toMatchObject({ code: "conflict", message: expect.stringContaining("changed outside this app") }); expectNoWrites(value);
+  });
+  it("rejects creating before a foreign future reservation rather than leaving a wrongly appended reservation", async () => {
+    const value = input({ schedules: [{ ...schedule(), id: FO, briefing: "External successor", originIcao: "CYVR", destinationIcao: "KJFK", scheduledDepartureUtc: "2026-10-04T16:00:00Z", scheduledArrivalUtc: "2026-10-04T18:00:00Z" }] });
+    await expect(synchronizeIfFlight(value)).rejects.toMatchObject({ code: "conflict", message: expect.stringContaining("wrong side") }); expectNoWrites(value);
+  });
+  it("allows an appended first local leg when the published local successor can be reordered safely", async () => {
+    const next = { ...flight, public_id: FO, departure: "CYVR", arrival: "KJFK", scheduled_departure: new Date("2026-10-04T16:00:00Z"), scheduled_arrival: new Date("2026-10-04T18:00:00Z") };
+    const remote = { ...schedule(buildIfPayload(next, authored().crew)), id: CAPTAIN };
+    const value = input({ schedules: [remote], localFlights: [flight, next] });
     await synchronizeIfFlight(value); expect(value.api.create).toHaveBeenCalledOnce();
   });
   it("protects in-progress reservations from local cancellation", async () => {
@@ -96,6 +154,74 @@ describe("IF reconciliation", () => {
   it("deletes an unchanged app-owned scheduled reservation on cancellation", async () => {
     const value = input({ remoteId: REMOTE_ID, schedules: [schedule()], previous: authored(), desired: null });
     await expect(synchronizeIfFlight(value)).resolves.toEqual({ remoteId: null, removed: true }); expect(value.api.remove).toHaveBeenCalledWith(REMOTE_ID);
+  });
+  it.each([9, 11])("reconciles an unchanged owned terminal reservation in state %s without deleting history", async status => {
+    const value = input({ remoteId: REMOTE_ID, schedules: [{ ...schedule(), status }], previous: authored(), desired: null, uncertainCreation: true });
+    await expect(synchronizeIfFlight(value)).resolves.toEqual({ remoteId: null, removed: true }); expectNoWrites(value);
+  });
+  it.each([9, 11])("protects terminal state %s against unrelated changes even with overwrite selected", async status => {
+    const value = input({ remoteId: REMOTE_ID, schedules: [{ ...schedule(), status, destinationIcao: "KJFK" }], previous: authored(), desired: null, action: "overwrite" });
+    await expect(synchronizeIfFlight(value)).rejects.toMatchObject({ code: "conflict" }); expectNoWrites(value);
+  });
+  it.each([0, 6, 99])("blocks cancellation of owned started or unknown state %s", async status => {
+    const value = input({ remoteId: REMOTE_ID, schedules: [{ ...schedule(), status }], previous: authored(), desired: null });
+    await expect(synchronizeIfFlight(value)).rejects.toMatchObject({ code: "conflict" }); expectNoWrites(value);
+  });
+  it.each([9, 11])("never relinks or deletes a foreign terminal reservation in state %s", async status => {
+    const value = input({ remoteId: REMOTE_ID, schedules: [{ ...schedule(), status, briefing: "Foreign reservation" }], previous: authored(), desired: null, action: "overwrite" });
+    await expect(synchronizeIfFlight(value)).rejects.toMatchObject({ code: "conflict" }); expectNoWrites(value);
+  });
+  it("does not delete a changed scheduled reservation even with overwrite selected", async () => {
+    const value = input({ remoteId: REMOTE_ID, schedules: [{ ...schedule(), destinationIcao: "KJFK" }], previous: authored(), desired: null, action: "overwrite" });
+    await expect(synchronizeIfFlight(value)).rejects.toMatchObject({ code: "conflict" }); expectNoWrites(value);
+  });
+  it("does not remove a bridge between remaining active IF flights", async () => {
+    const earlier = { ...schedule(), id: CAPTAIN, briefing: "Earlier external flight", originIcao: "KBOS", destinationIcao: "CYYZ", scheduledDepartureUtc: "2026-10-04T05:00:00Z", scheduledArrivalUtc: "2026-10-04T09:00:00Z" };
+    const later = { ...schedule(), id: FO, briefing: "Later external flight", originIcao: "CYVR", destinationIcao: "KJFK", scheduledDepartureUtc: "2026-10-04T16:00:00Z", scheduledArrivalUtc: "2026-10-04T18:00:00Z" };
+    const value = input({ remoteId: REMOTE_ID, schedules: [earlier, schedule(), later], previous: authored(), desired: null });
+    await expect(synchronizeIfFlight(value)).rejects.toMatchObject({ code: "conflict", message: expect.stringContaining("discontinuous") }); expectNoWrites(value);
+  });
+  it("drains a cancellation cascade downstream first without stranding the predecessor job in conflict", async () => {
+    const nextFlight = { ...flight, id: 10, public_id: FO, departure: "CYVR", arrival: "KJFK", scheduled_departure: new Date("2026-10-04T16:00:00Z"), scheduled_arrival: new Date("2026-10-04T18:00:00Z") };
+    const nextPayload = buildIfPayload(nextFlight, authored().crew); const next = { ...schedule(nextPayload), id: CAPTAIN };
+    const localFlights = [{ ...flight, status: "cancelled", if_schedule_id: REMOTE_ID, last_published_payload: authored() }, { ...nextFlight, status: "needs_review", if_schedule_id: CAPTAIN, last_published_payload: nextPayload }];
+    const blocked = input({ remoteId: REMOTE_ID, schedules: [schedule(), next], previous: authored(), desired: null, localFlights });
+    await expect(synchronizeIfFlight(blocked)).rejects.toMatchObject({ code: "removal_pending" }); expectNoWrites(blocked);
+    const downstream = input({ publicId: FO, remoteId: CAPTAIN, schedules: [schedule(), next], previous: nextPayload, desired: null, localFlights });
+    await expect(synchronizeIfFlight(downstream)).resolves.toEqual({ remoteId: null, removed: true }); expect(downstream.api.remove).toHaveBeenCalledWith(CAPTAIN);
+    const retry = input({ remoteId: REMOTE_ID, schedules: [schedule()], previous: authored(), desired: null, localFlights });
+    await expect(synchronizeIfFlight(retry)).resolves.toEqual({ remoteId: null, removed: true }); expect(retry.api.remove).toHaveBeenCalledWith(REMOTE_ID);
+  });
+  it("waits for downstream cleanup before publishing an amendment that changes the preceding route", async () => {
+    const nextFlight = { ...flight, id: 10, public_id: FO, departure: "CYVR", arrival: "KJFK", scheduled_departure: new Date("2026-10-04T16:00:00Z"), scheduled_arrival: new Date("2026-10-04T18:00:00Z") };
+    const nextPayload = buildIfPayload(nextFlight, authored().crew); const next = { ...schedule(nextPayload), id: CAPTAIN };
+    const desired = { ...authored(), schedule: { ...authored().schedule, destinationIcao: "KLAX" } };
+    const localFlights = [{ ...flight, arrival: "KLAX", status: "approved", if_schedule_id: REMOTE_ID, last_published_payload: authored() }, { ...nextFlight, status: "needs_review", if_schedule_id: CAPTAIN, last_published_payload: nextPayload }];
+    const blocked = input({ remoteId: REMOTE_ID, schedules: [schedule(), next], previous: authored(), desired, localFlights });
+    await expect(synchronizeIfFlight(blocked)).rejects.toMatchObject({ code: "removal_pending" }); expectNoWrites(blocked);
+    const downstream = input({ publicId: FO, remoteId: CAPTAIN, schedules: [schedule(), next], previous: nextPayload, desired: null, localFlights });
+    await synchronizeIfFlight(downstream); expect(downstream.api.remove).toHaveBeenCalledWith(CAPTAIN);
+    const retry = input({ remoteId: REMOTE_ID, schedules: [schedule()], previous: authored(), desired, localFlights });
+    await synchronizeIfFlight(retry); expect(retry.api.update).toHaveBeenCalledWith(REMOTE_ID, desired.schedule);
+  });
+  it("keeps an externally changed pending removal in conflict", async () => {
+    const nextFlight = { ...flight, id: 10, public_id: FO, departure: "CYVR", arrival: "KJFK", scheduled_departure: new Date("2026-10-04T16:00:00Z"), scheduled_arrival: new Date("2026-10-04T18:00:00Z") };
+    const nextPayload = buildIfPayload(nextFlight, authored().crew);
+    const value = input({ remoteId: REMOTE_ID, schedules: [schedule(), { ...schedule(nextPayload), id: CAPTAIN, destinationIcao: "KLAX" }], previous: authored(), desired: null,
+      localFlights: [{ ...flight, status: "cancelled", last_published_payload: authored() }, { ...nextFlight, status: "needs_review", if_schedule_id: CAPTAIN, last_published_payload: nextPayload }] });
+    await expect(synchronizeIfFlight(value)).rejects.toMatchObject({ code: "conflict", message: expect.stringContaining("changed outside this app") }); expectNoWrites(value);
+  });
+  it("does not project away a pending removal whose ownership marker was removed", async () => {
+    const nextFlight = { ...flight, id: 10, public_id: FO, departure: "CYVR", arrival: "KJFK", scheduled_departure: new Date("2026-10-04T16:00:00Z"), scheduled_arrival: new Date("2026-10-04T18:00:00Z") };
+    const nextPayload = buildIfPayload(nextFlight, authored().crew);
+    const value = input({ remoteId: REMOTE_ID, schedules: [schedule(), { ...schedule(nextPayload), id: CAPTAIN, briefing: "External reservation" }], previous: authored(), desired: null,
+      localFlights: [{ ...flight, status: "cancelled", last_published_payload: authored() }, { ...nextFlight, status: "needs_review", if_schedule_id: CAPTAIN, last_published_payload: nextPayload }] });
+    await expect(synchronizeIfFlight(value)).rejects.toMatchObject({ code: "conflict", message: expect.stringContaining("lost this app's reference") }); expectNoWrites(value);
+  });
+  it("never removes a first leg that would strand a foreign successor", async () => {
+    const external = { ...schedule(), id: FO, briefing: "External successor", originIcao: "CYVR", destinationIcao: "KJFK", scheduledDepartureUtc: "2026-10-04T16:00:00Z", scheduledArrivalUtc: "2026-10-04T18:00:00Z" };
+    const value = input({ remoteId: REMOTE_ID, schedules: [schedule(), external], previous: authored(), desired: null });
+    await expect(synchronizeIfFlight(value)).rejects.toMatchObject({ code: "conflict", message: expect.stringContaining("leave the aircraft at CYYZ") }); expectNoWrites(value);
   });
   it("keeps an uncertain cancelled create in reconciliation if it cannot be found", async () => {
     await expect(synchronizeIfFlight(input({ uncertainCreation: true, desired: null }))).rejects.toMatchObject({ code: "reconciliation" });

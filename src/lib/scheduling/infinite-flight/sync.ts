@@ -1,8 +1,10 @@
 import { IfLiveError, isIfUuid } from "./config";
 import type { AuthoredIfPayload, IfCrew, IfSchedule, IfScheduleRequest } from "./types";
+import { assertIfItinerary, crewIsSubset, isIfTerminal, normalizedCrew, sameIfCrew, sameIfSchedule, scheduleMarker, type IfLocalFlight, type IfPublishedPayload } from "./itinerary";
+export { sameIfCrew, sameIfSchedule, scheduleMarker } from "./itinerary";
 
 export type PublishAction = "sync" | "overwrite" | "recreate";
-export type PublishedPayload = AuthoredIfPayload & { crewPending?: boolean; previousCrew?: IfCrew[] };
+export type PublishedPayload = IfPublishedPayload;
 export type SyncApi = {
   create(body: IfScheduleRequest): Promise<IfSchedule>;
   update(id: string, body: IfScheduleRequest): Promise<IfSchedule>;
@@ -10,11 +12,6 @@ export type SyncApi = {
   putCrew(id: string, crew: IfCrew): Promise<IfSchedule>;
   removeCrew(id: string, userId: string): Promise<IfSchedule>;
 };
-
-export function scheduleMarker(publicId: string) {
-  if (!isIfUuid(publicId)) throw new IfLiveError("Local schedule marker is invalid", "validation", 400);
-  return `[WNC schedule:${publicId.toLowerCase()}]`;
-}
 
 export function buildIfPayload(
   flight: { id: number; public_id: string; callsign: string | null; departure: string; arrival: string; scheduled_departure: Date; scheduled_arrival: Date; notes: string | null },
@@ -35,20 +32,11 @@ export function buildIfPayload(
   return { schedule: { callsign, flightType: 1, originIcao: flight.departure, destinationIcao: flight.arrival, scheduledDepartureUtc: departure, scheduledArrivalUtc: arrival, briefing, flightPlan: null }, crew: crew.map(row => ({ userId: row.userId.toLowerCase(), role: row.role })) };
 }
 
-function normalizedSchedule(schedule: IfScheduleRequest) {
-  return { callsign: schedule.callsign, flightType: schedule.flightType, originIcao: schedule.originIcao.toUpperCase(), destinationIcao: schedule.destinationIcao.toUpperCase(),
-    scheduledDepartureUtc: new Date(schedule.scheduledDepartureUtc).toISOString(), scheduledArrivalUtc: new Date(schedule.scheduledArrivalUtc).toISOString(),
-    briefing: schedule.briefing || null, flightPlan: schedule.flightPlan || null };
-}
-function normalizedCrew(crew: IfCrew[]) { return crew.map(row => ({ userId: row.userId.toLowerCase(), role: row.role })).sort((a, b) => a.userId.localeCompare(b.userId)); }
-export function sameIfSchedule(left: IfScheduleRequest, right: IfScheduleRequest) { return JSON.stringify(normalizedSchedule(left)) === JSON.stringify(normalizedSchedule(right)); }
-export function sameIfCrew(left: IfCrew[], right: IfCrew[]) { return JSON.stringify(normalizedCrew(left)) === JSON.stringify(normalizedCrew(right)); }
-function crewIsSubset(crew: IfCrew[], expected: IfCrew[]) { return crew.every(row => expected.some(wanted => wanted.userId.toLowerCase() === row.userId.toLowerCase() && wanted.role === row.role)); }
-
 /** Pure reconciliation logic. checkpoint stores only the desired, app-authored payload. */
 export async function synchronizeIfFlight(input: {
   publicId: string; remoteId: string | null; schedules: IfSchedule[]; desired: AuthoredIfPayload | null;
   previous: PublishedPayload | null; action: PublishAction; uncertainCreation: boolean;
+  localFlights?: IfLocalFlight[];
   api: SyncApi; checkpoint(id: string, authored: PublishedPayload): Promise<void>;
 }) {
   const marker = scheduleMarker(input.publicId);
@@ -58,8 +46,9 @@ export async function synchronizeIfFlight(input: {
   const bound = input.remoteId ? input.schedules.find(row => row.id.toLowerCase() === input.remoteId!.toLowerCase()) : null;
   if (bound && bound !== remote) throw new IfLiveError("The linked IF schedule no longer has this app's reference; review the IF reservation", "conflict", 409);
   if (remote && input.remoteId && remote.id.toLowerCase() !== input.remoteId.toLowerCase() && input.action === "sync") throw new IfLiveError("The IF schedule identifier changed; review it before relinking", "conflict", 409);
-  if (remote && remote.status !== 1) throw new IfLiveError("IF has already started or changed this reservation; it cannot be changed automatically", "conflict", 409);
-  if (remote && input.action !== "overwrite") {
+  const terminalRemoval = Boolean(remote && !input.desired && isIfTerminal(remote.status));
+  if (remote && remote.status !== 1 && !terminalRemoval) throw new IfLiveError("IF has already started or changed this reservation; it cannot be changed automatically", "conflict", 409);
+  if (remote && (input.action !== "overwrite" || terminalRemoval || !input.desired)) {
     const expected = input.previous ?? input.desired;
     if (!expected || !sameIfSchedule(remote, expected.schedule) ||
         !(input.previous?.crewPending || !input.previous ? crewIsSubset(remote.crew, [...expected.crew, ...(input.previous?.previousCrew ?? [])]) : sameIfCrew(remote.crew, expected.crew))) {
@@ -68,23 +57,14 @@ export async function synchronizeIfFlight(input: {
   }
   if (!input.desired) {
     if (!remote && input.uncertainCreation) throw new IfLiveError("An earlier IF create request was not confirmed; verify that no reservation remains before removing the binding", "reconciliation", 409);
-    if (remote) await input.api.remove(remote.id);
+    // Already cancelled/arrived reservations are history, not live bookings to delete.
+    if (remote && !terminalRemoval) {
+      assertIfItinerary({ schedules: input.schedules, localFlights: input.localFlights, target: { publicId: input.publicId, desired: null } });
+      await input.api.remove(remote.id);
+    }
     return { remoteId: null, removed: true as const };
   }
-  const departure = Date.parse(input.desired.schedule.scheduledDepartureUtc);
-  const arrival = Date.parse(input.desired.schedule.scheduledArrivalUtc);
-  for (const other of input.schedules) {
-    // Cancelled (9) and Arrived (11) are the documented terminal preview states.
-    if (other.id === remote?.id || [9, 11].includes(other.status)) continue;
-    const otherDeparture = Date.parse(other.scheduledDepartureUtc);
-    const otherArrival = Date.parse(other.scheduledArrivalUtc);
-    if (!Number.isFinite(otherDeparture) || !Number.isFinite(otherArrival) || otherArrival <= otherDeparture) {
-      throw new IfLiveError("An active IF reservation has an invalid time interval; review IF before publishing", "conflict", 409);
-    }
-    if (departure < otherArrival && arrival > otherDeparture) {
-      throw new IfLiveError("This flight overlaps another active IF reservation for the aircraft; review IF's bookings before publishing", "conflict", 409);
-    }
-  }
+  assertIfItinerary({ schedules: input.schedules, localFlights: input.localFlights, target: { publicId: input.publicId, desired: input.desired.schedule }, requirePublishedPredecessors: Boolean(input.localFlights) });
   const transitionalPayload: PublishedPayload = { ...input.desired, crewPending: true,
     previousCrew: normalizedCrew([...(input.previous?.crew ?? []), ...(input.previous?.previousCrew ?? [])]) };
   if (!remote) {

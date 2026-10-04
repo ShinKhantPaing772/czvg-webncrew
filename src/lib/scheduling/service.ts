@@ -5,10 +5,20 @@ import { models } from "@/lib/models";
 import { canAccessLiveScheduling, livePilotAwardId } from "./access";
 import { LiveAircraft, LiveFlight, LiveFlightMember, LiveScheduleEvent, IfLiveConnection, IfLiveOutbox } from "./models";
 import { SchedulingError, airport, text, validId, scheduledWindow, projectedOrigin, orderedQueue, overlaps, validateQueue, RESERVED_STATUSES } from "./policy";
+import { getIfLiveConfig, IfLiveError } from "./infinite-flight/config";
+import { getIfAuthorizationSnapshot } from "./infinite-flight/connection";
+import { validateIfAircraftBinding } from "./infinite-flight/binding";
+import { getIfAirport, getIfPosition, getIfSchedules } from "./infinite-flight/client";
+import { assertIfDepartureReady, IF_START_CHECK_MAX_AGE_MS } from "./infinite-flight/readiness";
+import { buildIfPayload } from "./infinite-flight/sync";
+import { withIfRequestBudget } from "./infinite-flight/request-budget";
+import type { AuthoredIfPayload, IfCrew } from "./infinite-flight/types";
+import type { IfLocalFlight, IfPublishedPayload } from "./infinite-flight/itinerary";
 
 export type SchedulingActor = { id: number; admin: boolean };
 type Body = Record<string, unknown>;
 const reserved = { [Op.in]: [...RESERVED_STATUSES] };
+const ifItineraryStatuses = { [Op.in]: ["approved", "in_progress", "needs_review", "cancelled", "rejected"] };
 const has = (body: Body, key: string) => Object.prototype.hasOwnProperty.call(body, key);
 
 async function eligible(id: number, transaction: Transaction) {
@@ -22,7 +32,7 @@ async function bumpAndQueue(flight: LiveFlight, aircraft: LiveAircraft, transact
   flight.revision += 1;
   flight.error = null;
   if (aircraft.if_aircraft_id) {
-    flight.publishing_state = process.env.IF_LIVE_AUTO_PUBLISH_ENABLED === "true" ? "queued" : "disabled";
+    flight.publishing_state = getIfLiveConfig().autoPublishEnabled ? "queued" : "disabled";
     await flight.save({ transaction });
     await IfLiveOutbox.create({ flight_id: flight.id, revision: flight.revision, state: "queued", next_attempt_at: new Date() }, { transaction });
   } else {
@@ -139,6 +149,93 @@ async function repairQueue(aircraft: LiveAircraft, actor: SchedulingActor, trans
   }
 }
 
+async function localIfPayload(flight: LiveFlight, transaction?: Transaction) {
+  const members = await LiveFlightMember.findAll({ where: { flight_id: flight.id, status: "approved" }, transaction });
+  const ids = [flight.captain_id, ...members.map(member => member.pilot_id)];
+  const pilots = await models.Pilot.findAll({ where: { id: { [Op.in]: ids } }, attributes: ["id", "ifuserid"], transaction });
+  const crew: IfCrew[] = ids.map(id => ({ userId: pilots.find(pilot => pilot.id === id)?.ifuserid ?? "", role: id === flight.captain_id ? 0 : 1 }));
+  return buildIfPayload(flight, crew.sort((left, right) => left.userId.localeCompare(right.userId)));
+}
+
+async function connectedIfAccount() {
+  const authorization = await getIfAuthorizationSnapshot();
+  const connection = await IfLiveConnection.findByPk(1);
+  if (!connection?.organization_id || connection.state !== "connected") throw new SchedulingError("Connect an IF organization first", 409);
+  if (connection.access_token_encrypted !== authorization.credential || connection.connected_by !== authorization.owner || connection.organization_id !== authorization.organizationId) {
+    throw new SchedulingError("The IF connection changed while checking access; try again", 409);
+  }
+  return { token: authorization.token, connection };
+}
+
+function catalogSignature(catalog: { id: number; ifaircraftid: string | null; ifliveryid: string | null; status: number }) {
+  return JSON.stringify([catalog.id, catalog.ifaircraftid, catalog.ifliveryid, catalog.status]);
+}
+function connectionSignature(connection: IfLiveConnection) {
+  return JSON.stringify([connection.organization_id, connection.state, connection.connected_by, connection.access_token_encrypted]);
+}
+function startSignature(flight: LiveFlight, aircraft: LiveAircraft, catalog: Parameters<typeof catalogSignature>[0], connection: IfLiveConnection, payload: AuthoredIfPayload, localFlights: LiveFlight[]) {
+  return JSON.stringify([flight.id, flight.public_id, flight.revision, flight.status, flight.publishing_state, flight.published_revision, flight.if_schedule_id,
+    aircraft.id, aircraft.aircraft_id, aircraft.if_aircraft_id, aircraft.active, aircraft.current_airport, aircraft.location_updated_at,
+    catalogSignature(catalog), connectionSignature(connection), payload,
+    localFlights.map(ifLocalFlight).sort((left, right) => left.public_id.localeCompare(right.public_id))]);
+}
+
+/** Upstream reads happen before row locks; a concurrent local mutation invalidates the check. */
+async function prepareIfStart(actor: SchedulingActor, body: Body) {
+  const flight = await LiveFlight.findByPk(validId(body.flight_id, "Flight"));
+  if (!flight) throw new SchedulingError("Flight not found", 404);
+  requireCaptain(actor, flight); requireState(flight, "approved");
+  if (!actor.admin && !await canAccessLiveScheduling(actor.id)) throw new SchedulingError("This pilot needs an active account and the live pilot award", 403);
+  const aircraft = await LiveAircraft.findByPk(flight.live_aircraft_id);
+  if (!aircraft) throw new SchedulingError("Live aircraft not found", 404);
+  activeAircraft(aircraft);
+  if (!aircraft.if_aircraft_id) return null;
+  if (flight.publishing_state !== "published" || flight.published_revision !== flight.revision) throw new SchedulingError("Wait until this flight's latest schedule and crew are published to IF", 409);
+  return withIfRequestBudget(20_000, async () => {
+    const { token, connection } = await connectedIfAccount();
+    const catalog = await models.Aircraft.findByPk(aircraft.aircraft_id);
+    if (!catalog || catalog.status !== 1) throw new SchedulingError("Select an active aircraft type", 409);
+    const desired = await localIfPayload(flight);
+    const localFlights = await LiveFlight.findAll({ where: { live_aircraft_id: aircraft.id, status: ifItineraryStatuses } });
+    const checkedAt = Date.now();
+    const [, schedules, position, departureAirport] = await Promise.all([
+      validateIfAircraftBinding({ token, organizationId: connection.organization_id!, ifAircraftId: aircraft.if_aircraft_id!, catalog }),
+      getIfSchedules(token, aircraft.if_aircraft_id!, { fresh: true }),
+      getIfPosition(token, aircraft.if_aircraft_id!, { fresh: true }),
+      getIfAirport(flight.departure, { fresh: true }),
+    ]);
+    assertIfDepartureReady({ publicId: flight.public_id, remoteId: flight.if_schedule_id, aircraftId: aircraft.if_aircraft_id!, organizationId: connection.organization_id!,
+      desired, schedules, position, airport: departureAirport, localFlights: localFlights.map(ifLocalFlight) });
+    return { checkedAt, signature: startSignature(flight, aircraft, catalog, connection, desired, localFlights) };
+  });
+}
+
+function ifLocalFlight(flight: LiveFlight): IfLocalFlight {
+  return { public_id: flight.public_id, departure: flight.departure, arrival: flight.arrival, scheduled_departure: flight.scheduled_departure,
+    scheduled_arrival: flight.scheduled_arrival, status: flight.status, if_schedule_id: flight.if_schedule_id,
+    last_published_payload: flight.last_published_payload as IfPublishedPayload | null, revision: flight.revision, published_revision: flight.published_revision };
+}
+
+async function prepareIfBinding(body: Body) {
+  const aircraft = body.action === "add_aircraft" ? null : await LiveAircraft.findByPk(validId(body.live_aircraft_id, "Aircraft"));
+  if (body.action !== "add_aircraft" && !aircraft) throw new SchedulingError("Live aircraft not found", 404);
+  const binding = has(body, "if_aircraft_id") ? text(body.if_aircraft_id, 36, "IF aircraft ID")?.toLowerCase() ?? null : aircraft?.if_aircraft_id ?? null;
+  const catalogId = has(body, "aircraft_id") ? validId(body.aircraft_id, "Aircraft type") : aircraft?.aircraft_id;
+  if (!binding || (!has(body, "if_aircraft_id") && catalogId === aircraft?.aircraft_id)) return null;
+  const config = getIfLiveConfig();
+  if (!config.publishingReady) throw new SchedulingError(`IF aircraft binding is unavailable: ${config.publishingDisabledReasons.join("; ")}`, 409);
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(binding)) throw new SchedulingError("Invalid persistent IF aircraft ID");
+  return withIfRequestBudget(20_000, async () => {
+    const { token, connection } = await connectedIfAccount();
+    const catalog = catalogId ? await models.Aircraft.findByPk(catalogId) : null;
+    if (!catalog || catalog.status !== 1) throw new SchedulingError("Select an active aircraft type");
+    const checkedAt = Date.now();
+    await validateIfAircraftBinding({ token, organizationId: connection.organization_id!, ifAircraftId: binding, catalog });
+    return { checkedAt, binding, catalog: catalogSignature(catalog), connection: connectionSignature(connection),
+      aircraft: JSON.stringify([aircraft?.id, aircraft?.aircraft_id, aircraft?.if_aircraft_id]) };
+  });
+}
+
 export async function requestFlight(actor: SchedulingActor, body: Body) {
   return mutate(actor, body, async (transaction, aircraft) => {
     if (!aircraft) throw new SchedulingError("Select a live aircraft");
@@ -158,6 +255,7 @@ export async function requestFlight(actor: SchedulingActor, body: Body) {
 
 export async function changeFlight(actor: SchedulingActor, body: Body) {
   const action = String(body.action ?? "");
+  const startCheck = action === "start" ? await prepareIfStart(actor, body) : null;
   return mutate(actor, body, async (transaction, aircraft, flight) => {
     if (!aircraft || !flight) throw new SchedulingError("Select a flight");
     const before = flightState(flight);
@@ -201,6 +299,16 @@ export async function changeFlight(actor: SchedulingActor, body: Body) {
       if (aircraft.current_airport !== flight.departure) throw new SchedulingError("Aircraft location must be confirmed at the departure airport", 409);
       await validateCrew(flight, transaction, true);
       if (aircraft.if_aircraft_id && (flight.publishing_state !== "published" || flight.published_revision !== flight.revision)) throw new SchedulingError("Wait until this flight's latest schedule and crew are published to IF", 409);
+      if (aircraft.if_aircraft_id) {
+        const catalog = await models.Aircraft.findByPk(aircraft.aircraft_id, { transaction, lock: transaction.LOCK.UPDATE });
+        const connection = await IfLiveConnection.findByPk(1, { transaction, lock: transaction.LOCK.UPDATE });
+        const payload = await localIfPayload(flight, transaction);
+        const localFlights = await LiveFlight.findAll({ where: { live_aircraft_id: aircraft.id, status: ifItineraryStatuses }, transaction });
+        if (!startCheck || !catalog || !connection || Date.now() - startCheck.checkedAt > IF_START_CHECK_MAX_AGE_MS ||
+            startCheck.signature !== startSignature(flight, aircraft, catalog, connection, payload, localFlights)) {
+          throw new SchedulingError("The flight, aircraft, crew, or IF connection changed during the departure check; try starting again", 409);
+        }
+      } else if (startCheck) throw new SchedulingError("The IF aircraft binding changed during the departure check; try starting again", 409);
       await flight.update({ status: "in_progress", actual_departure_at: new Date() }, { transaction });
     } else if (action === "complete") {
       requireCaptain(actor, flight); requireState(flight, "in_progress");
@@ -244,6 +352,7 @@ export async function changeFlight(actor: SchedulingActor, body: Body) {
 
 export async function changeAircraft(actor: SchedulingActor, body: Body) {
   if (!actor.admin) throw new SchedulingError("Scheduling administrator access required", 403);
+  const bindingCheck = await prepareIfBinding(body);
   return mutate(actor, body, async (transaction, aircraft) => {
     const adding = body.action === "add_aircraft";
     if (!adding && !aircraft) throw new SchedulingError("Select a live aircraft");
@@ -269,9 +378,10 @@ export async function changeAircraft(actor: SchedulingActor, body: Body) {
       payload.active = body.active;
     }
     if (has(body, "if_aircraft_id")) {
-      const binding = text(body.if_aircraft_id, 36, "IF aircraft ID");
+      const binding = text(body.if_aircraft_id, 36, "IF aircraft ID")?.toLowerCase() ?? null;
       if (binding) {
-        if (![process.env.IF_LIVE_PREVIEW_ENABLED, process.env.IF_LIVE_AUTO_PUBLISH_ENABLED, process.env.IF_LIVE_DURABLE_BINDINGS_ALLOWED].every(value => value === "true")) throw new SchedulingError("IF aircraft binding requires enabled preview publishing and permitted identifier retention", 409);
+        const config = getIfLiveConfig();
+        if (!config.publishingReady) throw new SchedulingError(`IF aircraft binding is unavailable: ${config.publishingDisabledReasons.join("; ")}`, 409);
         if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(binding)) throw new SchedulingError("Invalid persistent IF aircraft ID");
         const connection = await IfLiveConnection.findByPk(1, { transaction });
         if (!connection?.organization_id || connection.state !== "connected") throw new SchedulingError("Connect an IF organization first", 409);
@@ -285,6 +395,16 @@ export async function changeAircraft(actor: SchedulingActor, body: Body) {
       }
       payload.if_aircraft_id = binding;
     }
+    const effectiveBinding = has(payload, "if_aircraft_id") ? payload.if_aircraft_id : aircraft?.if_aircraft_id;
+    if (effectiveBinding && (has(payload, "if_aircraft_id") || (has(payload, "aircraft_id") && payload.aircraft_id !== aircraft?.aircraft_id))) {
+      const catalog = await models.Aircraft.findByPk(Number(payload.aircraft_id ?? aircraft?.aircraft_id), { transaction, lock: transaction.LOCK.UPDATE });
+      const connection = await IfLiveConnection.findByPk(1, { transaction, lock: transaction.LOCK.UPDATE });
+      if (!bindingCheck || !catalog || !connection || Date.now() - bindingCheck.checkedAt > IF_START_CHECK_MAX_AGE_MS || bindingCheck.binding !== effectiveBinding ||
+          bindingCheck.catalog !== catalogSignature(catalog) || bindingCheck.connection !== connectionSignature(connection) ||
+          bindingCheck.aircraft !== JSON.stringify([aircraft?.id, aircraft?.aircraft_id, aircraft?.if_aircraft_id])) {
+        throw new SchedulingError("The aircraft type, binding, or IF connection changed during validation; try saving again", 409);
+      }
+    } else if (bindingCheck) throw new SchedulingError("The aircraft binding changed during validation; try saving again", 409);
     if (aircraft) {
       const flights = await queue(aircraft.id, transaction);
       if (flights.some(flight => flight.status === "in_progress")) throw new SchedulingError("Finish the in-progress flight before changing this aircraft", 409);
@@ -337,6 +457,8 @@ export async function schedulingSnapshot(actor: SchedulingActor) {
 
 export function schedulingFailure(error: unknown) {
   if (error instanceof SchedulingError) return { status: error.status, error: error.message };
+  // Upstream authorization belongs to the shared IF account, not the pilot's site session.
+  if (error instanceof IfLiveError) return { status: [401, 403].includes(error.status) ? 503 : error.status, error: error.message };
   if (error instanceof UniqueConstraintError) return { status: 409, error: "This registration, IF binding, or request already exists" };
   const dbError = (error as { original?: { code?: string; sqlMessage?: string } })?.original;
   const dbCode = dbError?.code;

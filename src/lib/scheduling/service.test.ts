@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => {
     Pilot: table(), Aircraft: table(), AwardGranted: table(),
     LiveAircraft: table(), LiveFlight: table(), LiveFlightMember: table(),
     LiveScheduleEvent: table(), IfLiveConnection: table(), IfLiveOutbox: table(),
+    ifToken: vi.fn(), ifBinding: vi.fn(), ifSchedules: vi.fn(), ifPosition: vi.fn(), ifAirport: vi.fn(),
   };
 });
 
@@ -21,8 +22,13 @@ vi.mock("./models", () => ({
   LiveAircraft: mocks.LiveAircraft, LiveFlight: mocks.LiveFlight, LiveFlightMember: mocks.LiveFlightMember,
   LiveScheduleEvent: mocks.LiveScheduleEvent, IfLiveConnection: mocks.IfLiveConnection, IfLiveOutbox: mocks.IfLiveOutbox,
 }));
+vi.mock("./infinite-flight/connection", () => ({ getIfAuthorizationSnapshot: mocks.ifToken }));
+vi.mock("./infinite-flight/binding", () => ({ validateIfAircraftBinding: mocks.ifBinding }));
+vi.mock("./infinite-flight/client", () => ({ getIfSchedules: mocks.ifSchedules, getIfPosition: mocks.ifPosition, getIfAirport: mocks.ifAirport }));
 
 import { changeAircraft, changeFlight, requestFlight, schedulingSnapshot, schedulingFailure } from "./service";
+import { buildIfPayload } from "./infinite-flight/sync";
+import { IfLiveError } from "./infinite-flight/config";
 
 type Row = Record<string, any>;
 type TableName = "Pilot" | "Aircraft" | "AwardGranted" | "LiveAircraft" | "LiveFlight" | "LiveFlightMember" | "LiveScheduleEvent" | "IfLiveConnection" | "IfLiveOutbox";
@@ -31,6 +37,10 @@ let eligiblePilots: Set<number>;
 const captain = { id: 1, admin: false };
 const administrator = { id: 9, admin: true };
 const transaction = { LOCK: { UPDATE: "UPDATE" } };
+const IF_AIRCRAFT = "10000000-0000-0000-0000-000000000001";
+const IF_ORGANIZATION = "20000000-0000-0000-0000-000000000002";
+const IF_SCHEDULE = "30000000-0000-0000-0000-000000000003";
+const ifUser = (id: number) => `50000000-0000-0000-0000-${String(id).padStart(12, "0")}`;
 const at = (hour: number) => new Date(`2026-10-02T${String(hour).padStart(2, "0")}:00:00Z`);
 const comparable = (value: unknown) => value instanceof Date ? value.getTime() : value;
 
@@ -104,6 +114,7 @@ function flight(overrides: Row = {}) {
     departure: "CYYZ", arrival: "KJFK", scheduled_departure: at(10), scheduled_arrival: at(12),
     status: "approved", callsign: null, notes: null, revision: 1, published_revision: 0,
     publishing_state: "local", if_schedule_id: null, updated_at: new Date(), ...overrides,
+    public_id: `40000000-0000-0000-0000-${String(rows.LiveFlight.length + 1).padStart(12, "0")}`,
   };
   rows.LiveFlight.push(row); return row;
 }
@@ -118,8 +129,8 @@ function proposal(overrides: Row = {}) {
 beforeEach(() => {
   eligiblePilots = new Set([1, 2, 3, 4, 5]);
   rows = {
-    Pilot: [1, 2, 3, 4, 5, 9].map(id => ({ id, status: 1, name: `Pilot ${id}`, callsign: `CZV${id}` })),
-    Aircraft: [{ id: 1, name: "A350", status: 1 }], AwardGranted: [1, 2, 3, 4, 5].map(pilotid => ({ pilotid, awardid: 7 })),
+    Pilot: [1, 2, 3, 4, 5, 9].map(id => ({ id, status: 1, name: `Pilot ${id}`, callsign: `CZV${id}`, ifuserid: ifUser(id) })),
+    Aircraft: [{ id: 1, name: "A350", status: 1, ifaircraftid: IF_AIRCRAFT, ifliveryid: null }], AwardGranted: [1, 2, 3, 4, 5].map(pilotid => ({ pilotid, awardid: 7 })),
     LiveAircraft: [{ id: 1, aircraft_id: 1, registration: "C-LIVE", current_airport: "CYYZ", active: true, if_aircraft_id: null }],
     LiveFlight: [], LiveFlightMember: [], LiveScheduleEvent: [], IfLiveConnection: [], IfLiveOutbox: [],
   };
@@ -132,10 +143,22 @@ beforeEach(() => {
     catch (error) { rows = before; throw error; }
   });
   vi.stubEnv("IF_LIVE_AUTO_PUBLISH_ENABLED", "false");
+  mocks.ifToken.mockReset().mockResolvedValue({ token: "test-if-access", credential: "test-encrypted", owner: 9, organizationId: IF_ORGANIZATION });
+  mocks.ifBinding.mockReset().mockResolvedValue({ id: IF_AIRCRAFT });
+  mocks.ifSchedules.mockReset().mockImplementation(async () => rows.LiveFlight.filter(row => row.status === "approved").map(row => {
+    const crew = [{ userId: ifUser(row.captain_id), role: 0 as const }, ...rows.LiveFlightMember.filter(member => member.flight_id === row.id && member.status === "approved").map(member => ({ userId: ifUser(member.pilot_id), role: 1 as const }))];
+    const payload = buildIfPayload(row as any, crew);
+    return { ...payload.schedule, id: row.if_schedule_id ?? IF_SCHEDULE, aircraftId: IF_AIRCRAFT, organizationId: IF_ORGANIZATION, status: 1, crew: payload.crew };
+  }));
+  mocks.ifPosition.mockReset().mockResolvedValue({ id: IF_AIRCRAFT, state: 1, isOnGround: true, latitude: 43.6777, longitude: -79.6248, updatedAt: new Date().toISOString() });
+  mocks.ifAirport.mockReset().mockResolvedValue({ icao: "CYYZ", latitude: 43.6777, longitude: -79.6248 });
 });
-afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
+afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe("database setup diagnostics", () => {
+  it("keeps an IF authorization failure separate from the pilot's site access", () => {
+    expect(schedulingFailure(new IfLiveError("Reconnect the organization's IF account", "reauth_required", 401))).toEqual({ status: 503, error: "Reconnect the organization's IF account" });
+  });
   it("distinguishes a model column mismatch from an unapplied migration", () => {
     const logger = vi.spyOn(console, "error").mockImplementation(() => {});
     const result = schedulingFailure({ original: { code: "ER_BAD_FIELD_ERROR", sqlMessage: "Unknown column 'LiveFlight.location_updated_at' in 'field list'", sql: "private query", parameters: ["private value"] } });
@@ -267,6 +290,55 @@ describe("crew eligibility and capacity", () => {
 });
 
 describe("persistent aircraft chain repair", () => {
+  function configuredIfPublishing() {
+    for (const name of ["IF_LIVE_PREVIEW_ENABLED", "IF_LIVE_AUTO_PUBLISH_ENABLED", "IF_LIVE_DURABLE_BINDINGS_ALLOWED"]) vi.stubEnv(name, " TRUE ");
+    vi.stubEnv("IF_LIVE_CLIENT_ID", "test-client"); vi.stubEnv("IF_LIVE_CLIENT_SECRET", "test-secret");
+    vi.stubEnv("IF_LIVE_REDIRECT_URI", "https://ifczvg.com/oauth/callback");
+    vi.stubEnv("IF_LIVE_REVOCATION_URL", "https://api.infiniteflight.com/supported-test-revoke");
+    vi.stubEnv("IF_LIVE_TOKEN_ENCRYPTION_KEY", Buffer.alloc(32, 7).toString("base64"));
+    rows.IfLiveConnection.push({ id: 1, organization_id: IF_ORGANIZATION, state: "connected", access_token_encrypted: "test-encrypted", connected_by: 9 });
+  }
+
+  it("uses the same normalized publishing flags as OAuth when binding aircraft", async () => {
+    configuredIfPublishing();
+    await changeAircraft(administrator, { action: "edit_aircraft", live_aircraft_id: 1, if_aircraft_id: "12345678-1234-1234-1234-123456789abc" });
+    expect(rows.LiveAircraft[0].if_aircraft_id).toBe("12345678-1234-1234-1234-123456789abc");
+    expect(mocks.ifBinding).toHaveBeenCalledWith(expect.objectContaining({ token: "test-if-access", organizationId: IF_ORGANIZATION, ifAircraftId: "12345678-1234-1234-1234-123456789abc", catalog: expect.objectContaining({ id: 1 }) }));
+  });
+
+  it("does not save a mismatched IF aircraft binding", async () => {
+    configuredIfPublishing(); mocks.ifBinding.mockRejectedValue(new IfLiveError("The IF aircraft type does not match", "binding", 409));
+    await expect(changeAircraft(administrator, { action: "edit_aircraft", live_aircraft_id: 1, if_aircraft_id: IF_AIRCRAFT })).rejects.toMatchObject({ code: "binding", status: 409 });
+    expect(rows.LiveAircraft[0].if_aircraft_id).toBeNull(); expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
+  it("validates a new catalog type against an existing IF binding", async () => {
+    configuredIfPublishing(); rows.LiveAircraft[0].if_aircraft_id = IF_AIRCRAFT;
+    rows.Aircraft.push({ id: 2, name: "B737", status: 1, ifaircraftid: IF_ORGANIZATION, ifliveryid: null });
+    mocks.ifBinding.mockRejectedValue(new IfLiveError("The IF aircraft type does not match", "binding", 409));
+    await expect(changeAircraft(administrator, { action: "edit_aircraft", live_aircraft_id: 1, aircraft_id: 2 })).rejects.toMatchObject({ status: 409 });
+    expect(rows.LiveAircraft[0].aircraft_id).toBe(1);
+    expect(mocks.ifBinding).toHaveBeenCalledWith(expect.objectContaining({ catalog: expect.objectContaining({ id: 2 }) }));
+  });
+
+  it("rechecks the catalog after upstream binding validation", async () => {
+    configuredIfPublishing(); mocks.ifBinding.mockImplementation(async () => { rows.Aircraft[0].ifaircraftid = IF_ORGANIZATION; });
+    await expect(changeAircraft(administrator, { action: "edit_aircraft", live_aircraft_id: 1, if_aircraft_id: IF_AIRCRAFT })).rejects.toThrow("changed during validation");
+    expect(rows.LiveAircraft[0].if_aircraft_id).toBeNull();
+  });
+
+  it("rejects binding when OAuth lacks a supported revocation configuration", async () => {
+    configuredIfPublishing(); vi.stubEnv("IF_LIVE_REVOCATION_URL", "");
+    await expect(changeAircraft(administrator, { action: "edit_aircraft", live_aircraft_id: 1, if_aircraft_id: "12345678-1234-1234-1234-123456789abc" })).rejects.toMatchObject({ status: 409 });
+    expect(rows.LiveAircraft[0].if_aircraft_id).toBeNull();
+  });
+
+  it("keeps aircraft on local scheduling during OAuth testing without automatic publishing", async () => {
+    configuredIfPublishing(); vi.stubEnv("IF_LIVE_AUTO_PUBLISH_ENABLED", "false");
+    await expect(changeAircraft(administrator, { action: "edit_aircraft", live_aircraft_id: 1, if_aircraft_id: "12345678-1234-1234-1234-123456789abc" })).rejects.toMatchObject({ status: 409 });
+    expect(rows.LiveAircraft[0].if_aircraft_id).toBeNull();
+  });
+
   it("allows unbinding completed IF history while preserving its identifiers", async () => {
     rows.LiveAircraft[0].if_aircraft_id = "persisted-aircraft";
     flight({ status: "completed", if_schedule_id: "historical-schedule", publishing_state: "published" });
@@ -347,12 +419,108 @@ describe("start and completion policies", () => {
   });
 
   it("requires the latest external schedule revision before starting a bound aircraft", async () => {
-    flight({ publishing_state: "published", revision: 2, published_revision: 1 });
-    rows.LiveAircraft[0].if_aircraft_id = "persisted-id";
+    flight({ publishing_state: "published", revision: 2, published_revision: 1, if_schedule_id: IF_SCHEDULE });
+    rows.LiveAircraft[0].if_aircraft_id = IF_AIRCRAFT;
+    rows.IfLiveConnection.push({ id: 1, organization_id: IF_ORGANIZATION, state: "connected", access_token_encrypted: "test-encrypted", connected_by: 9 });
     await expect(changeFlight(captain, { flight_id: 1, action: "start" })).rejects.toMatchObject({ status: 409 });
+    expect(mocks.ifSchedules).not.toHaveBeenCalled();
     rows.LiveFlight[0].published_revision = 2;
     await changeFlight(captain, { flight_id: 1, action: "start" });
     expect(rows.LiveFlight[0].status).toBe("in_progress");
+    expect(mocks.ifSchedules).toHaveBeenCalledWith("test-if-access", IF_AIRCRAFT, { fresh: true });
+    expect(mocks.ifPosition).toHaveBeenCalledWith("test-if-access", IF_AIRCRAFT, { fresh: true });
+    expect(mocks.ifAirport).toHaveBeenCalledWith("CYYZ", { fresh: true });
+  });
+
+  function linkedFlight() {
+    const row = flight({ publishing_state: "published", published_revision: 1, if_schedule_id: IF_SCHEDULE });
+    rows.LiveAircraft[0].if_aircraft_id = IF_AIRCRAFT;
+    rows.IfLiveConnection.push({ id: 1, organization_id: IF_ORGANIZATION, state: "connected", access_token_encrypted: "test-encrypted", connected_by: 9 });
+    return row;
+  }
+
+  it("blocks a locally published flight whose IF reservation was deleted", async () => {
+    linkedFlight(); mocks.ifSchedules.mockResolvedValue([]);
+    await expect(changeFlight(captain, { flight_id: 1, action: "start" })).rejects.toMatchObject({ status: 409 });
+    expect(rows.LiveFlight[0].status).toBe("approved"); expect(rows.LiveScheduleEvent).toHaveLength(0);
+  });
+
+  it("blocks a flight after its IF aircraft moved to another airport", async () => {
+    linkedFlight(); mocks.ifPosition.mockResolvedValue({ id: IF_AIRCRAFT, state: 1, isOnGround: true, latitude: 40.6413, longitude: -73.7781 });
+    await expect(changeFlight(captain, { flight_id: 1, action: "start" })).rejects.toThrow("outside the 5 nautical mile vicinity");
+    expect(rows.LiveFlight[0].status).toBe("approved");
+  });
+
+  it("fails closed when fresh IF reads are unavailable", async () => {
+    linkedFlight(); mocks.ifPosition.mockRejectedValue(new IfLiveError("IF position is unavailable", "unavailable", 503));
+    await expect(changeFlight(captain, { flight_id: 1, action: "start" })).rejects.toMatchObject({ status: 503 });
+    expect(rows.LiveFlight[0].status).toBe("approved"); expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects a flight amended while IF departure checks are running", async () => {
+    linkedFlight(); mocks.ifPosition.mockImplementation(async () => {
+      rows.LiveFlight[0].revision = 2;
+      return { id: IF_AIRCRAFT, state: 1, isOnGround: true, latitude: 43.6777, longitude: -79.6248 };
+    });
+    await expect(changeFlight(captain, { flight_id: 1, action: "start" })).rejects.toMatchObject({ status: 409 });
+    expect(rows.LiveFlight[0].status).toBe("approved");
+  });
+
+  it("rejects an IF user ID changed without a flight revision during departure checks", async () => {
+    linkedFlight(); mocks.ifPosition.mockImplementation(async () => {
+      rows.Pilot[0].ifuserid = ifUser(5);
+      return { id: IF_AIRCRAFT, state: 1, isOnGround: true, latitude: 43.6777, longitude: -79.6248 };
+    });
+    await expect(changeFlight(captain, { flight_id: 1, action: "start" })).rejects.toThrow("changed during the departure check");
+    expect(rows.LiveFlight[0].status).toBe("approved");
+  });
+
+  it("rejects a different local leg cancelled while IF departure checks run", async () => {
+    linkedFlight();
+    flight({ id: 2, departure: "KJFK", arrival: "KBOS", scheduled_departure: at(13), scheduled_arrival: at(15), if_schedule_id: "60000000-0000-0000-0000-000000000006" });
+    mocks.ifPosition.mockImplementation(async () => {
+      rows.LiveFlight[1].status = "cancelled";
+      return { id: IF_AIRCRAFT, state: 1, isOnGround: true, latitude: 43.6777, longitude: -79.6248 };
+    });
+    await expect(changeFlight(captain, { flight_id: 1, action: "start" })).rejects.toThrow("changed during the departure check");
+    expect(rows.LiveFlight[0].status).toBe("approved");
+  });
+
+  it("rejects IF connection rotation during the departure check", async () => {
+    linkedFlight(); mocks.ifPosition.mockImplementation(async () => {
+      rows.IfLiveConnection[0].access_token_encrypted = "new-encrypted-credential";
+      return { id: IF_AIRCRAFT, state: 1, isOnGround: true, latitude: 43.6777, longitude: -79.6248 };
+    });
+    await expect(changeFlight(captain, { flight_id: 1, action: "start" })).rejects.toThrow("changed during the departure check");
+    expect(rows.LiveFlight[0].status).toBe("approved");
+  });
+
+  it("rejects an authorization token from a previous connection before IF reads", async () => {
+    linkedFlight();
+    mocks.ifToken.mockImplementation(async () => {
+      rows.IfLiveConnection[0].access_token_encrypted = "replacement-connection";
+      return { token: "previous-access", credential: "test-encrypted", owner: 9, organizationId: IF_ORGANIZATION };
+    });
+    await expect(changeFlight(captain, { flight_id: 1, action: "start" })).rejects.toThrow("changed while checking access");
+    expect(mocks.ifSchedules).not.toHaveBeenCalled(); expect(rows.LiveFlight[0].status).toBe("approved");
+  });
+
+  it("expires a departure check that waited too long for local locks", async () => {
+    vi.useFakeTimers(); linkedFlight();
+    mocks.query.mockImplementation(async () => { vi.setSystemTime(Date.now() + 31_000); return [{ name: "live_scheduling_mutex" }]; });
+    await expect(changeFlight(captain, { flight_id: 1, action: "start" })).rejects.toThrow("changed during the departure check");
+    expect(rows.LiveFlight[0].status).toBe("approved");
+  });
+
+  it("denies another pilot before fetching any IF scheduling data", async () => {
+    linkedFlight();
+    await expect(changeFlight({ id: 4, admin: false }, { flight_id: 1, action: "start" })).rejects.toMatchObject({ status: 403 });
+    expect(mocks.ifToken).not.toHaveBeenCalled();
+  });
+
+  it("performs no IF reads for manually scheduled departures", async () => {
+    flight(); await changeFlight(captain, { flight_id: 1, action: "start" });
+    expect(mocks.ifToken).not.toHaveBeenCalled(); expect(rows.LiveFlight[0].status).toBe("in_progress");
   });
 
   it("does not complete an unstarted flight or without an actual arrival", async () => {

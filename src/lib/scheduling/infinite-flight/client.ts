@@ -1,13 +1,15 @@
 import { createHash } from "node:crypto";
 import { IF_LIVE_BASE_URL, IF_LIVE_CACHE_MS, IfLiveError, isIfUuid } from "./config";
-import type { IfAircraft, IfOrganization, IfPosition, IfSchedule, IfScheduleRequest, IfCrew } from "./types";
+import type { IfAircraft, IfAirport, IfContentAircraft, IfContentDirectory, IfContentLivery, IfOrganization, IfPosition, IfSchedule, IfScheduleRequest, IfCrew } from "./types";
 import { ifRequestTimeoutMs } from "./request-budget";
 
 const cache = new Map<string, { data: unknown; expiresAt: number; timer: ReturnType<typeof setTimeout> }>();
 const pending = new Map<string, Promise<unknown>>();
 const budgets = new Map<string, { count: number; resetAt: number }>();
+const IF_CONTENT_BASE_URL = "https://api.infiniteflight.com/public/v2";
+export type IfReadOptions = { fresh?: boolean };
 
-function cacheKey(token: string, path: string) { return `${createHash("sha256").update(token).digest("hex")}:${path}`; }
+function cacheKey(token: string, path: string, baseUrl = IF_LIVE_BASE_URL) { return `${createHash("sha256").update(token).digest("hex")}:${baseUrl}${path}`; }
 
 export function clearIfLiveCache() {
   for (const entry of cache.values()) clearTimeout(entry.timer);
@@ -23,22 +25,28 @@ function spendBudget(token: string) {
   } else { budgets.set(key, { count: 1, resetAt: now + 60_000 }); }
 }
 
-async function performRequest<T>(token: string, path: string, method: string, body?: unknown): Promise<T> {
+async function performRequest<T>(token: string, path: string, method: string, body?: unknown, baseUrl = IF_LIVE_BASE_URL): Promise<T> {
   spendBudget(token);
   const timeout = ifRequestTimeoutMs();
   let response: Response;
   try {
-    response = await fetch(`${IF_LIVE_BASE_URL}${path}`, {
-      method, cache: "no-store", signal: AbortSignal.timeout(timeout),
+    response = await fetch(`${baseUrl}${path}`, {
+      method, redirect: "error", cache: "no-store", signal: AbortSignal.timeout(timeout),
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
     throw new IfLiveError("Infinite Flight did not confirm the request", "unavailable", 502, 60, method !== "GET");
   }
+  if (response.redirected || (response.status >= 300 && response.status < 400)) {
+    throw new IfLiveError("Infinite Flight returned an unexpected redirect", "redirect", 502, 60, method !== "GET");
+  }
   if (!response.ok) {
     const retry = Number(response.headers.get("Retry-After"));
     const retryAfter = Number.isFinite(retry) && retry > 0 ? Math.min(retry, 3600) : 60;
+    if (baseUrl === IF_CONTENT_BASE_URL && [401, 403].includes(response.status)) {
+      throw new IfLiveError("IF rejected the server's IF_API key; verify its access before checking aircraft content or airport coordinates", "configuration", response.status, retryAfter);
+    }
     const message = response.status === 403 ? "IF denied this operation; the connected account needs the requested scopes and organization owner/admin access" :
       response.status === 401 ? "IF authorization expired; reconnect the organization account" :
       response.status === 429 ? "Infinite Flight rate limit reached" : `Infinite Flight returned HTTP ${response.status}`;
@@ -54,17 +62,33 @@ async function performRequest<T>(token: string, path: string, method: string, bo
   return envelope.result as T;
 }
 
-async function get<T>(token: string, path: string): Promise<T> {
-  const key = cacheKey(token, path); const found = cache.get(key);
+async function get<T>(token: string, path: string, baseUrl = IF_LIVE_BASE_URL): Promise<T> {
+  const key = cacheKey(token, path, baseUrl); const found = cache.get(key);
   if (found && found.expiresAt > Date.now()) return found.data as T;
   const active = pending.get(key); if (active) return active as Promise<T>;
-  const request = performRequest<T>(token, path, "GET").then(data => {
+  const request = performRequest<T>(token, path, "GET", undefined, baseUrl).then(data => {
     const timer = setTimeout(() => { cache.delete(key); }, IF_LIVE_CACHE_MS);
     timer.unref?.();
     cache.set(key, { data, expiresAt: Date.now() + IF_LIVE_CACHE_MS, timer });
     return data;
   }).finally(() => pending.delete(key));
   pending.set(key, request); return request;
+}
+
+function read<T>(token: string, path: string, options: IfReadOptions, baseUrl = IF_LIVE_BASE_URL): Promise<T> {
+  // Operational decisions must bypass an earlier UI snapshot, including an unfinished cached read.
+  return options.fresh ? performRequest<T>(token, path, "GET", undefined, baseUrl) : get<T>(token, path, baseUrl);
+}
+
+function contentApiKey() {
+  const key = process.env.IF_API?.trim();
+  if (!key) throw new IfLiveError("Configure the server's IF_API key to verify aircraft content and departure airport coordinates", "configuration", 503);
+  return key;
+}
+
+function validCoordinates(value: any) {
+  return Number.isFinite(value?.latitude) && value.latitude >= -90 && value.latitude <= 90 &&
+    Number.isFinite(value?.longitude) && value.longitude >= -180 && value.longitude <= 180;
 }
 
 function invalidate(token: string, paths: string[]) {
@@ -80,7 +104,7 @@ function list<T>(value: unknown, valid: (entry: any) => boolean): T[] {
   return value as T[];
 }
 function validSchedule(entry: any) {
-  return entry && isIfUuid(entry.id) && typeof entry.status === "number" && typeof entry.callsign === "string" &&
+  return entry && isIfUuid(entry.id) && isIfUuid(entry.aircraftId) && isIfUuid(entry.organizationId) && Number.isInteger(entry.status) && typeof entry.callsign === "string" &&
     typeof entry.originIcao === "string" && typeof entry.destinationIcao === "string" &&
     typeof entry.scheduledDepartureUtc === "string" && typeof entry.scheduledArrivalUtc === "string" &&
     Array.isArray(entry.crew) && entry.crew.every((crew: any) => isIfUuid(crew.userId) && (crew.role === 0 || crew.role === 1));
@@ -89,19 +113,46 @@ function validSchedule(entry: any) {
 export async function getIfOrganizations(token: string) {
   return list<IfOrganization>(await get(token, "/live/organizations"), entry => entry && isIfUuid(entry.id) && typeof entry.name === "string");
 }
-export async function getIfFleet(token: string, organizationId: string) {
-  return list<IfAircraft>(await get(token, `/live/organizations/${id(organizationId)}/aircraft`), entry => entry && isIfUuid(entry.id) && isIfUuid(entry.organizationId) && typeof entry.registration === "string" && typeof entry.isFleetActiveSlot === "boolean");
+export async function getIfFleet(token: string, organizationId: string, options: IfReadOptions = {}) {
+  return list<IfAircraft>(await read(token, `/live/organizations/${id(organizationId)}/aircraft`, options), entry => entry && isIfUuid(entry.id) && isIfUuid(entry.aircraftId) && isIfUuid(entry.organizationId) && typeof entry.registration === "string" && typeof entry.isFleetActiveSlot === "boolean" && (entry.status === 0 || entry.status === 1));
 }
-export async function getIfSchedules(token: string, aircraftId: string, options: { fresh?: boolean } = {}) {
-  const path = `/live/aircraft/${id(aircraftId)}/schedules`;
-  // Publishing decisions must not share an earlier UI snapshot or pending cached read.
-  const value = options.fresh ? await performRequest(token, path, "GET") : await get(token, path);
-  return list<IfSchedule>(value, validSchedule);
+export async function getIfSchedules(token: string, aircraftId: string, options: IfReadOptions = {}) {
+  const instanceId = id(aircraftId);
+  const path = `/live/aircraft/${instanceId}/schedules`;
+  const value = await read(token, path, options);
+  return list<IfSchedule>(value, entry => validSchedule(entry) && entry.aircraftId.toLowerCase() === instanceId);
 }
-export async function getIfPosition(token: string, aircraftId: string) {
-  const value = await get<IfPosition>(token, `/live/aircraft/${id(aircraftId)}/position`);
-  if (!value || !isIfUuid(value.id) || !Number.isFinite(value.latitude) || !Number.isFinite(value.longitude) || typeof value.updatedAt !== "string") throw new IfLiveError("IF position response format changed", "invalid_response", 502);
+export async function getIfPosition(token: string, aircraftId: string, options: IfReadOptions = {}) {
+  const instanceId = id(aircraftId);
+  const value = await read<IfPosition>(token, `/live/aircraft/${instanceId}/position`, options);
+  if (!value) throw new IfLiveError("IF has no persisted position for this aircraft; review its location in IF before starting", "position_unavailable", 409);
+  if (!isIfUuid(value.id) || value.id.toLowerCase() !== instanceId || !validCoordinates(value) ||
+      !Number.isInteger(value.state) || value.state < 0 || value.state > 5 || typeof value.isOnGround !== "boolean" ||
+      typeof value.updatedAt !== "string" || !Number.isFinite(Date.parse(value.updatedAt))) throw new IfLiveError("IF returned an invalid or mismatched aircraft position; review the aircraft in IF before starting", "invalid_response", 502);
   return value;
+}
+
+/** The stable content directory uses the existing server API key, never the organization's OAuth token. */
+export async function getIfContentDirectory(options: IfReadOptions = {}): Promise<IfContentDirectory> {
+  const key = contentApiKey();
+  const [aircraftValue, liveryValue] = await Promise.all([
+    read(key, "/aircraft", options, IF_CONTENT_BASE_URL),
+    read(key, "/aircraft/liveries", options, IF_CONTENT_BASE_URL),
+  ]);
+  const aircraft = list<IfContentAircraft>(aircraftValue, entry => entry && isIfUuid(entry.id) && typeof entry.name === "string");
+  const liveries = list<IfContentLivery>(liveryValue, entry => entry && isIfUuid(entry.id) && isIfUuid(entry.aircraftID) && typeof entry.aircraftName === "string" && typeof entry.liveryName === "string");
+  return { aircraft, liveries };
+}
+
+/** Airport coordinates are a vicinity reference, not an aircraft's confirmed airport. */
+export async function getIfAirport(airportIcao: string, options: IfReadOptions = {}): Promise<IfAirport> {
+  const icao = typeof airportIcao === "string" ? airportIcao.trim().toUpperCase() : "";
+  if (!/^[A-Z0-9]{1,8}$/.test(icao)) throw new IfLiveError("Departure airport code is invalid", "validation", 400);
+  const value = await read<IfAirport>(contentApiKey(), `/airport/${icao}`, options, IF_CONTENT_BASE_URL);
+  if (!value || typeof value.icao !== "string" || value.icao.toUpperCase() !== icao || !validCoordinates(value)) {
+    throw new IfLiveError("IF could not provide valid coordinates for the departure airport; confirm the airport code and try again", "invalid_response", 502);
+  }
+  return { icao, latitude: value.latitude, longitude: value.longitude };
 }
 export async function createIfSchedule(token: string, aircraftId: string, body: IfScheduleRequest) {
   const value = await performRequest<IfSchedule>(token, `/live/aircraft/${id(aircraftId)}/schedules`, "POST", body);

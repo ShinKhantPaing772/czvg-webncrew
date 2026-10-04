@@ -4,6 +4,7 @@ export const IF_LIVE_BASE_URL = "https://api.infiniteflight.com/public/v3";
 export const IF_LIVE_AUTH_URL = "https://api.infiniteflight.com/auth/v2";
 export const IF_LIVE_SCOPES = "openid profile offline_access live:organizations.read live:aircraft.read live:schedules.read live:schedules.write";
 export const IF_LIVE_CACHE_MS = 60_000;
+export const IF_CALLBACK_PATHS = ["/oauth/callback", "/api/admin/scheduling/if/callback"] as const;
 
 export class IfLiveError extends Error {
   constructor(
@@ -35,28 +36,52 @@ export function getIfLiveConfig() {
   const redirectUri = process.env.IF_LIVE_REDIRECT_URI?.trim() ?? "";
   const revocationUrl = process.env.IF_LIVE_REVOCATION_URL?.trim() ?? "";
   const disabledReasons: string[] = [];
+  let callbackUrl: string | null = null;
+  let revocationReady = false;
+  let encryptionReady = false;
   if (!previewEnabled) disabledReasons.push("Infinite Flight v3 preview is disabled");
   if (!clientId || !clientSecret) disabledReasons.push("Infinite Flight OAuth client credentials are missing");
   try {
     const url = new URL(redirectUri);
-    if (url.pathname !== "/api/admin/scheduling/if/callback" || url.search || url.hash ||
+    if (!(IF_CALLBACK_PATHS as readonly string[]).includes(url.pathname) || url.username || url.password || url.search || url.hash ||
         (url.protocol !== "https:" && !(process.env.NODE_ENV !== "production" && url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname)))) {
       throw new Error("invalid callback");
     }
+    callbackUrl = url.toString();
   } catch { disabledReasons.push("A registered IF OAuth callback URL is required"); }
   try {
     const url = new URL(revocationUrl);
     if (url.protocol !== "https:" || !["api.infiniteflight.com", "auth.infiniteflight.com"].includes(url.hostname) || url.username || url.password || url.hash) throw new Error("invalid revoke URL");
-  } catch { disabledReasons.push("The supported IF OAuth revocation URL must be configured"); }
-  try { tokenEncryptionKey(); } catch { disabledReasons.push("The IF token encryption key is missing or invalid"); }
-  return { previewEnabled, autoPublishEnabled, durableBindingsAllowed, clientId, clientSecret, redirectUri, revocationUrl, configured: disabledReasons.length === 0, disabledReasons };
+    revocationReady = true;
+  } catch {
+    if (revocationUrl) disabledReasons.push("The configured IF OAuth revocation URL is invalid");
+  }
+  try { tokenEncryptionKey(); encryptionReady = true; } catch { disabledReasons.push("The IF token encryption key is missing or invalid"); }
+  const publishingDisabledReasons = [
+    ...disabledReasons,
+    ...(!autoPublishEnabled ? ["Automatic IF publishing is disabled"] : []),
+    ...(!durableBindingsAllowed ? ["Durable IF mapping retention has not been authorized"] : []),
+    ...(!revocationReady ? ["Automatic IF publishing requires a supported OAuth revocation URL"] : []),
+  ];
+  const oauthSetup = { callbackUrl, checks: [
+    { id: "preview", label: "Preview access enabled", ready: previewEnabled, required: true },
+    { id: "client", label: "OAuth client configured", ready: Boolean(clientId && clientSecret), required: true },
+    { id: "callback", label: "Registered callback configured", ready: Boolean(callbackUrl), required: true },
+    { id: "revocation", label: "Supported revocation configured", ready: revocationReady, required: false },
+    { id: "encryption", label: "Token encryption configured", ready: encryptionReady, required: true },
+  ] };
+  return {
+    previewEnabled, autoPublishEnabled, durableBindingsAllowed, clientId, clientSecret, redirectUri, revocationUrl,
+    configured: disabledReasons.length === 0, disabledReasons, oauthSetup,
+    revocationConfigured: revocationReady, publishingReady: publishingDisabledReasons.length === 0, publishingDisabledReasons,
+  };
 }
 
 export function requireIfLiveConfig(requirePublishing = false) {
   const config = getIfLiveConfig();
   if (!config.configured) throw new IfLiveError(config.disabledReasons.join("; "), "configuration");
-  if (requirePublishing && (!config.autoPublishEnabled || !config.durableBindingsAllowed)) {
-    throw new IfLiveError("Automatic IF publishing requires preview access and explicit permission to retain durable mapping identifiers", "disabled");
+  if (requirePublishing && !config.publishingReady) {
+    throw new IfLiveError(config.publishingDisabledReasons.join("; "), "disabled");
   }
   return config;
 }
@@ -65,6 +90,7 @@ export function requireIfLiveConfig(requirePublishing = false) {
 export function requireIfRevocationConfig() {
   const config = getIfLiveConfig();
   const reasons = config.disabledReasons.filter(reason => !["Infinite Flight v3 preview is disabled", "A registered IF OAuth callback URL is required"].includes(reason));
+  if (!config.revocationUrl) reasons.push("The supported IF OAuth revocation URL must be configured");
   if (reasons.length) throw new IfLiveError(reasons.join("; "), "configuration");
   return config;
 }

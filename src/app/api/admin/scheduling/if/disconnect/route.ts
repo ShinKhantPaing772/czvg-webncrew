@@ -5,6 +5,6 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export async function POST(request: Request) {
   const auth = await requirePermission(request, "scheduling"); if (!auth.ok) return auth.response;
-  try { await disconnectIfConnection(); return ifJson({ success: true }); }
+  try { const result = await disconnectIfConnection(); return ifJson({ success: true, ...result }); }
   catch (error) { return ifRouteError(error); }
 }

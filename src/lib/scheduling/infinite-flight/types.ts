@@ -1,6 +1,10 @@
 export type IfOrganization = { id: string; name: string; status?: number };
 export type IfAircraft = { id: string; aircraftId: string; organizationId: string; registration: string; isFleetActiveSlot: boolean; visibility: number; status?: number };
 export type IfPosition = { id: string; state: number; isOnGround: boolean; latitude: number; longitude: number; updatedAt: string; [key: string]: unknown };
+export type IfContentAircraft = { id: string; name: string };
+export type IfContentLivery = { id: string; aircraftID: string; aircraftName: string; liveryName: string };
+export type IfContentDirectory = { aircraft: IfContentAircraft[]; liveries: IfContentLivery[] };
+export type IfAirport = { icao: string; latitude: number; longitude: number };
 export type IfCrew = { userId: string; role: 0 | 1 };
 export type IfScheduleRequest = {
   callsign: string; flightType: number; originIcao: string; destinationIcao: string;
