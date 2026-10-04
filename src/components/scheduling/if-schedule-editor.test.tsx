@@ -47,10 +47,29 @@ describe("external IF schedule editor", () => {
     await submit();
     expect(mocks.fetch).toHaveBeenCalledWith("/api/admin/scheduling/if/schedules", expect.objectContaining({
       method: "PATCH", body: JSON.stringify({ aircraftId: 12, scheduleId: schedule.id, expectedFingerprint: schedule.fingerprint,
-        changes: { callsign: "UPDATED", originIcao: "CYYZ", destinationIcao: "KLAX", scheduledDepartureUtc: "2026-10-05T18:00:00Z", scheduledArrivalUtc: "2026-10-05T20:00:00Z" } }),
+        changes: { callsign: "UPDATED", flightType: 1, originIcao: "CYYZ", destinationIcao: "KLAX", scheduledDepartureUtc: "2026-10-05T18:00:00Z", scheduledArrivalUtc: "2026-10-05T20:00:00Z" } }),
     }));
     expect(saved).toHaveBeenCalledWith(expect.objectContaining({ callsign: "UPDATED", id: schedule.id }));
     expect(mocks.fetch).toHaveBeenCalledTimes(1);
+  });
+  it("preserves IF's unspecified type and presents only its supported categories", async () => {
+    await render({ ...schedule, flightType: 0 });
+    const type = document.getElementById("if-schedule-flight-type") as HTMLSelectElement;
+    expect(type.value).toBe("0");
+    expect(document.querySelector('label[for="if-schedule-flight-type"]')?.textContent).toBe("Flight type");
+    expect(Array.from(type.options).filter(option => option.value === "12")).toHaveLength(1);
+    expect(Array.from(type.options).find(option => option.value === "12")?.textContent).toBe("Other");
+    await submit();
+    expect(JSON.parse(mocks.fetch.mock.calls[0][1].body).changes.flightType).toBe(0);
+  });
+  it("sends a newly selected IF Freight purpose as a number", async () => {
+    await render({ ...schedule, flightType: 1 });
+    await act(async () => {
+      const type = document.getElementById("if-schedule-flight-type") as HTMLSelectElement;
+      type.value = "3"; type.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await submit();
+    expect(JSON.parse(mocks.fetch.mock.calls[0][1].body).changes.flightType).toBe(3);
   });
   it.each([
     { ...schedule, status: 11, editable: true },

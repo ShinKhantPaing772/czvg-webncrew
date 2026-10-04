@@ -14,7 +14,7 @@ describe("temporary IF schedule display and edit guards", () => {
   it("normalizes explicit timezone offsets to UTC without retaining year-one sentinels", () => {
     expect(meaningfulIfScheduleTime("2026-10-06T12:00:00+02:00")).toBe("2026-10-06T10:00:00.000Z");
     const view = toIfAircraftScheduleView({ ...remote, scheduledDepartureUtc: "0001-01-01T00:00:00Z", scheduledArrivalUtc: "0001-01-01T00:00:00Z" }, [], true);
-    expect(view).toMatchObject({ scheduledDepartureUtc: null, scheduledArrivalUtc: null, sequence: 3, editable: true });
+    expect(view).toMatchObject({ scheduledDepartureUtc: null, scheduledArrivalUtc: null, sequence: 3, editable: true, flightType: 1 });
     expect(JSON.stringify(view)).not.toMatch(/Provider private|organizationId|aircraftId|briefing|flightPlan/);
   });
   it.each([1, 2, 3, 4, 6, 7, 8, 10])("permits admin edits before arrival in status %s", status => {
@@ -34,7 +34,7 @@ describe("temporary IF schedule display and edit guards", () => {
   it("does not expose write access in a pilot view", () => {
     expect(toIfAircraftScheduleView(remote)).toMatchObject({ editable: false, editDisabledReason: expect.stringContaining("administrator") });
   });
-  it.each([{ callsign: "IF2" }, { status: 11 }, { sequence: 4 }, { updatedAt: "2026-10-06T10:00:01Z" },
+  it.each([{ callsign: "IF2" }, { flightType: 3 }, { status: 11 }, { sequence: 4 }, { updatedAt: "2026-10-06T10:00:01Z" },
     { briefing: "Changed" }, { crew: [] }, { actualArrivalUtc: "2026-10-06T15:00:00Z" }])("detects concurrent provider changes without exposing source fields: %j", changes => {
     expect(ifScheduleFingerprint({ ...remote, ...changes })).not.toBe(ifScheduleFingerprint(remote));
     expect(ifScheduleFingerprint(remote)).toMatch(/^[0-9a-f]{64}$/);

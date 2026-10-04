@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { IfLiveError } from "./config";
 import { buildIfPayload, scheduleMarker, synchronizeIfFlight, type SyncApi } from "./sync";
 import type { AuthoredIfPayload, IfSchedule } from "./types";
+import type { FlightType } from "../flight-types";
 
 const PUBLIC_ID = "10000000-0000-0000-0000-000000000001";
 const REMOTE_ID = "20000000-0000-0000-0000-000000000002";
@@ -27,6 +28,32 @@ function expectNoWrites(value: ReturnType<typeof input>) {
 }
 
 describe("IF reconciliation", () => {
+  it.each([
+    ["commercial", 1], ["freight", 3], ["ferry", 12], ["charter", 2], ["training", 4], ["test_flight", 5],
+    ["medical_emergency", 6], ["military", 7], ["vip_executive", 8], ["humanitarian_relief", 9],
+    ["general_aviation", 10], ["airshow", 11], ["other", 12],
+  ] as const)("maps the local %s category to the official IF flight type %s", (flightType, ifType) => {
+    const value = buildIfPayload({ ...flight, flight_type: flightType }, [{ userId: CAPTAIN, role: 0 }]);
+    expect(value.schedule.flightType).toBe(ifType);
+    expect(value.schedule.briefing).toContain(flight.notes);
+    expect(value.schedule.briefing).toContain(scheduleMarker(PUBLIC_ID));
+    if (flightType === "ferry") expect(value.schedule.briefing).toContain("Flight type: Ferry");
+    else expect(value.schedule.briefing).not.toContain("Flight type: Ferry");
+  });
+  it.each([undefined, null])("keeps legacy flights without a flight type commercial: %s", flightType => {
+    expect(buildIfPayload({ ...flight, flight_type: flightType }, [{ userId: CAPTAIN, role: 0 }]).schedule.flightType).toBe(1);
+  });
+  it("rejects an unsupported stored flight type with a sanitized validation error", () => {
+    expect(() => buildIfPayload({ ...flight, flight_type: "provider-private-value" as FlightType }, [{ userId: CAPTAIN, role: 0 }]))
+      .toThrowError(new IfLiveError("The local flight has an unsupported flight type; amend it before publishing", "validation", 409));
+  });
+  it("requires a local type amendment to update the corresponding owned IF schedule", async () => {
+    const previous = authored();
+    const desired = buildIfPayload({ ...flight, flight_type: "freight" }, previous.crew);
+    const value = input({ remoteId: REMOTE_ID, previous, desired, schedules: [schedule()], api: apiFor(desired) });
+    await synchronizeIfFlight(value);
+    expect(value.api.update).toHaveBeenCalledWith(REMOTE_ID, expect.objectContaining({ flightType: 3 }));
+  });
   it("authors a stable marker and callsign without changing optional local input", () => {
     const value = authored(); expect(value.schedule.callsign).toBe("WNC9"); expect(flight.callsign).toBeNull();
     expect(value.schedule.briefing).toContain(scheduleMarker(PUBLIC_ID));

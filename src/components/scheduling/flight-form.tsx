@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { FlightInput, ScheduledFlight, SchedulingData } from "./types";
 import { errorMessage, inputToIso, utcInput } from "./utils";
 import { orderedQueue, projectedOrigin, RESERVED_STATUSES } from "@/lib/scheduling/policy";
+import { DEFAULT_FLIGHT_TYPE, FLIGHT_TYPES, isFlightType } from "@/lib/scheduling/flight-types";
 
 type Props = {
   data: SchedulingData;
@@ -35,6 +36,7 @@ export function FlightForm({ data, flight, aircraftId, admin, onClose, onSave }:
     return {
       live_aircraft_id: selectedId ? String(selectedId) : "",
       callsign: flight?.callsign || "", departure: flight?.departure || "", arrival: flight?.arrival || "",
+      flight_type: flight?.flight_type || DEFAULT_FLIGHT_TYPE,
       scheduled_departure: flight?.scheduled_departure ? utcInput(flight.scheduled_departure) : "",
       scheduled_arrival: flight?.scheduled_arrival ? utcInput(flight.scheduled_arrival) : "", notes: flight?.notes || "",
     };
@@ -50,6 +52,10 @@ export function FlightForm({ data, flight, aircraftId, admin, onClose, onSave }:
   async function submit(event: FormEvent) {
     event.preventDefault();
     setError("");
+    if (!isFlightType(form.flight_type)) {
+      setError("Choose a valid flight type.");
+      return;
+    }
     const scheduledDeparture = withTimes ? inputToIso(form.scheduled_departure) : null;
     const scheduledArrival = withTimes ? inputToIso(form.scheduled_arrival) : null;
     if (!aircraft || (withTimes && (!scheduledDeparture || !scheduledArrival))) {
@@ -68,6 +74,7 @@ export function FlightForm({ data, flight, aircraftId, admin, onClose, onSave }:
     try {
       await onSave({
         live_aircraft_id: aircraft.id, callsign: form.callsign.trim(), departure: departure.trim(), arrival: form.arrival.trim(),
+        flight_type: form.flight_type,
         scheduled_departure: scheduledDeparture, scheduled_arrival: scheduledArrival, notes: form.notes.trim(),
       });
       onClose();
@@ -91,6 +98,14 @@ export function FlightForm({ data, flight, aircraftId, admin, onClose, onSave }:
           <select id="flight-aircraft" value={form.live_aircraft_id} onChange={(event) => setForm({ ...form, live_aircraft_id: event.target.value, departure: "", ...(!flight && withTimes ? suggestedTimes(data, Number(event.target.value)) : {}) })} required disabled={saving || Boolean(flight)} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
             <option value="">Select an aircraft</option>
             {data.aircraft.filter((item) => item.active || item.id === flight?.live_aircraft_id).map((item) => <option key={item.id} value={item.id} disabled={!item.active}>{item.registration} · {item.name}{!item.active ? " (inactive)" : ""}</option>)}
+          </select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="flight-type">Flight type</Label>
+          <select id="flight-type" value={form.flight_type} onChange={(event) => {
+            if (isFlightType(event.target.value)) setForm({ ...form, flight_type: event.target.value });
+          }} required disabled={saving} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
+            {FLIGHT_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
           </select>
         </div>
         <div className="space-y-2 rounded-md border bg-muted/20 p-3"><label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={withTimes} disabled={saving} onChange={(event) => {

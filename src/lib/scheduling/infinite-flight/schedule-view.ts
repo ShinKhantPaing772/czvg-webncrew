@@ -6,7 +6,7 @@ export { meaningfulIfScheduleTime } from "./schedule-time";
 
 export type IfManagedFlight = { id: number; public_id: string; if_schedule_id: string | null; status: string };
 export type IfAircraftScheduleView = {
-  id: string; callsign: string; originIcao: string; destinationIcao: string;
+  id: string; callsign: string; flightType: number; originIcao: string; destinationIcao: string;
   scheduledDepartureUtc: string | null; scheduledArrivalUtc: string | null;
   status: number; crew: IfSchedule["crew"]; sequence: number | null;
   fingerprint: string; managedFlightId: number | null; editable: boolean; editDisabledReason: string | null;
@@ -39,7 +39,7 @@ export function toIfAircraftScheduleView(row: IfSchedule, flights: readonly IfMa
         managed || marker ? "Amend this app-managed flight through the local scheduling controls" :
           !canEdit ? "Scheduling administrator access and an enabled IF connection are required" : null;
   return {
-    id: row.id, callsign: row.callsign, originIcao: row.originIcao, destinationIcao: row.destinationIcao,
+    id: row.id, callsign: row.callsign, flightType: row.flightType, originIcao: row.originIcao, destinationIcao: row.destinationIcao,
     scheduledDepartureUtc: meaningfulIfScheduleTime(row.scheduledDepartureUtc), scheduledArrivalUtc: meaningfulIfScheduleTime(row.scheduledArrivalUtc),
     status: row.status, crew: row.crew.map(member => ({ userId: member.userId, role: member.role })),
     sequence: Number.isSafeInteger(row.sequence) ? row.sequence! : null, fingerprint: ifScheduleFingerprint(row),

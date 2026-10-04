@@ -29,6 +29,7 @@ vi.mock("./infinite-flight/client", () => ({ getIfSchedules: mocks.ifSchedules, 
 import { changeAircraft, changeFlight, requestFlight, schedulingSnapshot, schedulingFailure } from "./service";
 import { buildIfPayload } from "./infinite-flight/sync";
 import { IfLiveError } from "./infinite-flight/config";
+import { FLIGHT_TYPES } from "./flight-types";
 
 type Row = Record<string, any>;
 type TableName = "Pilot" | "Aircraft" | "AwardGranted" | "LiveAircraft" | "LiveFlight" | "LiveFlightMember" | "LiveScheduleEvent" | "IfLiveConnection" | "IfLiveOutbox";
@@ -99,7 +100,7 @@ function installTable(name: TableName) {
   table.create.mockReset().mockImplementation(async (values: Row) => {
     const id = Math.max(0, ...rows[name].map(row => row.id)) + 1;
     const row = { id, ...values };
-    if (name === "LiveFlight") Object.assign(row, { revision: 1, publishing_state: "local", published_revision: 0, if_schedule_id: null }, values);
+    if (name === "LiveFlight") Object.assign(row, { revision: 1, flight_type: "commercial", publishing_state: "local", published_revision: 0, if_schedule_id: null }, values);
     if (name === "LiveAircraft") Object.assign(row, { active: true, if_aircraft_id: null }, values);
     rows[name].push(row);
     return instance(row);
@@ -116,7 +117,7 @@ function flight(overrides: Row = {}) {
     id: rows.LiveFlight.length + 1, live_aircraft_id: 1, captain_id: 1,
     departure: "CYYZ", arrival: "KJFK", scheduled_departure: at(10), scheduled_arrival: at(12),
     queue_order: overrides.status === "pending" ? null : nextOrder,
-    status: "approved", callsign: null, notes: null, revision: 1, published_revision: 0,
+    status: "approved", callsign: null, flight_type: "commercial", notes: null, revision: 1, published_revision: 0,
     publishing_state: "local", if_schedule_id: null, updated_at: new Date(), ...overrides,
     public_id: `40000000-0000-0000-0000-${String(rows.LiveFlight.length + 1).padStart(12, "0")}`,
   };
@@ -161,6 +162,12 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe("database setup diagnostics", () => {
+  it("identifies the flight-types migration for a missing flight type column", () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(schedulingFailure({ original: { code: "ER_BAD_FIELD_ERROR", sqlMessage: "Unknown column 'LiveFlight.flight_type' in 'field list'" } })).toEqual({
+      status: 503, error: "Live scheduling needs its flight-types migration. Apply migrations/20261004_live_flight_types.sql first.",
+    });
+  });
   it("identifies the optional-times migration for a missing queue order column", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     expect(schedulingFailure({ original: { code: "ER_BAD_FIELD_ERROR", sqlMessage: "Unknown column 'LiveFlight.queue_order' in 'field list'" } })).toEqual({
@@ -187,6 +194,61 @@ describe("database setup diagnostics", () => {
 });
 
 describe("flight proposals", () => {
+  it("defaults omitted flight type to Commercial", async () => {
+    await requestFlight(captain, proposal());
+    expect(rows.LiveFlight[0].flight_type).toBe("commercial");
+    expect(rows.LiveScheduleEvent[0].details.flight_type).toBe("commercial");
+  });
+
+  it.each(FLIGHT_TYPES.map(type => ({ value: type.value })))("stores the supported $value flight type", async ({ value }) => {
+    await requestFlight(captain, proposal({ flight_type: value }));
+    expect(rows.LiveFlight[0].flight_type).toBe(value);
+  });
+
+  it.each([null, undefined, "", "Commercial", "passenger", "other ", 1, {}].map(value => ({ value })))("rejects unsupported submitted flight types ($value)", async ({ value }) => {
+    await expect(requestFlight(captain, proposal({ flight_type: value }))).rejects.toMatchObject({ status: 400 });
+    expect(rows.LiveFlight).toHaveLength(0);
+    expect(rows.LiveScheduleEvent).toHaveLength(0);
+  });
+
+  it("preserves the flight type through omitted edits and approvals and audits explicit amendments", async () => {
+    await requestFlight(captain, proposal({ flight_type: "freight" }));
+    await changeFlight(captain, { action: "edit", flight_id: 1, notes: "Updated notes" });
+    expect(rows.LiveFlight[0].flight_type).toBe("freight");
+    await changeFlight(captain, { action: "edit", flight_id: 1, flight_type: "ferry" });
+    expect(rows.LiveFlight[0].flight_type).toBe("ferry");
+    expect(rows.LiveScheduleEvent.at(-1)?.details).toMatchObject({ before: { flight_type: "freight" }, after: { flight_type: "ferry" } });
+    await changeFlight(administrator, { action: "approve", flight_id: 1 });
+    expect(rows.LiveFlight[0].flight_type).toBe("ferry");
+    await changeFlight(administrator, { action: "amend", flight_id: 1, flight_type: "other" });
+    expect(rows.LiveFlight[0]).toMatchObject({ flight_type: "other", revision: 3, status: "approved" });
+    expect(rows.LiveScheduleEvent.at(-1)?.details).toMatchObject({ before: { flight_type: "ferry" }, after: { flight_type: "other" } });
+  });
+
+  it("rejects invalid edits and amendments without changing the stored type or publishing revision", async () => {
+    flight({ status: "pending", flight_type: "freight" });
+    await expect(changeFlight(captain, { action: "edit", flight_id: 1, flight_type: "unknown" })).rejects.toMatchObject({ status: 400 });
+    await expect(changeFlight(administrator, { action: "approve", flight_id: 1, flight_type: null })).rejects.toMatchObject({ status: 400 });
+    expect(rows.LiveFlight[0]).toMatchObject({ flight_type: "freight", revision: 1, status: "pending" });
+    expect(rows.LiveScheduleEvent).toHaveLength(0);
+    expect(rows.IfLiveOutbox).toHaveLength(0);
+  });
+
+  it("allows distinct pending flight types for the same route while preventing duplicate types", async () => {
+    await requestFlight(captain, proposal({ flight_type: "commercial" }));
+    await requestFlight(captain, proposal({ flight_type: "freight" }));
+    await expect(requestFlight(captain, proposal({ flight_type: "freight" }))).rejects.toMatchObject({ status: 409 });
+    expect(rows.LiveFlight.map(row => row.flight_type)).toEqual(["commercial", "freight"]);
+  });
+
+  it("queues a new IF publishing revision when an approved flight type changes", async () => {
+    flight();
+    rows.LiveAircraft[0].if_aircraft_id = IF_AIRCRAFT;
+    await changeFlight(administrator, { action: "amend", flight_id: 1, flight_type: "freight" });
+    expect(rows.LiveFlight[0]).toMatchObject({ flight_type: "freight", revision: 2, publishing_state: "disabled" });
+    expect(rows.IfLiveOutbox).toEqual([expect.objectContaining({ flight_id: 1, revision: 2, state: "queued" })]);
+  });
+
   it("stores an untimed proposal without reserving a queue position and assigns one only on approval", async () => {
     await requestFlight(captain, proposal({ scheduled_departure: null, scheduled_arrival: null }));
     expect(rows.LiveFlight[0]).toMatchObject({ scheduled_departure: null, scheduled_arrival: null, queue_order: null, status: "pending" });
@@ -622,6 +684,15 @@ describe("start and completion policies", () => {
   it("rejects an IF user ID changed without a flight revision during departure checks", async () => {
     linkedFlight(); mocks.ifPosition.mockImplementation(async () => {
       rows.Pilot[0].ifuserid = ifUser(5);
+      return { id: IF_AIRCRAFT, state: 1, isOnGround: true, latitude: 43.6777, longitude: -79.6248 };
+    });
+    await expect(changeFlight(captain, { flight_id: 1, action: "start" })).rejects.toThrow("changed during the departure check");
+    expect(rows.LiveFlight[0].status).toBe("approved");
+  });
+
+  it("rejects a flight type changed during fresh IF departure checks", async () => {
+    linkedFlight(); mocks.ifPosition.mockImplementation(async () => {
+      rows.LiveFlight[0].flight_type = "freight";
       return { id: IF_AIRCRAFT, state: 1, isOnGround: true, latitude: 43.6777, longitude: -79.6248 };
     });
     await expect(changeFlight(captain, { flight_id: 1, action: "start" })).rejects.toThrow("changed during the departure check");

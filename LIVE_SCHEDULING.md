@@ -45,6 +45,24 @@ and adds the remaining indexes/checks. Its verification query must return zero
 reserved flights without queue positions. Do not run the repair after a
 successful upgrade or after new queue assignments have been made.
 
+For the flight-type dropdown, apply
+`migrations/20261004_live_flight_types.sql` once before deploying this update.
+This single atomic `ALTER` adds the validated `flight_type` field and defaults
+existing flights to **Commercial**. It uses no whole-table `UPDATE`, so Workbench
+safe-update mode can stay enabled. Pause scheduling writes during the change.
+Fresh installations already include this field in `crewcenterdb.sql`.
+
+Pilots choose a flight type when requesting or editing a pending flight, and
+admins can amend it on approved flights. Choices include Commercial, Freight,
+Ferry, Charter, Training, Test flight, Medical emergency, Military, VIP / Executive,
+Humanitarian relief, General aviation, Airshow, and Other. The type appears on
+flight lists and details and is included in approval history and IF publishing.
+IF's [PersistentFlightType](https://infiniteflight.com/guide/developer-reference/live-api/v3-oauth-live-preview#persistentflighttype)
+uses **Cargo** for Freight. It has no Ferry category, so local Ferry flights publish
+as **Other** with `Flight type: Ferry` in their briefing. Admin edits to external
+IF schedules offer IF's supported categories, including its existing
+**Not specified** value, and retain the existing arrival and ownership locks.
+
 Planned times are optional; enter both UTC times or leave both unspecified.
 Callsigns are optional. Every new flight needs
 admin approval; pending requests reserve neither aircraft nor a queue position.
@@ -354,10 +372,11 @@ migration, OAuth registration, and scheduler provisioning are operator steps.
 - Automated tests, TypeScript, and the production build passed; see the current
   task report for the latest test count.
 - Both pages were checked at desktop and mobile widths with fictional sample data.
-- Twenty isolated MySQL tests passed against disposable MySQL 8.4 databases,
+- Twenty-two isolated MySQL tests passed against disposable MySQL 8.4 databases,
   covering concurrent reservations/crew, actual candidate SQL/advisory locks,
   aircraft-specific publishing/expired-lease isolation, Workbench safe-update
-  mode, and recovery from a partially applied optional-times migration.
+  mode, recovery from a partially applied optional-times migration, and
+  flight-type migration defaults, constraints, persistence, and amendment history.
   The test containers were removed afterward. These suites remain opt-in for normal
   test runs; rerun the command above when changing database or publishing logic.
 - Real IF OAuth/publishing was not exercised. No production migration, account

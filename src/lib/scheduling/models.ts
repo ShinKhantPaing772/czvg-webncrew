@@ -1,6 +1,7 @@
 import { DataTypes, Model } from "sequelize";
 import sequelize from "@/lib/database";
 import { models } from "@/lib/models";
+import { DEFAULT_FLIGHT_TYPE, FLIGHT_TYPES, type FlightType } from "./flight-types";
 
 // Sequelize annotates attribute definitions during init. Give every field its
 // own object so one timestamp cannot inherit another field's column mapping.
@@ -29,7 +30,7 @@ LiveAircraft.init({
 
 export class LiveFlight extends Model {
   declare id: number; declare public_id: string; declare live_aircraft_id: number; declare captain_id: number;
-  declare callsign: string | null; declare departure: string; declare arrival: string;
+  declare callsign: string | null; declare flight_type: FlightType; declare departure: string; declare arrival: string;
   declare queue_order: number | null; declare scheduled_departure: Date | null; declare scheduled_arrival: Date | null; declare status: string;
   declare notes: string | null; declare reviewed_by: number | null; declare reviewed_at: Date | null;
   declare review_reason: string | null; declare actual_departure_at: Date | null;
@@ -42,6 +43,7 @@ LiveFlight.init({
   id: id(), public_id: { type: DataTypes.CHAR(36), allowNull: false, unique: true },
   live_aircraft_id: { type: DataTypes.INTEGER, allowNull: false }, captain_id: { type: DataTypes.INTEGER, allowNull: false },
   callsign: { type: DataTypes.STRING(32), allowNull: true },
+  flight_type: { type: DataTypes.STRING(32), allowNull: false, defaultValue: DEFAULT_FLIGHT_TYPE, validate: { isIn: [FLIGHT_TYPES.map(type => type.value)] } },
   departure: { type: DataTypes.CHAR(4), allowNull: false }, arrival: { type: DataTypes.CHAR(4), allowNull: false },
   queue_order: { type: DataTypes.INTEGER, allowNull: true },
   scheduled_departure: date(), scheduled_arrival: date(),

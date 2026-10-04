@@ -9,10 +9,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { schedulingResponse } from "./use-scheduling";
 import { errorMessage, hasIfScheduleTime, inputToIso, utcInput } from "./utils";
+import { IF_FLIGHT_TYPES } from "@/lib/scheduling/flight-types";
 
 export type RemoteSchedule = {
   id: string;
   callsign: string;
+  flightType?: number;
   originIcao: string;
   destinationIcao: string;
   scheduledDepartureUtc: string | null;
@@ -34,6 +36,7 @@ export function IfScheduleEditor({ aircraftId, schedule, onClose, onSave, onDeni
   onDenied: () => void;
 }) {
   const [callsign, setCallsign] = useState(schedule.callsign);
+  const [flightType, setFlightType] = useState(schedule.flightType ?? 1);
   const [origin, setOrigin] = useState(schedule.originIcao);
   const [destination, setDestination] = useState(schedule.destinationIcao);
   const [departure, setDeparture] = useState(hasIfScheduleTime(schedule.scheduledDepartureUtc) ? utcInput(schedule.scheduledDepartureUtc) : "");
@@ -53,6 +56,10 @@ export function IfScheduleEditor({ aircraftId, schedule, onClose, onSave, onDeni
     if (saving) return;
     if (!schedule.editable || !schedule.fingerprint || schedule.status === 11 || schedule.managedFlightId) {
       setError("This flight cannot be edited directly in Infinite Flight. Refresh its schedules before continuing.");
+      return;
+    }
+    if (!IF_FLIGHT_TYPES.some(type => type.value === flightType)) {
+      setError("Choose a valid flight type.");
       return;
     }
     const plannedDeparture = !setTimes ? null : hasIfScheduleTime(schedule.scheduledDepartureUtc) && departure === utcInput(schedule.scheduledDepartureUtc) ? schedule.scheduledDepartureUtc : inputToIso(departure);
@@ -77,7 +84,7 @@ export function IfScheduleEditor({ aircraftId, schedule, onClose, onSave, onDeni
         method: "PATCH", signal: next.signal, headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           aircraftId, scheduleId: schedule.id, expectedFingerprint: schedule.fingerprint,
-          changes: { callsign: callsign.trim(), originIcao: origin.trim().toUpperCase(), destinationIcao: destination.trim().toUpperCase(), scheduledDepartureUtc: plannedDeparture, scheduledArrivalUtc: plannedArrival },
+          changes: { callsign: callsign.trim(), flightType, originIcao: origin.trim().toUpperCase(), destinationIcao: destination.trim().toUpperCase(), scheduledDepartureUtc: plannedDeparture, scheduledArrivalUtc: plannedArrival },
         }),
       });
       if ([401, 403].includes(response.status) && mounted.current) onDenied();
@@ -101,6 +108,7 @@ export function IfScheduleEditor({ aircraftId, schedule, onClose, onSave, onDeni
       <form onSubmit={event => void save(event)} className="space-y-4">
         {error && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
         <div className="space-y-2"><Label htmlFor="if-schedule-callsign">Callsign</Label><Input id="if-schedule-callsign" value={callsign} onChange={event => setCallsign(event.target.value)} maxLength={32} required disabled={saving} /></div>
+        <div className="space-y-2"><Label htmlFor="if-schedule-flight-type">Flight type</Label><select id="if-schedule-flight-type" value={flightType} onChange={event => setFlightType(Number(event.target.value))} required disabled={saving} className="h-10 w-full rounded-md border bg-background px-3 text-sm">{IF_FLIGHT_TYPES.map(type => <option key={type.value} value={type.value}>{type.label}</option>)}</select></div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2"><Label htmlFor="if-schedule-origin">Departure airport</Label><Input id="if-schedule-origin" value={origin} onChange={event => setOrigin(event.target.value.toUpperCase())} maxLength={8} required disabled={saving} /></div>
           <div className="space-y-2"><Label htmlFor="if-schedule-destination">Destination airport</Label><Input id="if-schedule-destination" value={destination} onChange={event => setDestination(event.target.value.toUpperCase())} maxLength={8} required disabled={saving} /></div>

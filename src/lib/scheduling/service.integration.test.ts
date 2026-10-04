@@ -28,11 +28,12 @@ describe.skipIf(!suppliedUrl)("MySQL live scheduling transaction concurrency", (
   let service: typeof import("./service");
   let mayCleanUp = false;
   let migratedQueue: Array<{ id: number; queue_order: number | null }>;
+  let migratedTypes: Array<{ id: number; flight_type: string }>;
   const captain = { id: 1, admin: false };
   const administrator = { id: 9, admin: true };
   const at = (hour: number) => new Date(`2026-10-02T${String(hour).padStart(2, "0")}:00:00Z`);
   const tables = ["if_live_outbox", "live_schedule_events", "live_flight_members", "live_flights", "live_aircraft", "if_live_connections", "awards_granted", "awards", "aircraft", "pilots", "options"];
-  const migrationTables = ["live_flights_migration_full", "live_flights_migration_repair"];
+  const migrationTables = ["live_flights_migration_full", "live_flights_migration_repair", "live_flights_migration_types"];
   const createdMigrationTables = new Set<string>();
 
   beforeAll(async () => {
@@ -94,6 +95,8 @@ describe.skipIf(!suppliedUrl)("MySQL live scheduling transaction concurrency", (
     `);
     await database.query(await readFile(new URL("../../../migrations/20261004_optional_live_flight_times.sql", import.meta.url), "utf8"));
     migratedQueue = await database.query<{ id: number; queue_order: number | null }>("SELECT id, queue_order FROM live_flights ORDER BY id", { type: QueryTypes.SELECT });
+    await database.query(await readFile(new URL("../../../migrations/20261004_live_flight_types.sql", import.meta.url), "utf8"));
+    migratedTypes = await database.query<{ id: number; flight_type: string }>("SELECT id, flight_type FROM live_flights ORDER BY id", { type: QueryTypes.SELECT });
   }, 30_000);
 
   afterAll(async () => {
@@ -226,6 +229,45 @@ describe.skipIf(!suppliedUrl)("MySQL live scheduling transaction concurrency", (
 
   it("backfills legacy flight chronology per aircraft and leaves pending requests unreserved", () => {
     expect(migratedQueue).toEqual([{ id: 1, queue_order: 3 }, { id: 2, queue_order: 2 }, { id: 3, queue_order: null }, { id: 4, queue_order: 1 }, { id: 5, queue_order: 1 }]);
+  });
+
+  it("atomically adds Commercial defaults and flight-type constraints with Workbench safe updates enabled", async () => {
+    await withLegacyMigrationTable(migrationTables[2], async (connection, rewrite) => {
+      await connection.query(rewrite(await readFile(new URL("../../../migrations/20261004_optional_live_flight_times.sql", import.meta.url), "utf8")));
+      const migration = await readFile(new URL("../../../migrations/20261004_live_flight_types.sql", import.meta.url), "utf8");
+      expect(migration.match(/ALTER TABLE/g)).toHaveLength(1);
+      await connection.query(rewrite(migration));
+      const [session] = await connection.query<RowDataPacket[]>("SELECT @@SESSION.SQL_SAFE_UPDATES AS safeUpdates");
+      expect(Number(session[0].safeUpdates)).toBe(1);
+      const [existing] = await connection.query<RowDataPacket[]>(`SELECT flight_type FROM \`${migrationTables[2]}\` ORDER BY id`);
+      expect(existing.map(row => row.flight_type)).toEqual(Array(5).fill("commercial"));
+      await connection.query(`UPDATE \`${migrationTables[2]}\` SET flight_type = 'freight' WHERE id = 1`);
+      await connection.query(`UPDATE \`${migrationTables[2]}\` SET flight_type = 'ferry' WHERE id = 2`);
+      await connection.query(`UPDATE \`${migrationTables[2]}\` SET flight_type = 'other' WHERE id = 3`);
+      for (const invalidType of ["passenger", "Commercial", "other "]) {
+        await expect(connection.query(`UPDATE \`${migrationTables[2]}\` SET flight_type = ? WHERE id = 1`, [invalidType])).rejects.toMatchObject({ errno: 3819 });
+      }
+      await expect(connection.query(`UPDATE \`${migrationTables[2]}\` SET flight_type = NULL WHERE id = 1`)).rejects.toMatchObject({ errno: 1048 });
+    });
+    expect(migratedTypes).toEqual([1, 2, 3, 4, 5].map(id => ({ id, flight_type: "commercial" })));
+  });
+
+  it("persists requested and amended flight types and rejects invalid API submissions without mutation", async () => {
+    const freight = await service.requestFlight(captain, { live_aircraft_id: 1, arrival: "KJFK", flight_type: "freight" });
+    expect((await live.LiveFlight.findByPk(freight.flight_id))?.flight_type).toBe("freight");
+    await service.changeFlight(captain, { flight_id: freight.flight_id, action: "edit", notes: "No type change" });
+    await service.changeFlight(administrator, { flight_id: freight.flight_id, action: "approve" });
+    expect((await live.LiveFlight.findByPk(freight.flight_id))?.flight_type).toBe("freight");
+    await service.changeFlight(administrator, { flight_id: freight.flight_id, action: "amend", flight_type: "ferry" });
+    expect((await live.LiveFlight.findByPk(freight.flight_id))?.flight_type).toBe("ferry");
+    const audits = await live.LiveScheduleEvent.findAll({ where: { flight_id: freight.flight_id, action: "amend" }, raw: true });
+    expect(audits[0]).toMatchObject({ details: { before: { flight_type: "freight" }, after: { flight_type: "ferry" } } });
+    await expect(service.changeFlight(administrator, { flight_id: freight.flight_id, action: "amend", flight_type: "unknown" })).rejects.toMatchObject({ status: 400 });
+    expect((await live.LiveFlight.findByPk(freight.flight_id))?.flight_type).toBe("ferry");
+    await expect(service.requestFlight(captain, { live_aircraft_id: 1, arrival: "KBOS", flight_type: "unknown" })).rejects.toMatchObject({ status: 400 });
+    expect(await live.LiveFlight.count()).toBe(1);
+    const commercial = await service.requestFlight(captain, { live_aircraft_id: 1, arrival: "KBOS" });
+    expect((await live.LiveFlight.findByPk(commercial.flight_id))?.flight_type).toBe("commercial");
   });
 
   it("appends consecutive untimed approvals with unique queue positions under concurrent requests", async () => {

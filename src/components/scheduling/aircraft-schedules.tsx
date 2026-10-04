@@ -10,6 +10,7 @@ import type { LiveAircraft, ScheduledFlight } from "./types";
 import { schedulingResponse } from "./use-scheduling";
 import { crewCount, errorMessage, formatIfScheduleTimeRange, formatUtc, ifScheduleStatusLabel, publishingLabel, statusLabels } from "./utils";
 import { IfScheduleEditor, type RemoteSchedule } from "./if-schedule-editor";
+import { flightTypeLabel, ifFlightTypeLabel } from "@/lib/scheduling/flight-types";
 
 type AircraftIfSchedules = {
   schedules: RemoteSchedule[];
@@ -144,7 +145,7 @@ export function AircraftSchedulesDialog({ aircraft, flights, admin, onClose, onS
           {!localFlights.length ? <p className="text-sm text-muted-foreground">No local flights for this aircraft.</p> : localFlights.map(flight => <button key={flight.id} type="button" disabled={publishing} onClick={() => onSelect(flight)} className="w-full space-y-2 rounded-md border p-3 text-left hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-medium">{flight.callsign || "Flight"} · {flight.departure} → {flight.arrival}</p><Badge variant="secondary">{statusLabels[flight.status]}</Badge></div>
             <p className="text-xs text-muted-foreground">{formatIfScheduleTimeRange(flight.scheduled_departure, flight.scheduled_arrival)}</p>
-            <p className="text-xs text-muted-foreground">{flight.captain?.name || "Captain unavailable"} · {crewCount(flight)}/3 crew · {publishingLabel(flight.publishing_state)}</p>
+            <p className="text-xs text-muted-foreground">{flightTypeLabel(flight.flight_type)} · {flight.captain?.name || "Captain unavailable"} · {crewCount(flight)}/3 crew · {publishingLabel(flight.publishing_state)}</p>
             {flight.error && <p className="text-xs text-destructive">{flight.error}</p>}
           </button>)}
         </section>
@@ -161,7 +162,7 @@ export function AircraftSchedulesDialog({ aircraft, flights, admin, onClose, onS
                 return <div key={schedule.id} className="space-y-2 rounded-md border p-3">
                   <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-medium">{schedule.callsign || "IF flight"} · {schedule.originIcao} → {schedule.destinationIcao}</p><Badge variant="outline">{ifScheduleStatusLabel(schedule.status)}</Badge></div>
                   <p className="text-xs text-muted-foreground">{formatIfScheduleTimeRange(schedule.scheduledDepartureUtc, schedule.scheduledArrivalUtc)}</p>
-                  <p className="text-xs text-muted-foreground">{schedule.crew.length} assigned crew · {schedule.crew.some(member => member.role === 0) ? "Captain assigned" : "No captain assigned"} · {managed || schedule.managedFlightId ? "Linked to Crew Center" : "No local flight link"}{typeof schedule.sequence === "number" ? ` · Queue position ${schedule.sequence}` : ""}</p>
+                  <p className="text-xs text-muted-foreground">{ifFlightTypeLabel(schedule.flightType)} · {schedule.crew.length} assigned crew · {schedule.crew.some(member => member.role === 0) ? "Captain assigned" : "No captain assigned"} · {managed || schedule.managedFlightId ? "Linked to Crew Center" : "No local flight link"}{typeof schedule.sequence === "number" ? ` · Queue position ${schedule.sequence}` : ""}</p>
                   {schedule.status === 11 || schedule.editDisabledReason === "Arrived flights are locked" ? <p className="flex items-center gap-1 text-xs text-muted-foreground"><LockKeyhole className="h-3 w-3" />Arrived flights are locked.</p> : admin && !managed && !schedule.managedFlightId && !schedule.editable && <p className="text-xs text-muted-foreground">{schedule.editDisabledReason || "This IF flight cannot be edited in its current state."}</p>}
                   <div className="flex flex-wrap gap-3">
                     {managed && <Button variant="link" size="sm" className="h-auto p-0" disabled={publishing} onClick={() => onSelect(managed)}>{admin && schedule.status !== 11 ? "View or amend local flight" : "View local flight"}</Button>}

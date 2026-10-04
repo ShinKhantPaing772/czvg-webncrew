@@ -14,6 +14,7 @@ import { buildIfPayload } from "./infinite-flight/sync";
 import { withIfRequestBudget } from "./infinite-flight/request-budget";
 import type { AuthoredIfPayload, IfCrew } from "./infinite-flight/types";
 import type { IfLocalFlight, IfPublishedPayload } from "./infinite-flight/itinerary";
+import { DEFAULT_FLIGHT_TYPE, isFlightType } from "./flight-types";
 
 export type SchedulingActor = { id: number; admin: boolean };
 type Body = Record<string, unknown>;
@@ -98,15 +99,18 @@ function requireState(flight: LiveFlight, ...states: string[]) {
   if (!states.includes(flight.status)) throw new SchedulingError(`This action is unavailable for a ${flight.status.replaceAll("_", " ")} flight`, 409);
 }
 function flightState(flight: LiveFlight) {
-  return { captain_id: flight.captain_id, callsign: flight.callsign, departure: flight.departure, arrival: flight.arrival,
+  return { captain_id: flight.captain_id, callsign: flight.callsign, flight_type: flight.flight_type, departure: flight.departure, arrival: flight.arrival,
     queue_order: flight.queue_order, scheduled_departure: flight.scheduled_departure, scheduled_arrival: flight.scheduled_arrival, status: flight.status,
     actual_arrival: flight.actual_arrival, notes: flight.notes, revision: flight.revision };
 }
 function flightFields(body: Body, current?: LiveFlight) {
+  const flightType = has(body, "flight_type") ? body.flight_type : current?.flight_type ?? DEFAULT_FLIGHT_TYPE;
+  if (!isFlightType(flightType)) throw new SchedulingError("Select a valid flight type");
   return {
     ...scheduledWindow(has(body, "scheduled_departure") ? body.scheduled_departure : current?.scheduled_departure?.toISOString() ?? null,
       has(body, "scheduled_arrival") ? body.scheduled_arrival : current?.scheduled_arrival?.toISOString() ?? null),
     callsign: has(body, "callsign") ? text(body.callsign, 32, "Callsign") : current?.callsign ?? null,
+    flight_type: flightType,
     arrival: airport(body.arrival ?? current?.arrival)!,
     notes: has(body, "notes") ? text(body.notes, 3000, "Notes") : current?.notes ?? null,
   };
@@ -191,7 +195,7 @@ function connectionSignature(connection: IfLiveConnection) {
   return JSON.stringify([connection.organization_id, connection.state, connection.connected_by, connection.access_token_encrypted]);
 }
 function startSignature(flight: LiveFlight, aircraft: LiveAircraft, catalog: Parameters<typeof catalogSignature>[0], connection: IfLiveConnection, payload: AuthoredIfPayload, localFlights: LiveFlight[]) {
-  return JSON.stringify([flight.id, flight.public_id, flight.revision, flight.status, flight.publishing_state, flight.published_revision, flight.if_schedule_id,
+  return JSON.stringify([flight.id, flight.public_id, flight.revision, flight.status, flight.flight_type, flight.publishing_state, flight.published_revision, flight.if_schedule_id,
     aircraft.id, aircraft.aircraft_id, aircraft.if_aircraft_id, aircraft.active, aircraft.current_airport, aircraft.location_updated_at,
     catalogSignature(catalog), connectionSignature(connection), payload,
     localFlights.map(ifLocalFlight).sort((left, right) => left.public_id.localeCompare(right.public_id))]);
@@ -262,7 +266,7 @@ export async function requestFlight(actor: SchedulingActor, body: Body) {
     const reservedFlights = await queue(aircraft.id, transaction);
     const departure = projectedOrigin(aircraft.current_airport, reservedFlights) ?? airport(body.departure)!;
     if (departure === fields.arrival) throw new SchedulingError("Departure and destination must be different");
-    const duplicate = await LiveFlight.findOne({ where: { captain_id: actor.id, live_aircraft_id: aircraft.id, status: "pending", departure, arrival: fields.arrival, scheduled_departure: fields.scheduled_departure, scheduled_arrival: fields.scheduled_arrival }, transaction });
+    const duplicate = await LiveFlight.findOne({ where: { captain_id: actor.id, live_aircraft_id: aircraft.id, status: "pending", departure, arrival: fields.arrival, flight_type: fields.flight_type, scheduled_departure: fields.scheduled_departure, scheduled_arrival: fields.scheduled_arrival }, transaction });
     if (duplicate) throw new SchedulingError("This flight request already exists", 409);
     const flight = await LiveFlight.create({ ...fields, public_id: randomUUID(), live_aircraft_id: aircraft.id, captain_id: actor.id, departure, queue_order: null, status: "pending" }, { transaction });
     await event(aircraft, flight, actor, "requested", fields, transaction);
@@ -489,6 +493,8 @@ export function schedulingFailure(error: unknown) {
       ? "Live scheduling needs its SQL migration. Apply migrations/20261002_live_scheduling.sql first."
       : identifier?.split(".").at(-1) === "queue_order"
         ? "Live scheduling needs its optional-times migration. Apply migrations/20261004_optional_live_flight_times.sql first."
+        : identifier?.split(".").at(-1) === "flight_type"
+          ? "Live scheduling needs its flight-types migration. Apply migrations/20261004_live_flight_types.sql first."
         : "Live scheduling has a database column mismatch. An administrator needs to check the deployed app and database schema." };
   }
   console.error("[Scheduling] Operation failed", error instanceof Error ? error.name : "Unknown error");

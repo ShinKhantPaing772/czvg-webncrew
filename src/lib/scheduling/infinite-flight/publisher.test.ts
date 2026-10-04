@@ -43,6 +43,25 @@ beforeEach(() => {
 afterEach(() => { vi.resetAllMocks(); vi.unstubAllEnvs(); });
 
 describe("IF durable publishing worker", () => {
+  it.each([
+    ["freight", 3], ["ferry", 12], ["charter", 2], ["other", 12],
+  ])("publishes the selected %s local flight type as IF category %s", async (flightType, expected) => {
+    flight.flight_type = flightType;
+    const payload = buildIfPayload(flight, [{ userId: UUID, role: 0 }]);
+    const remote = { ...payload.schedule, id: REMOTE_ID, aircraftId: UUID, organizationId: UUID, status: 1, crew: [] };
+    mocks.schedules.mockReset().mockResolvedValueOnce([]).mockResolvedValue([remote]);
+    mocks.create.mockResolvedValue(remote); mocks.putCrew.mockResolvedValue({ ...remote, crew: payload.crew });
+    expect(await runIfLivePublisher()).toMatchObject({ published: 1, states: { published: 1 } });
+    expect(mocks.create).toHaveBeenCalledWith("if-access-token", UUID, expect.objectContaining({ flightType: expected }));
+    const stored = mocks.liveFlight.update.mock.calls.find(([values]) => values.last_published_payload)?.[0].last_published_payload;
+    expect(stored.schedule.flightType).toBe(expected);
+    if (flightType === "ferry") expect(stored.schedule.briefing).toContain("Flight type: Ferry");
+  });
+  it("fails an unsupported local type without submitting it to IF", async () => {
+    flight.flight_type = "provider-private-value";
+    expect(await runIfLivePublisher()).toMatchObject({ published: 0, states: { failed: 1 } });
+    expect(mocks.create).not.toHaveBeenCalled(); expect(mocks.putCrew).not.toHaveBeenCalled();
+  });
   it("publishes an untimed local flight without transmitting placeholder or null timestamps", async () => {
     flight.scheduled_departure = null; flight.scheduled_arrival = null;
     const payload = buildIfPayload(flight, [{ userId: UUID, role: 0 }]);

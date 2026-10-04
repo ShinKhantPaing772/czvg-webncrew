@@ -42,6 +42,12 @@ function button(label: string) {
 async function load() { await act(async () => button("Load IF schedules").click()); }
 
 describe("aircraft IF schedule view", () => {
+  it("shows local and Infinite Flight purposes using their respective labels", async () => {
+    mocks.fetch.mockResolvedValue(Response.json({ success: true, data: snapshot({ schedules: [{ ...remote, flightType: 3 }] }) }));
+    await render(true, aircraft, [{ ...flight, flight_type: "ferry" }]); await load();
+    expect(document.querySelector('[aria-label="Crew Center schedules"]')?.textContent).toContain("Ferry");
+    expect(document.querySelector('[aria-label="Infinite Flight schedules"]')?.textContent).toContain("Freight");
+  });
   it("makes no automatic request on opening, elapsed time, focus, or visibility", async () => {
     vi.useFakeTimers();
     await render();

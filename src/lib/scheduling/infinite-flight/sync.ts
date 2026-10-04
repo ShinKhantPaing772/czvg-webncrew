@@ -2,6 +2,7 @@ import { IfLiveError, isIfUuid } from "./config";
 import type { AuthoredIfPayload, IfCrew, IfSchedule, IfScheduleRequest } from "./types";
 import { assertIfItinerary, crewIsSubset, isIfTerminal, normalizedCrew, sameIfCrew, sameIfSchedule, scheduleMarker, type IfLocalFlight, type IfPublishedPayload } from "./itinerary";
 import { ifScheduleTimeMs } from "./schedule-time";
+import { toIfFlightType, type FlightType } from "../flight-types";
 export { sameIfCrew, sameIfSchedule, scheduleMarker } from "./itinerary";
 
 export type PublishAction = "sync" | "overwrite" | "recreate";
@@ -15,7 +16,7 @@ export type SyncApi = {
 };
 
 export function buildIfPayload(
-  flight: { id: number; public_id: string; callsign: string | null; departure: string; arrival: string; scheduled_departure: Date | null; scheduled_arrival: Date | null; notes: string | null },
+  flight: { id: number; public_id: string; callsign: string | null; departure: string; arrival: string; scheduled_departure: Date | null; scheduled_arrival: Date | null; notes: string | null; flight_type?: FlightType | null },
   crew: IfCrew[],
 ): AuthoredIfPayload {
   if (!crew.length || crew.length > 3 || crew.filter(row => row.role === 0).length !== 1 ||
@@ -30,9 +31,13 @@ export function buildIfPayload(
     throw new IfLiveError("The local flight cannot be represented as an IF schedule", "validation", 409);
   }
   const notes = (flight.notes ?? "").replace(/\[WNC schedule:[0-9a-f-]+\]/gi, "").trim();
-  const briefing = [notes, scheduleMarker(flight.public_id)].filter(Boolean).join("\n\n");
+  let flightType: number;
+  try { flightType = toIfFlightType(flight.flight_type ?? "commercial"); }
+  catch { throw new IfLiveError("The local flight has an unsupported flight type; amend it before publishing", "validation", 409); }
+  // IF has no Ferry enum, so retain that distinction in the app-authored briefing.
+  const briefing = [notes, flight.flight_type === "ferry" ? "Flight type: Ferry" : null, scheduleMarker(flight.public_id)].filter(Boolean).join("\n\n");
   if (briefing.length > 4000) throw new IfLiveError("Flight notes plus the IF schedule reference exceed 4000 characters", "validation", 409);
-  return { schedule: { callsign, flightType: 1, originIcao: flight.departure, destinationIcao: flight.arrival,
+  return { schedule: { callsign, flightType, originIcao: flight.departure, destinationIcao: flight.arrival,
     ...(departure !== null && arrival !== null ? { scheduledDepartureUtc: new Date(departure).toISOString(), scheduledArrivalUtc: new Date(arrival).toISOString() } : {}),
     briefing, flightPlan: null }, crew: crew.map(row => ({ userId: row.userId.toLowerCase(), role: row.role })) };
 }

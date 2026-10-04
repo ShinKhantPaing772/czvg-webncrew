@@ -10,10 +10,11 @@ import { assertIfItinerary, sameIfCrew, sameIfSchedule, type IfLocalFlight } fro
 import { ifBudgetRemainingMs, withIfRequestBudget } from "./request-budget";
 import { ifScheduleFingerprint, meaningfulIfScheduleTime, toIfAircraftScheduleView } from "./schedule-view";
 import type { IfSchedule, IfScheduleRequest } from "./types";
+import { isIfFlightType } from "../flight-types";
 
-type EditChanges = Partial<Pick<IfScheduleRequest, "callsign" | "originIcao" | "destinationIcao" | "scheduledDepartureUtc" | "scheduledArrivalUtc">>;
+type EditChanges = Partial<Pick<IfScheduleRequest, "callsign" | "flightType" | "originIcao" | "destinationIcao" | "scheduledDepartureUtc" | "scheduledArrivalUtc">>;
 type EditInput = { aircraftId: number; scheduleId: string; expectedFingerprint: string; changes: EditChanges };
-const fields = new Set(["callsign", "originIcao", "destinationIcao", "scheduledDepartureUtc", "scheduledArrivalUtc"]);
+const fields = new Set(["callsign", "flightType", "originIcao", "destinationIcao", "scheduledDepartureUtc", "scheduledArrivalUtc"]);
 
 function parseEdit(value: unknown): EditInput {
   const body = value as Record<string, unknown>;
@@ -25,10 +26,15 @@ function parseEdit(value: unknown): EditInput {
   }
   const changes: EditChanges = {};
   const entries = Object.entries(body.changes);
-  if (!entries.length || entries.some(([key]) => !fields.has(key))) throw new IfLiveError("Edit only the IF callsign, route, or planned UTC times", "validation", 400);
+  if (!entries.length || entries.some(([key]) => !fields.has(key))) throw new IfLiveError("Edit only the IF callsign, flight type, route, or planned UTC times", "validation", 400);
   for (const [key, source] of entries) {
+    if (key === "flightType") {
+      if (!isIfFlightType(source)) throw new IfLiveError("Select a valid IF flight type", "validation", 400);
+      changes.flightType = source;
+      continue;
+    }
     if ((key === "scheduledDepartureUtc" || key === "scheduledArrivalUtc") && source === null) { changes[key] = null; continue; }
-    if (typeof source !== "string") throw new IfLiveError("Schedule fields must be text; IF requires planned departure and arrival times", "validation", 400);
+    if (typeof source !== "string") throw new IfLiveError("Schedule text fields must contain text", "validation", 400);
     let value = source.trim();
     if (key === "callsign") {
       if (!value || value.length > 32 || /[\u0000-\u001f\u007f]/.test(source)) throw new IfLiveError("Callsign must contain 1 to 32 characters without control characters", "validation", 400);
@@ -40,7 +46,7 @@ function parseEdit(value: unknown): EditInput {
       if (!meaningful) throw new IfLiveError("Enter a valid planned UTC time; the default year-one IF date means no time was set", "validation", 400);
       value = meaningful;
     }
-    changes[key as keyof EditChanges] = value;
+    changes[key as Exclude<keyof EditChanges, "flightType">] = value;
   }
   if ((changes.scheduledDepartureUtc === null) !== (changes.scheduledArrivalUtc === null)) throw new IfLiveError("Clear both planned UTC times together", "validation", 400);
   return { aircraftId: Number(body.aircraftId), scheduleId: body.scheduleId.toLowerCase(), expectedFingerprint: body.expectedFingerprint, changes };
@@ -52,7 +58,7 @@ function editBody(remote: IfSchedule, changes: EditChanges): IfScheduleRequest {
     scheduledDepartureUtc: remote.scheduledDepartureUtc, scheduledArrivalUtc: remote.scheduledArrivalUtc,
     briefing: remote.briefing ?? null, flightPlan: remote.flightPlan ?? null, ...changes,
   };
-  if (!Number.isInteger(body.flightType) || body.flightType < 0 || body.flightType > 12 ||
+  if (!isIfFlightType(body.flightType) ||
       typeof body.callsign !== "string" || !body.callsign || body.callsign.length > 32 || /[\u0000-\u001f\u007f]/.test(body.callsign) ||
       !/^[A-Z0-9]{1,8}$/i.test(body.originIcao) || !/^[A-Z0-9]{1,8}$/i.test(body.destinationIcao) ||
       (body.briefing !== null && (typeof body.briefing !== "string" || body.briefing.length > 4000)) ||

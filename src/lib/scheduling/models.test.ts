@@ -23,10 +23,11 @@ vi.mock("@/lib/database", async () => {
 // Initialize the real models and associations. Mocking these models would hide
 // Sequelize's mutation of reused attribute descriptors, which this test prevents.
 import { IfLiveConnection, IfLiveOutbox, LiveAircraft, LiveFlight, LiveFlightMember, LiveScheduleEvent } from "./models";
+import { DEFAULT_FLIGHT_TYPE, FLIGHT_TYPES } from "./flight-types";
 
 const models: ModelStatic<Model>[] = [LiveAircraft, LiveFlight, LiveFlightMember, LiveScheduleEvent, IfLiveConnection, IfLiveOutbox];
 const schemas = [
-  { name: "live scheduling migrations", sql: readFileSync(new URL("../../../migrations/20261002_live_scheduling.sql", import.meta.url), "utf8") + "\n" + readFileSync(new URL("../../../migrations/20261004_optional_live_flight_times.sql", import.meta.url), "utf8") },
+  { name: "live scheduling migrations", sql: ["20261002_live_scheduling.sql", "20261004_optional_live_flight_times.sql", "20261004_live_flight_types.sql"].map(name => readFileSync(new URL(`../../../migrations/${name}`, import.meta.url), "utf8")).join("\n") },
   { name: "fresh database schema", sql: readFileSync(new URL("../../../crewcenterdb.sql", import.meta.url), "utf8") },
 ];
 
@@ -44,6 +45,11 @@ afterAll(async () => { await LiveAircraft.sequelize?.close(); });
 
 describe("real Sequelize scheduling model field mappings", () => {
   for (const schema of schemas) {
+    it(`keeps the allowed flight types aligned with the ${schema.name}`, () => {
+      const check = schema.sql.match(/CONSTRAINT `live_flights_flight_type` CHECK \(CAST\(`flight_type` AS BINARY\) IN \(([^)]+)\)\)/)?.[1];
+      expect(check).toBeDefined();
+      expect([...check!.matchAll(/'([^']+)'/g)].map(match => match[1]).sort()).toEqual(FLIGHT_TYPES.map(type => type.value).sort());
+    });
     for (const model of models) {
       const table = model.getTableName();
       const tableName = typeof table === "string" ? table : table.tableName;
@@ -80,5 +86,13 @@ describe("real Sequelize scheduling model field mappings", () => {
   it("initializes all models and associations without database access", () => {
     expect(networkAttempts.query).not.toHaveBeenCalled();
     expect(networkAttempts.authenticate).not.toHaveBeenCalled();
+  });
+
+  it("defaults flight types to Commercial and validates the shared supported options", async () => {
+    expect(LiveFlight.build().flight_type).toBe(DEFAULT_FLIGHT_TYPE);
+    for (const { value } of FLIGHT_TYPES) await expect(LiveFlight.build({ flight_type: value }).validate({ fields: ["flight_type"] })).resolves.toBeDefined();
+    for (const value of ["passenger", "Commercial", "other ", null]) {
+      await expect(LiveFlight.build({ flight_type: value }).validate({ fields: ["flight_type"] })).rejects.toMatchObject({ name: "SequelizeValidationError" });
+    }
   });
 });

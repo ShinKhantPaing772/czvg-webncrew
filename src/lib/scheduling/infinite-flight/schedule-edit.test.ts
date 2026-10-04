@@ -54,6 +54,27 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllEnvs(); });
 
 describe("explicit admin IF schedule edits", () => {
+  it.each(Array.from({ length: 13 }, (_, flightType) => flightType))("accepts an official IF type %s while preserving crew, plan and briefing", async flightType => {
+    const result = await run(input(remote, { flightType }));
+    expect(result.schedule).toMatchObject({ flightType, editable: true });
+    expect(mocks.update).toHaveBeenCalledWith("private-token", AIRCRAFT, SCHEDULE, expect.objectContaining({ flightType,
+      callsign: remote.callsign, briefing: remote.briefing, flightPlan: remote.flightPlan }));
+    expect(mocks.events.create).toHaveBeenCalledWith(expect.objectContaining({ details: { schedule_id: SCHEDULE, changes: { flightType } } }), expect.anything());
+  });
+  it.each([-1, 13, 1.5, NaN, Infinity, "3", null, {}, undefined])("rejects invalid IF flight type %j before any IF operation", async flightType => {
+    await expect(run(input(remote, { flightType }))).rejects.toMatchObject({ code: "validation", status: 400 });
+    expect(mocks.authorization).not.toHaveBeenCalled(); expect(mocks.query).not.toHaveBeenCalled(); expect(mocks.update).not.toHaveBeenCalled();
+  });
+  it("detects another application's flight type change through the fresh fingerprint", async () => {
+    mocks.schedules.mockResolvedValue([{ ...remote, flightType: 3 }]);
+    await expect(run(input(remote, { flightType: 12 }))).rejects.toMatchObject({ code: "conflict" });
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+  it("does not claim success when IF did not retain the selected flight type", async () => {
+    mocks.update.mockResolvedValue(remote);
+    await expect(run(input(remote, { flightType: 3 }))).rejects.toMatchObject({ code: "reconciliation", uncertainWrite: true });
+    expect(mocks.events.create).not.toHaveBeenCalled();
+  });
   it("edits an external unfinished flight with fresh ownership checks, preserving provider briefing, plan, category and crew", async () => {
     const result = await run();
     expect(result.schedule).toMatchObject({ id: SCHEDULE, callsign: "IF2", sequence: 3, editable: true, managedFlightId: null });

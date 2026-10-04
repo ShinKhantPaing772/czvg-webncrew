@@ -54,6 +54,35 @@ async function toggleTimes() {
 }
 
 describe("live flight request form", () => {
+  it("defaults new flights to Commercial and offers Freight, Ferry, and Other with an accessible label", async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    await act(async () => root.render(<FlightForm data={data} onClose={vi.fn()} onSave={save} />));
+    const type = document.querySelector("#flight-type") as HTMLSelectElement;
+    expect(type.value).toBe("commercial");
+    expect(document.querySelector('label[for="flight-type"]')?.textContent).toBe("Flight type");
+    expect(Array.from(type.options).map(option => option.textContent)).toEqual(expect.arrayContaining(["Commercial", "Freight", "Ferry", "Other"]));
+    await change("#flight-arrival", "KJFK");
+    await submit();
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ flight_type: "commercial" }));
+  });
+
+  it.each(["freight", "ferry", "other"])("submits the selected %s flight type", async type => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    await act(async () => root.render(<FlightForm data={data} onClose={vi.fn()} onSave={save} />));
+    await change("#flight-type", type);
+    await change("#flight-arrival", "KJFK");
+    await submit();
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ flight_type: type }));
+  });
+
+  it.each([false, true])("preserves an existing Ferry purpose when editing (admin: %s)", async admin => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    await act(async () => root.render(<FlightForm data={data} admin={admin} flight={{ ...flight, flight_type: "ferry" }} onClose={vi.fn()} onSave={save} />));
+    expect((document.querySelector("#flight-type") as HTMLSelectElement).value).toBe("ferry");
+    await submit();
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ flight_type: "ferry" }));
+  });
+
   it("suggests optional UTC times after the last approved arrival and derives that leg's destination", async () => {
     vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-02T08:00:00Z"));
     const save = vi.fn().mockResolvedValue(undefined);

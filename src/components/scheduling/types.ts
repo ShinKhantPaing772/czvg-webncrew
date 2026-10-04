@@ -1,3 +1,5 @@
+import type { FlightType } from "@/lib/scheduling/flight-types";
+
 export type FlightStatus = "pending" | "approved" | "in_progress" | "completed" | "rejected" | "cancelled" | "needs_review";
 
 export type SchedulingPilot = {
@@ -35,6 +37,7 @@ export type ScheduledFlight = {
   live_aircraft_id: number;
   captain_id: number;
   callsign?: string | null;
+  flight_type?: FlightType;
   departure: string;
   arrival: string;
   queue_order?: number | null;
@@ -67,6 +70,7 @@ export type SchedulingData = {
 export type FlightInput = {
   live_aircraft_id: number;
   callsign: string;
+  flight_type: FlightType;
   departure: string;
   arrival: string;
   scheduled_departure: string | null;

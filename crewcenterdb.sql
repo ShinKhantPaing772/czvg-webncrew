@@ -169,6 +169,7 @@ CREATE TABLE IF NOT EXISTS `live_flights` (
   `live_aircraft_id` INT NOT NULL,
   `captain_id` INT NOT NULL,
   `callsign` VARCHAR(32) NULL,
+  `flight_type` VARCHAR(32) NOT NULL DEFAULT 'commercial',
   `departure` CHAR(4) NOT NULL,
   `arrival` CHAR(4) NOT NULL,
   `queue_order` INT NULL,
@@ -195,6 +196,7 @@ CREATE TABLE IF NOT EXISTS `live_flights` (
   KEY `live_flights_queue` (`live_aircraft_id`, `status`, `queue_order`),
   KEY `live_flights_captain` (`captain_id`, `status`, `scheduled_departure`),
   KEY `live_flights_review` (`status`, `created_at`),
+  CONSTRAINT `live_flights_flight_type` CHECK (CAST(`flight_type` AS BINARY) IN ('commercial', 'freight', 'ferry', 'charter', 'training', 'test_flight', 'medical_emergency', 'military', 'vip_executive', 'humanitarian_relief', 'general_aviation', 'airshow', 'other')),
   CONSTRAINT `live_flights_time_pair` CHECK (
     (`scheduled_departure` IS NULL AND `scheduled_arrival` IS NULL)
     OR (`scheduled_departure` IS NOT NULL AND `scheduled_arrival` IS NOT NULL AND `scheduled_arrival` > `scheduled_departure`)
