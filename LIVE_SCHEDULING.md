@@ -79,6 +79,15 @@ times or finish/cancel that reservation before accepting the other assignment.
 Pilots can edit or withdraw pending requests. Scheduling admins amend, reassign,
 or cancel approved flights.
 
+Pilot views exclude rejected and cancelled flights, including cancelled IF
+schedules. Admins retain these records for review. When choosing an aircraft,
+the request form shows other pending requests and unfinished approved flights
+ahead, including any flight in progress. Counts include all pilots without
+revealing another pilot's private pending request details.
+Request submission time comes from the database, appears in UTC with seconds,
+and does not change when a request is edited. The admin **Awaiting review** view
+lists the oldest flight requests first; approvals still require conflict checks.
+
 Cancellation, diversion, and amendments flag affected downstream flights as
 **Needs review**. Admins amend/reapprove them before they can start. Award
 removal immediately blocks the affected pilot's scheduling actions; flagged

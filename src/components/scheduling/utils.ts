@@ -20,6 +20,15 @@ export function formatUtc(value: string | null | undefined) {
   }).format(date)} UTC`;
 }
 
+export function formatRequestTime(value: string | null | undefined) {
+  if (!value) return "Time not recorded";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Time unavailable";
+  return `${new Intl.DateTimeFormat("en-GB", {
+    timeZone: "UTC", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+  }).format(date)} UTC`;
+}
+
 export function hasIfScheduleTime(value: string | null | undefined): value is string {
   if (!value) return false;
   const date = new Date(value);

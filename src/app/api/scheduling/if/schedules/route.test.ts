@@ -42,7 +42,14 @@ describe("pilot IF schedule reads", () => {
     await expect(response.json()).resolves.toEqual({ success: true, data });
     expect(mocks.crewAuth).toHaveBeenCalledWith(input);
     expect(mocks.grant).toHaveBeenCalledWith({ where: { pilotid: 42, awardid: 7 }, attributes: ["id"] });
-    expect(mocks.load).toHaveBeenCalledWith(7); expect(maxDuration).toBe(30);
+    expect(mocks.load).toHaveBeenCalledWith(7, { admin: false }); expect(maxDuration).toBe(30);
+  });
+
+  it("uses pilot schedule visibility even for an administrator with the live award", async () => {
+    mocks.crewAuth.mockResolvedValue({ ok: true, user: { id: 42, permissions: ["admin", "scheduling"] } });
+    const response = await GET(request());
+    expect(response.status).toBe(200);
+    expect(mocks.load).toHaveBeenCalledWith(7, { admin: false });
   });
 
   it.each(["", "?aircraftId=0", "?aircraftId=1.5", "?aircraftId=7&aircraftId=8", "?aircraftId=7&organizationId=foreign"])("rejects invalid or caller-selected remote context: %s", async query => {

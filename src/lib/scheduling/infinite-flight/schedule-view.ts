@@ -25,9 +25,17 @@ export function ifScheduleFingerprint(row: IfSchedule): string {
   })).digest("hex");
 }
 
+function matchesManagedFlight(row: IfSchedule, flight: IfManagedFlight): boolean {
+  return flight.if_schedule_id?.toLowerCase() === row.id.toLowerCase() || Boolean(row.briefing?.includes(scheduleMarker(flight.public_id)));
+}
+
 export function ifScheduleManagedFlight(row: IfSchedule, flights: readonly IfManagedFlight[]): IfManagedFlight | undefined {
-  return flights.find(flight => flight.if_schedule_id?.toLowerCase() === row.id.toLowerCase() ||
-    row.briefing?.includes(scheduleMarker(flight.public_id)));
+  return flights.find(flight => matchesManagedFlight(row, flight));
+}
+
+export function isIfScheduleVisibleToPilot(row: IfSchedule, flights: readonly IfManagedFlight[]): boolean {
+  // Local cancellation/rejection is authoritative while publishing catches up.
+  return row.status !== 9 && !flights.some(flight => (flight.status === "cancelled" || flight.status === "rejected") && matchesManagedFlight(row, flight));
 }
 
 export function toIfAircraftScheduleView(row: IfSchedule, flights: readonly IfManagedFlight[] = [], canEdit = false): IfAircraftScheduleView {

@@ -17,7 +17,7 @@ import { AircraftSchedulesDialog } from "./aircraft-schedules";
 import { LiveFleet } from "./live-fleet";
 import { InfiniteFlightPanel } from "./infinite-flight-panel";
 import { FlightInput, LiveAircraft, ScheduledFlight, SchedulingData } from "./types";
-import { crewCount, errorMessage, formatUtc, publishingLabel, statusLabels } from "./utils";
+import { crewCount, errorMessage, formatRequestTime, formatUtc, publishingLabel, statusLabels } from "./utils";
 import { schedulingResponse, useScheduling } from "./use-scheduling";
 import { authFetch } from "@/lib/utils/api";
 import { flightTypeLabel } from "@/lib/scheduling/flight-types";
@@ -47,7 +47,7 @@ function FlightList({ flights, aircraft, onSelect }: { flights: ScheduledFlight[
     const tail = aircraft.find((item) => item.id === flight.live_aircraft_id);
     const pendingCrew = flight.members.filter((member) => member.status === "pending").length;
     return <Card key={flight.id}><button type="button" onClick={() => onSelect(flight)} className="grid w-full gap-4 rounded-lg p-5 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:grid-cols-[1fr_1.3fr_1fr]">
-      <div><div className="mb-2 flex flex-wrap items-center gap-2"><span className="font-semibold">{tail?.registration || "Aircraft"}</span><StatusBadge flight={flight} /></div><p className="text-sm text-muted-foreground">{tail?.name || "Live aircraft"} · {flightTypeLabel(flight.flight_type)}</p>{flight.callsign && <p className="mt-1 text-sm">{flight.callsign}</p>}</div>
+      <div><div className="mb-2 flex flex-wrap items-center gap-2"><span className="font-semibold">{tail?.registration || "Aircraft"}</span><StatusBadge flight={flight} /></div><p className="text-sm text-muted-foreground">{tail?.name || "Live aircraft"} · {flightTypeLabel(flight.flight_type)}</p>{flight.callsign && <p className="mt-1 text-sm">{flight.callsign}</p>}<p className="mt-1 text-xs text-muted-foreground">Requested {formatRequestTime(flight.created_at)}</p></div>
       <div><div className="flex items-center gap-3 text-xl font-semibold tracking-tight"><span>{flight.departure}</span><ArrowRight className="h-4 w-4 text-muted-foreground" /><span>{flight.arrival}</span></div><p className="mt-2 text-xs text-muted-foreground">{formatUtc(flight.scheduled_departure)}</p><p className="mt-1 text-xs text-muted-foreground">Arrival {formatUtc(flight.scheduled_arrival)}</p></div>
       <div className="space-y-2 md:text-right"><p className="text-sm">{flight.captain?.name || "Captain unavailable"}<span className="ml-1 text-xs text-muted-foreground">{flight.captain?.callsign}</span></p><p className="text-xs text-muted-foreground">{crewCount(flight)}/3 crew{pendingCrew ? " · " + pendingCrew + " awaiting review" : ""}</p><p className={flight.error ? "text-xs text-destructive" : "text-xs text-muted-foreground"}>{publishingLabel(flight.publishing_state)}</p></div>
     </button></Card>;
@@ -55,7 +55,11 @@ function FlightList({ flights, aircraft, onSelect }: { flights: ScheduledFlight[
 }
 
 export function SchedulingWorkspace({ admin = false }: { admin?: boolean }) {
-  const { data, loading, refreshing, error, refresh, mutate } = useScheduling(admin);
+  const { data: schedulingData, loading, refreshing, error, refresh, mutate } = useScheduling(admin);
+  const data = useMemo(() => admin || !schedulingData ? schedulingData : {
+    ...schedulingData,
+    flights: schedulingData.flights.filter(flight => !["rejected", "cancelled"].includes(flight.status)),
+  }, [admin, schedulingData]);
   const [tab, setTab] = useState(admin ? "approvals" : "flights");
   const [query, setQuery] = useState("");
   const [aircraftFilter, setAircraftFilter] = useState("all");
@@ -89,8 +93,16 @@ export function SchedulingWorkspace({ admin = false }: { admin?: boolean }) {
       if (!["all", "upcoming", "attention", "history"].includes(statusFilter) && flight.status !== statusFilter) return false;
       const tail = data.aircraft.find((item) => item.id === flight.live_aircraft_id);
       return !search || [tail?.registration, tail?.name, flight.departure, flight.arrival, flight.callsign, flight.captain?.name, flight.captain?.callsign].some((value) => value?.toLowerCase().includes(search));
-    }).sort((first, second) => first.live_aircraft_id - second.live_aircraft_id || (first.queue_order ?? Number.MAX_SAFE_INTEGER) - (second.queue_order ?? Number.MAX_SAFE_INTEGER) || first.id - second.id);
-  }, [data, query, tab, aircraftFilter, statusFilter]);
+    }).sort((first, second) => {
+      if (admin && ["attention", "pending"].includes(statusFilter)) {
+        const firstRequested = Date.parse(first.created_at || "");
+        const secondRequested = Date.parse(second.created_at || "");
+        return (Number.isFinite(firstRequested) ? firstRequested : Number.MAX_SAFE_INTEGER) -
+          (Number.isFinite(secondRequested) ? secondRequested : Number.MAX_SAFE_INTEGER) || first.id - second.id;
+      }
+      return first.live_aircraft_id - second.live_aircraft_id || (first.queue_order ?? Number.MAX_SAFE_INTEGER) - (second.queue_order ?? Number.MAX_SAFE_INTEGER) || first.id - second.id;
+    });
+  }, [data, query, tab, aircraftFilter, statusFilter, admin]);
 
   async function act(body: Record<string, unknown>, message: string) {
     if (busy) return;
@@ -135,8 +147,9 @@ export function SchedulingWorkspace({ admin = false }: { admin?: boolean }) {
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="mb-4 grid w-full grid-cols-3 sm:w-auto sm:inline-flex">{admin ? <><TabsTrigger value="approvals">Approvals</TabsTrigger><TabsTrigger value="fleet">Live fleet</TabsTrigger><TabsTrigger value="if">Infinite Flight</TabsTrigger></> : <><TabsTrigger value="flights">Flights</TabsTrigger><TabsTrigger value="mine">My flights</TabsTrigger><TabsTrigger value="fleet">Live fleet</TabsTrigger></>}</TabsList>
         {(admin ? ["approvals"] : ["flights", "mine"]).map((flightTab) => <TabsContent key={flightTab} value={flightTab} className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-[1fr_auto_auto]"><Input aria-label="Search flights" placeholder="Search route, callsign, aircraft, or captain" value={query} onChange={(event) => setQuery(event.target.value)} /><select aria-label="Filter aircraft" className="h-10 rounded-md border bg-background px-3 text-sm" value={aircraftFilter} onChange={(event) => setAircraftFilter(event.target.value)}><option value="all">All aircraft</option>{data.aircraft.map((item) => <option key={item.id} value={item.id}>{item.registration}</option>)}</select><select aria-label="Filter flight status" className="h-10 rounded-md border bg-background px-3 text-sm" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>{admin && <option value="attention">Awaiting review</option>}<option value="upcoming">Upcoming and in flight</option><option value="all">All flights</option><option value="history">History</option>{Object.entries(statusLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></div>
+          <div className="grid gap-3 sm:grid-cols-[1fr_auto_auto]"><Input aria-label="Search flights" placeholder="Search route, callsign, aircraft, or captain" value={query} onChange={(event) => setQuery(event.target.value)} /><select aria-label="Filter aircraft" className="h-10 rounded-md border bg-background px-3 text-sm" value={aircraftFilter} onChange={(event) => setAircraftFilter(event.target.value)}><option value="all">All aircraft</option>{data.aircraft.map((item) => <option key={item.id} value={item.id}>{item.registration}</option>)}</select><select aria-label="Filter flight status" className="h-10 rounded-md border bg-background px-3 text-sm" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>{admin && <option value="attention">Awaiting review</option>}<option value="upcoming">Upcoming and in flight</option><option value="all">All flights</option><option value="history">History</option>{Object.entries(statusLabels).filter(([value]) => admin || !["rejected", "cancelled"].includes(value)).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></div>
           <p className="text-xs text-muted-foreground">All times are UTC. Each flight has one captain and up to two additional crew members.</p>
+          {admin && ["attention", "pending"].includes(statusFilter) && <p className="text-xs text-muted-foreground">Oldest flight requests first. Check conflicts before approving.</p>}
           <FlightList flights={visibleFlights} aircraft={data.aircraft} onSelect={(flight) => { setActionError(""); setDetailId(flight.id); }} />
         </TabsContent>)}
         <TabsContent value="fleet" className="space-y-4">
@@ -147,9 +160,9 @@ export function SchedulingWorkspace({ admin = false }: { admin?: boolean }) {
     </>}
     {data && selectedFlight && <FlightDetail flight={selectedFlight} aircraft={data.aircraft.find((item) => item.id === selectedFlight.live_aircraft_id)} pilotId={data.pilotId} admin={admin} busy={busy} error={actionError} onClose={() => setDetailId(null)} onEdit={() => { setFlightForm({ flight: selectedFlight }); setDetailId(null); }} onAsk={ask} onAct={(body, message) => { void act(body, message).catch(() => undefined); }} />}
     {data && scheduleAircraft && <AircraftSchedulesDialog aircraft={scheduleAircraft} flights={data.flights} admin={admin} onClose={() => setScheduleAircraftId(null)} onSelect={flight => { setScheduleAircraftId(null); setActionError(""); setDetailId(flight.id); }} onRefresh={refresh} />}
-    {data && flightForm && <FlightForm data={data} {...flightForm} admin={admin} onClose={() => setFlightForm(null)} onSave={saveFlight} />}
+    {data && flightForm && (!flightForm.flight || data.flights.some(flight => flight.id === flightForm.flight?.id)) && <FlightForm data={data} {...flightForm} admin={admin} onClose={() => setFlightForm(null)} onSave={saveFlight} />}
     {data && aircraftEditor && <AircraftEditor catalog={data.catalog} aircraft={aircraftEditor.aircraft} onClose={() => setAircraftEditor(null)} onSave={async (input) => { await mutate(input, aircraftEditor.aircraft ? "PATCH" : "POST"); setSuccess(aircraftEditor.aircraft ? "Aircraft updated." : "Aircraft added to the live fleet."); }} />}
-    {data && confirmation && <ConfirmAction confirmation={confirmation} pilots={data.pilots || []} onClose={() => setConfirmation(null)} onConfirm={async (fields) => { await act({ action: confirmation.action, flight_id: confirmation.flight.id, ...(confirmation.memberId ? { member_id: confirmation.memberId } : {}), ...fields }, "Flight updated."); setConfirmation(null); }} />}
+    {data && confirmation && data.flights.some(flight => flight.id === confirmation.flight.id) && <ConfirmAction confirmation={confirmation} pilots={data.pilots || []} onClose={() => setConfirmation(null)} onConfirm={async (fields) => { await act({ action: confirmation.action, flight_id: confirmation.flight.id, ...(confirmation.memberId ? { member_id: confirmation.memberId } : {}), ...fields }, "Flight updated."); setConfirmation(null); }} />}
   </main></CrewHeader>;
 }
 
@@ -175,7 +188,7 @@ function FlightDetail({ flight, aircraft, pilotId, admin, busy, error, onClose, 
 
   return <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl"><DialogHeader><DialogTitle className="flex flex-wrap items-center gap-2">{aircraft?.registration || "Live aircraft"}<StatusBadge flight={flight} /></DialogTitle><DialogDescription>{flight.callsign ? flight.callsign + " · " : ""}{flight.departure} → {flight.arrival}</DialogDescription></DialogHeader>
     {error && <p role="alert" className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
-    <div className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2"><div><p className="text-xs text-muted-foreground">Flight type</p><p className="mt-1 text-sm font-medium">{flightTypeLabel(flight.flight_type)}</p></div><div><p className="text-xs text-muted-foreground">Scheduled departure</p><p className="mt-1 text-sm font-medium">{formatUtc(flight.scheduled_departure)}</p></div><div><p className="text-xs text-muted-foreground">Scheduled arrival</p><p className="mt-1 text-sm font-medium">{formatUtc(flight.scheduled_arrival)}</p></div><div><p className="text-xs text-muted-foreground">Aircraft confirmed airport</p><p className="mt-1 text-sm font-medium">{aircraft?.current_airport || "Unknown"}</p></div><div><p className="text-xs text-muted-foreground">Scheduling</p><p className="mt-1 text-sm font-medium">{publishingLabel(flight.publishing_state)}</p></div>{flight.actual_arrival && <div><p className="text-xs text-muted-foreground">Actual arrival airport</p><p className="mt-1 text-sm font-medium">{flight.actual_arrival}</p></div>}</div>
+    <div className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2"><div><p className="text-xs text-muted-foreground">Flight type</p><p className="mt-1 text-sm font-medium">{flightTypeLabel(flight.flight_type)}</p></div><div><p className="text-xs text-muted-foreground">Requested</p><p className="mt-1 text-sm font-medium">{formatRequestTime(flight.created_at)}</p></div><div><p className="text-xs text-muted-foreground">Scheduled departure</p><p className="mt-1 text-sm font-medium">{formatUtc(flight.scheduled_departure)}</p></div><div><p className="text-xs text-muted-foreground">Scheduled arrival</p><p className="mt-1 text-sm font-medium">{formatUtc(flight.scheduled_arrival)}</p></div><div><p className="text-xs text-muted-foreground">Aircraft confirmed airport</p><p className="mt-1 text-sm font-medium">{aircraft?.current_airport || "Unknown"}</p></div><div><p className="text-xs text-muted-foreground">Scheduling</p><p className="mt-1 text-sm font-medium">{publishingLabel(flight.publishing_state)}</p></div>{flight.actual_arrival && <div><p className="text-xs text-muted-foreground">Actual arrival airport</p><p className="mt-1 text-sm font-medium">{flight.actual_arrival}</p></div>}</div>
     {flight.notes && <div><h3 className="mb-1 text-sm font-semibold">Flight notes</h3><p className="whitespace-pre-wrap text-sm text-muted-foreground">{flight.notes}</p></div>}
     {flight.review_reason && <div className="rounded-md border p-3"><p className="text-xs font-medium text-muted-foreground">Review note</p><p className="mt-1 whitespace-pre-wrap text-sm">{flight.review_reason}</p></div>}
     {(issues.length > 0 || flight.error || (flight.status === "approved" && (linkedNotPublished || airportMismatch))) && <div role="status" className="space-y-1 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm"><p className="font-medium">This flight needs attention</p>{issues.map((issue, index) => <p key={index}>{issue}</p>)}{flight.error && <p>{flight.error}</p>}{flight.status === "approved" && linkedNotPublished && <p>The latest schedule must be published to IF before departure.</p>}{flight.status === "approved" && airportMismatch && <p>The aircraft must reach {flight.departure} before this flight can start.</p>}</div>}

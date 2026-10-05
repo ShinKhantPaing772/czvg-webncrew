@@ -10,6 +10,6 @@ export async function GET(request: Request) {
   try {
     const auth = await requireLivePilotAuth(request);
     if (!auth.ok) { auth.response.headers.set("Cache-Control", "no-store"); return auth.response; }
-    return ifJson({ success: true, data: await loadIfAircraftSchedules(localAircraftIdFromRequest(request)) });
+    return ifJson({ success: true, data: await loadIfAircraftSchedules(localAircraftIdFromRequest(request), { admin: false }) });
   } catch (error) { return ifRouteError(error); }
 }

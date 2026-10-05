@@ -54,6 +54,48 @@ async function toggleTimes() {
 }
 
 describe("live flight request form", () => {
+  it("uses full aircraft counts without exposing hidden pending request details", async () => {
+    await act(async () => root.render(<FlightForm data={{ ...data, flights: [], aircraft: [{ ...data.aircraft[0], pending_request_count: 4, approved_schedule_count: 2, in_progress_count: 1 }] }} onClose={vi.fn()} onSave={vi.fn()} />));
+    const note = document.querySelector('[role="status"]')!;
+    expect(note.textContent).toContain("4 other flight requests are awaiting admin approval");
+    expect(note.textContent).toContain("Pending requests do not reserve it");
+    expect(note.textContent).toContain("3 approved flights ahead of this request are not completed (1 currently in progress)");
+  });
+
+  it("updates queue notes when selecting an aircraft with no pending or unfinished approved flights", async () => {
+    const fleet = [...data.aircraft.map(item => ({ ...item, pending_request_count: 1, approved_schedule_count: 1, in_progress_count: 0 })),
+      { ...data.aircraft[0], id: 2, registration: "C-WNCC", current_airport: "CYVR", pending_request_count: 0, approved_schedule_count: 0, in_progress_count: 0 }];
+    await act(async () => root.render(<FlightForm data={{ ...data, aircraft: fleet }} onClose={vi.fn()} onSave={vi.fn()} />));
+    expect(document.querySelector('[role="status"]')?.textContent).toContain("1 other flight request is awaiting");
+    expect(document.querySelector('[role="status"]')?.textContent).toContain("1 approved flight ahead of this request is not completed");
+    await change("#flight-aircraft", "2");
+    expect(document.querySelector('[role="status"]')?.textContent).toContain("No other flight requests");
+    expect(document.querySelector('[role="status"]')?.textContent).toContain("No unfinished approved flights");
+  });
+
+  it("excludes the pending request being edited from other requests and responds to refreshed counts", async () => {
+    const withCount = { ...data, aircraft: [{ ...data.aircraft[0], pending_request_count: 2, approved_schedule_count: 0, in_progress_count: 0 }] };
+    await act(async () => root.render(<FlightForm data={withCount} flight={flight} onClose={vi.fn()} onSave={vi.fn()} />));
+    expect(document.querySelector('[role="status"]')?.textContent).toContain("1 other flight request is awaiting");
+    await act(async () => root.render(<FlightForm data={{ ...withCount, aircraft: [{ ...withCount.aircraft[0], pending_request_count: 1, approved_schedule_count: 1 }] }} flight={flight} onClose={vi.fn()} onSave={vi.fn()} />));
+    expect(document.querySelector('[role="status"]')?.textContent).toContain("No other flight requests");
+    expect(document.querySelector('[role="status"]')?.textContent).toContain("1 approved flight ahead");
+  });
+
+  it("counts only pending and reserved flights for the selected aircraft in legacy payloads", async () => {
+    const flights: ScheduledFlight[] = [flight, { ...flight, id: 2, status: "approved" }, { ...flight, id: 3, status: "in_progress" },
+      { ...flight, id: 4, status: "completed" }, { ...flight, id: 5, status: "cancelled" }, { ...flight, id: 6, status: "rejected" },
+      { ...flight, id: 7, status: "needs_review" }, { ...flight, id: 8, live_aircraft_id: 2, status: "approved" }];
+    await act(async () => root.render(<FlightForm data={{ ...data, flights }} onClose={vi.fn()} onSave={vi.fn()} />));
+    expect(document.querySelector('[role="status"]')?.textContent).toContain("1 other flight request");
+    expect(document.querySelector('[role="status"]')?.textContent).toContain("2 approved flights ahead of this request are not completed (1 currently in progress)");
+  });
+
+  it("does not show request queue notes while an admin amends an already approved flight", async () => {
+    await act(async () => root.render(<FlightForm data={data} flight={{ ...flight, status: "approved" }} admin onClose={vi.fn()} onSave={vi.fn()} />));
+    expect(document.querySelector('[role="status"]')).toBeNull();
+  });
+
   it("defaults new flights to Commercial and offers Freight, Ferry, and Other with an accessible label", async () => {
     const save = vi.fn().mockResolvedValue(undefined);
     await act(async () => root.render(<FlightForm data={data} onClose={vi.fn()} onSave={save} />));

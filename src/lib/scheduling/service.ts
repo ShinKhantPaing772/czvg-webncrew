@@ -458,11 +458,26 @@ export async function schedulingSnapshot(actor: SchedulingActor) {
   const flights = await LiveFlight.findAll({ where: { [Op.or]: [{ status: { [Op.in]: ["pending", "approved", "in_progress", "needs_review"] } }, { updated_at: { [Op.gte]: new Date(Date.now() - 30 * 86400000) } }] }, order: [["live_aircraft_id", "ASC"], ["queue_order", "ASC"], ["id", "ASC"]], raw: true });
   const memberships = flights.length ? await LiveFlightMember.findAll({ where: { flight_id: { [Op.in]: flights.map(flight => flight.id) } }, raw: true }) : [];
   const catalogMap = new Map(catalog.map(item => [item.id, item]));
+  // Aggregate before applying visibility rules so pilots can see demand for an
+  // aircraft without receiving another pilot's pending request details.
+  const aircraftCounts = new Map<number, { pending_request_count: number; approved_schedule_count: number; in_progress_count: number }>();
+  for (const flight of flights) {
+    const counts = aircraftCounts.get(flight.live_aircraft_id) ?? { pending_request_count: 0, approved_schedule_count: 0, in_progress_count: 0 };
+    if (flight.status === "pending") counts.pending_request_count += 1;
+    if (flight.status === "approved") counts.approved_schedule_count += 1;
+    if (flight.status === "in_progress") counts.in_progress_count += 1;
+    aircraftCounts.set(flight.live_aircraft_id, counts);
+  }
   const aircraft = allAircraft.filter(item => actor.admin || item.active).map(item => ({
     ...item, name: catalogMap.get(item.aircraft_id)?.name ?? "Aircraft", liveryname: catalogMap.get(item.aircraft_id)?.liveryname ?? null,
     projected_airport: orderedQueue(flights.filter(flight => flight.live_aircraft_id === item.id && RESERVED_STATUSES.includes(flight.status as "approved" | "in_progress"))).at(-1)?.arrival ?? item.current_airport,
+    ...(aircraftCounts.get(item.id) ?? { pending_request_count: 0, approved_schedule_count: 0, in_progress_count: 0 }),
   }));
-  const visibleFlights = flights.filter(flight => actor.admin || !["pending", "rejected", "cancelled"].includes(flight.status) || flight.captain_id === actor.id || memberships.some(member => member.flight_id === flight.id && member.pilot_id === actor.id));
+  const visibleFlights = flights.filter(flight => {
+    if (actor.admin) return true;
+    if (flight.status === "rejected" || flight.status === "cancelled") return false;
+    return flight.status !== "pending" || flight.captain_id === actor.id || memberships.some(member => member.flight_id === flight.id && member.pilot_id === actor.id);
+  });
   return {
     aircraft, pilotId: actor.id, canAdmin: actor.admin,
     flights: visibleFlights.map(flight => {

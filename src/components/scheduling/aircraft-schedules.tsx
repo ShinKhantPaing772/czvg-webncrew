@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { LiveAircraft, ScheduledFlight } from "./types";
 import { schedulingResponse } from "./use-scheduling";
-import { crewCount, errorMessage, formatIfScheduleTimeRange, formatUtc, ifScheduleStatusLabel, publishingLabel, statusLabels } from "./utils";
+import { crewCount, errorMessage, formatIfScheduleTimeRange, formatRequestTime, formatUtc, ifScheduleStatusLabel, publishingLabel, statusLabels } from "./utils";
 import { IfScheduleEditor, type RemoteSchedule } from "./if-schedule-editor";
 import { flightTypeLabel, ifFlightTypeLabel } from "@/lib/scheduling/flight-types";
 
@@ -48,8 +48,9 @@ export function AircraftSchedulesDialog({ aircraft, flights, admin, onClose, onS
   const scope = useRef(0);
   const mounted = useRef(true);
   const linked = Boolean(aircraft.if_aircraft_id);
-  const localFlights = flights.filter(flight => flight.live_aircraft_id === aircraft.id)
+  const localFlights = flights.filter(flight => flight.live_aircraft_id === aircraft.id && (admin || !["rejected", "cancelled"].includes(flight.status)))
     .sort((left, right) => (left.queue_order ?? Number.POSITIVE_INFINITY) - (right.queue_order ?? Number.POSITIVE_INFINITY) || left.id - right.id);
+  const visibleIfSchedules = snapshot?.schedules.filter(schedule => admin || schedule.status !== 9) || [];
 
   const cancelRequests = useCallback(() => {
     mounted.current = false;
@@ -145,6 +146,7 @@ export function AircraftSchedulesDialog({ aircraft, flights, admin, onClose, onS
           {!localFlights.length ? <p className="text-sm text-muted-foreground">No local flights for this aircraft.</p> : localFlights.map(flight => <button key={flight.id} type="button" disabled={publishing} onClick={() => onSelect(flight)} className="w-full space-y-2 rounded-md border p-3 text-left hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-medium">{flight.callsign || "Flight"} · {flight.departure} → {flight.arrival}</p><Badge variant="secondary">{statusLabels[flight.status]}</Badge></div>
             <p className="text-xs text-muted-foreground">{formatIfScheduleTimeRange(flight.scheduled_departure, flight.scheduled_arrival)}</p>
+            <p className="text-xs text-muted-foreground">Requested {formatRequestTime(flight.created_at)}</p>
             <p className="text-xs text-muted-foreground">{flightTypeLabel(flight.flight_type)} · {flight.captain?.name || "Captain unavailable"} · {crewCount(flight)}/3 crew · {publishingLabel(flight.publishing_state)}</p>
             {flight.error && <p className="text-xs text-destructive">{flight.error}</p>}
           </button>)}
@@ -157,7 +159,7 @@ export function AircraftSchedulesDialog({ aircraft, flights, admin, onClose, onS
             {snapshot && <>
               <p className="text-xs text-muted-foreground">Last successful refresh: {formatUtc(snapshot.loadedAt)}. Newest queue entries appear first. Actual arrivals still confirm the local airport.</p>
               {stale && <p role="status" className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">These IF schedules may have changed. The last refresh is over 60 seconds old, or a schedule was changed. Refresh IF schedules before relying on this view.</p>}
-              {snapshot.schedules.length ? newestSchedulesFirst(snapshot.schedules).map(schedule => {
+              {visibleIfSchedules.length ? newestSchedulesFirst(visibleIfSchedules).map(schedule => {
                 const managed = localFlights.find(flight => flight.id === schedule.managedFlightId || flight.if_schedule_id?.toLowerCase() === schedule.id.toLowerCase());
                 return <div key={schedule.id} className="space-y-2 rounded-md border p-3">
                   <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-medium">{schedule.callsign || "IF flight"} · {schedule.originIcao} → {schedule.destinationIcao}</p><Badge variant="outline">{ifScheduleStatusLabel(schedule.status)}</Badge></div>

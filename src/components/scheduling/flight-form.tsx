@@ -48,6 +48,12 @@ export function FlightForm({ data, flight, aircraftId, admin, onClose, onSave }:
   const inferredDeparture = aircraft ? projectedOrigin(aircraft.current_airport,
     data.flights.filter((item) => item.live_aircraft_id === aircraft.id), flight?.queue_order, flight?.id) || "" : "";
   const departure = inferredDeparture || form.departure;
+  const aircraftFlights = data.flights.filter(item => item.live_aircraft_id === aircraft?.id);
+  const pendingRequests = aircraft?.pending_request_count ?? aircraftFlights.filter(item => item.status === "pending").length;
+  const otherRequests = Math.max(0, pendingRequests - (flight?.status === "pending" ? 1 : 0));
+  const approvedFlights = aircraft?.approved_schedule_count ?? aircraftFlights.filter(item => item.status === "approved").length;
+  const inProgress = aircraft?.in_progress_count ?? aircraftFlights.filter(item => item.status === "in_progress").length;
+  const flightsAhead = approvedFlights + inProgress;
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -100,6 +106,10 @@ export function FlightForm({ data, flight, aircraftId, admin, onClose, onSave }:
             {data.aircraft.filter((item) => item.active || item.id === flight?.live_aircraft_id).map((item) => <option key={item.id} value={item.id} disabled={!item.active}>{item.registration} · {item.name}{!item.active ? " (inactive)" : ""}</option>)}
           </select>
         </div>
+        {aircraft && (!flight || (!admin && flight.status === "pending")) && <div role="status" className={"space-y-1 rounded-md border p-3 text-sm " + (otherRequests ? "border-amber-500/30 bg-amber-500/10" : "bg-muted/20")}>
+          <p>{otherRequests ? `${otherRequests} other flight ${otherRequests === 1 ? "request is" : "requests are"} awaiting admin approval for this aircraft. Pending requests do not reserve it.` : "No other flight requests are awaiting approval for this aircraft."}</p>
+          <p>{flightsAhead ? `${flightsAhead} approved ${flightsAhead === 1 ? "flight ahead of this request is" : "flights ahead of this request are"} not completed${inProgress ? ` (${inProgress} currently in progress)` : ""}. Your flight can start only after they finish.` : "No unfinished approved flights are ahead of this request."}</p>
+        </div>}
         <div className="space-y-2">
           <Label htmlFor="flight-type">Flight type</Label>
           <select id="flight-type" value={form.flight_type} onChange={(event) => {

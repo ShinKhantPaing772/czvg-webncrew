@@ -69,6 +69,33 @@ describe("temporary schedules for a locally bound aircraft", () => {
     expect(mocks.position).not.toHaveBeenCalled();
   });
 
+  it.each([undefined, { admin: false }, { admin: true }])("applies role-specific visibility while preserving app ownership for %j", async options => {
+    const id = (value: number) => `10000000-0000-0000-0000-${String(value).padStart(12, "0")}`;
+    const externalCancelled = { ...schedule, id: id(6), status: 9 };
+    const localCancelled = { ...schedule, id: id(7), status: 1 };
+    const localRejected = { ...schedule, id: id(8), status: 1, briefing: `[WNC schedule:${id(18)}]` };
+    const localApproved = { ...schedule, id: id(9), status: 1 };
+    const arrived = { ...schedule, id: id(10), status: 11 };
+    const allSchedules = [schedule, externalCancelled, localCancelled, localRejected, localApproved, arrived];
+    mocks.schedules.mockResolvedValue(allSchedules);
+    mocks.flights.findAll.mockResolvedValue([
+      { id: 27, public_id: id(17), if_schedule_id: localCancelled.id, status: "cancelled" },
+      { id: 28, public_id: id(18), if_schedule_id: null, status: "rejected" },
+      { id: 29, public_id: id(19), if_schedule_id: localApproved.id, status: "approved" },
+    ]);
+
+    const result = await loadIfAircraftSchedules(7, options);
+    expect(result.schedules.map(row => row.id)).toEqual(options?.admin ? allSchedules.map(row => row.id) : [schedule.id, localApproved.id, arrived.id]);
+    expect(result.schedules.find(row => row.id === localApproved.id)).toMatchObject({ managedFlightId: 29, editable: false });
+    if (options?.admin) {
+      expect(result.schedules.find(row => row.id === localCancelled.id)).toMatchObject({ managedFlightId: 27, editable: false, editDisabledReason: expect.stringContaining("local scheduling") });
+      expect(result.schedules.find(row => row.id === localRejected.id)).toMatchObject({ managedFlightId: 28, editable: false, editDisabledReason: expect.stringContaining("local scheduling") });
+      expect(result.schedules.find(row => row.id === externalCancelled.id)).toMatchObject({ managedFlightId: null, editable: false, editDisabledReason: "Cancelled flights are locked" });
+    }
+    expect(mocks.aircraft.update).not.toHaveBeenCalled();
+    expect(mocks.connection.update).not.toHaveBeenCalled();
+  });
+
   it.each([0, -1, 1.5, NaN, Infinity, 2_147_483_648])("rejects invalid local ID %s before reading", async id => {
     await expect(loadIfAircraftSchedules(id)).rejects.toMatchObject({ code: "validation", status: 400 });
     expect(mocks.aircraft.findByPk).not.toHaveBeenCalled(); expect(mocks.authorization).not.toHaveBeenCalled();

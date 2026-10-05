@@ -766,3 +766,88 @@ it("keeps pending schedules private and exposes revoked-eligibility flags to the
   const adminView = await schedulingSnapshot(administrator);
   expect(adminView.flights).toHaveLength(2);
 });
+
+describe("pilot scheduling snapshots", () => {
+  it("ignores caller-supplied request timestamps so Sequelize records submission time", async () => {
+    await requestFlight(captain, proposal({ created_at: "2000-01-01T00:00:00Z", updated_at: "2000-01-01T00:00:00Z" }));
+    const values = mocks.LiveFlight.create.mock.calls[0][0];
+    expect(values).not.toHaveProperty("created_at");
+    expect(values).not.toHaveProperty("updated_at");
+  });
+
+  it.each(["edit", "amend"])("preserves original submission time and ignores forged timestamps in a flight %s", async action => {
+    const submittedAt = new Date("2026-10-04T10:15:30Z");
+    const forgedAt = "2000-01-01T00:00:00Z";
+    const existing = flight({ status: action === "edit" ? "pending" : "approved", created_at: submittedAt });
+    await changeFlight(action === "edit" ? captain : administrator, {
+      action, flight_id: existing.id, notes: "Updated notes", created_at: forgedAt, updated_at: forgedAt,
+    });
+    expect(rows.LiveFlight[0].created_at).toEqual(submittedAt);
+    expect(rows.LiveFlight[0].updated_at).not.toEqual(forgedAt);
+    expect((await schedulingSnapshot(captain)).flights[0]).toMatchObject({ created_at: submittedAt });
+  });
+
+  it("hides rejected and cancelled flights even when the pilot is captain or crew, and preserves admin history", async () => {
+    const rejectedCaptain = flight({ status: "rejected" });
+    const cancelledCaptain = flight({ status: "cancelled" });
+    const rejectedCrew = flight({ status: "rejected", captain_id: 2 });
+    const cancelledCrew = flight({ status: "cancelled", captain_id: 2 });
+    member(captain.id, "approved", rejectedCrew.id);
+    member(captain.id, "approved", cancelledCrew.id);
+    const rejectedOther = flight({ status: "rejected", captain_id: 3 });
+    const cancelledOther = flight({ status: "cancelled", captain_id: 3 });
+    const pending = flight({ status: "pending" });
+    const approved = flight();
+    const inProgress = flight({ status: "in_progress" });
+    const completed = flight({ status: "completed" });
+    const needsReview = flight({ status: "needs_review" });
+
+    const pilotView = await schedulingSnapshot(captain);
+    expect(new Set(pilotView.flights.map(row => row.id))).toEqual(new Set([pending.id, approved.id, inProgress.id, completed.id, needsReview.id]));
+    const adminView = await schedulingSnapshot(administrator);
+    expect(new Set(adminView.flights.map(row => row.id))).toEqual(new Set([
+      rejectedCaptain.id, cancelledCaptain.id, rejectedCrew.id, cancelledCrew.id, rejectedOther.id, cancelledOther.id,
+      pending.id, approved.id, inProgress.id, completed.id, needsReview.id,
+    ]));
+  });
+
+  it("counts aircraft demand and unfinished bookings without revealing private pending request details", async () => {
+    rows.LiveAircraft.push({ id: 2, aircraft_id: 1, registration: "C-EMPTY", current_airport: "KBOS", active: true });
+    const ownPending = flight({ status: "pending" });
+    const otherPending = flight({ status: "pending", captain_id: 2, arrival: "EGLL", notes: "Private pending request", updated_at: new Date("2020-01-01T00:00:00Z") });
+    flight({ status: "pending", captain_id: 3 });
+    flight({ status: "approved", captain_id: 2, updated_at: new Date("2020-01-01T00:00:00Z") });
+    flight({ status: "approved", captain_id: 3 });
+    flight({ status: "in_progress", captain_id: 4 });
+    flight({ status: "completed" });
+    flight({ status: "rejected" });
+    flight({ status: "cancelled" });
+    flight({ status: "needs_review" });
+
+    const pilotView = await schedulingSnapshot(captain);
+    expect(pilotView.aircraft.find(row => row.id === 1)).toMatchObject({ pending_request_count: 3, approved_schedule_count: 2, in_progress_count: 1 });
+    expect(pilotView.aircraft.find(row => row.id === 2)).toMatchObject({ pending_request_count: 0, approved_schedule_count: 0, in_progress_count: 0 });
+    expect(pilotView.flights.filter(row => row.status === "pending").map(row => row.id)).toEqual([ownPending.id]);
+    expect(pilotView.flights.some(row => row.id === otherPending.id)).toBe(false);
+    expect(JSON.stringify(pilotView)).not.toContain("Private pending request");
+
+    const adminView = await schedulingSnapshot(administrator);
+    expect(adminView.aircraft.find(row => row.id === 1)).toMatchObject({ pending_request_count: 3, approved_schedule_count: 2, in_progress_count: 1 });
+    expect(adminView.flights.filter(row => row.status === "pending")).toHaveLength(3);
+  });
+
+  it("keeps counts separate for each aircraft and leaves inactive aircraft available only to admins", async () => {
+    rows.LiveAircraft.push({ id: 2, aircraft_id: 1, registration: "C-OTHER", current_airport: "KBOS", active: true });
+    rows.LiveAircraft.push({ id: 3, aircraft_id: 1, registration: "C-INACTIVE", current_airport: "KJFK", active: false });
+    flight({ status: "pending", live_aircraft_id: 1 });
+    flight({ status: "approved", live_aircraft_id: 2 });
+    flight({ status: "in_progress", live_aircraft_id: 3 });
+
+    const pilotView = await schedulingSnapshot(captain);
+    expect(pilotView.aircraft.find(row => row.id === 1)).toMatchObject({ pending_request_count: 1, approved_schedule_count: 0, in_progress_count: 0 });
+    expect(pilotView.aircraft.find(row => row.id === 2)).toMatchObject({ pending_request_count: 0, approved_schedule_count: 1, in_progress_count: 0 });
+    expect(pilotView.aircraft.some(row => row.id === 3)).toBe(false);
+    const adminView = await schedulingSnapshot(administrator);
+    expect(adminView.aircraft.find(row => row.id === 3)).toMatchObject({ pending_request_count: 0, approved_schedule_count: 0, in_progress_count: 1 });
+  });
+});

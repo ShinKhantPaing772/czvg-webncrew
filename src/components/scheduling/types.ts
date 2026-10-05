@@ -16,6 +16,9 @@ export type LiveAircraft = {
   aircraft_id: number;
   current_airport: string | null;
   projected_airport?: string | null;
+  pending_request_count?: number;
+  approved_schedule_count?: number;
+  in_progress_count?: number;
   active: boolean | number;
   if_aircraft_id?: string | null;
   name: string;
@@ -38,6 +41,7 @@ export type ScheduledFlight = {
   captain_id: number;
   callsign?: string | null;
   flight_type?: FlightType;
+  created_at?: string;
   departure: string;
   arrival: string;
   queue_order?: number | null;

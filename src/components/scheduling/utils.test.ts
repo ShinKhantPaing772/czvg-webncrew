@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { crewCount, departureForTime, formatIfScheduleTimeRange, formatUtc, hasIfScheduleTime, inputToIso, publishingLabel, utcInput } from "./utils";
+import { crewCount, departureForTime, formatIfScheduleTimeRange, formatRequestTime, formatUtc, hasIfScheduleTime, inputToIso, publishingLabel, utcInput } from "./utils";
 import { LiveAircraft, ScheduledFlight } from "./types";
 
 const aircraft: LiveAircraft = { id: 1, registration: "C-WNCB", aircraft_id: 10, current_airport: "CYYZ", active: true, name: "Boeing 737" };
@@ -28,6 +28,13 @@ describe("scheduling display and UTC inputs", () => {
     expect(hasIfScheduleTime("0001-01-01T00:00:00Z")).toBe(false);
     expect(formatIfScheduleTimeRange("2026-10-02T09:30:00-04:00", "2026-10-02T16:00:00Z")).toContain("13:30 UTC — 02 Oct 2026, 16:00 UTC");
     expect(formatIfScheduleTimeRange(null, "2026-10-02T16:00:00Z")).toBe("Departure time not specified — 02 Oct 2026, 16:00 UTC");
+  });
+
+  it("shows request timestamps in UTC with seconds without inventing missing or invalid times", () => {
+    expect(formatRequestTime("2026-10-04T09:30:17-04:00")).toBe("04 Oct 2026, 13:30:17 UTC");
+    expect(formatRequestTime(null)).toBe("Time not recorded");
+    expect(formatRequestTime(undefined)).toBe("Time not recorded");
+    expect(formatRequestTime("invalid")).toBe("Time unavailable");
   });
 
   it("appends new requests to the aircraft queue regardless of the entered clock time", () => {

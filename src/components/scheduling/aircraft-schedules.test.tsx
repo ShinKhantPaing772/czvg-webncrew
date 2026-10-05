@@ -42,11 +42,44 @@ function button(label: string) {
 async function load() { await act(async () => button("Load IF schedules").click()); }
 
 describe("aircraft IF schedule view", () => {
+  it.each([false, true])("hides rejected and cancelled local flights only for pilots (admin: %s)", async admin => {
+    await render(admin, aircraft, [flight,
+      { ...flight, id: 5, callsign: "REJECTED5", status: "rejected" },
+      { ...flight, id: 6, callsign: "CANCELLED6", status: "cancelled" },
+      { ...flight, id: 7, callsign: "COMPLETED7", status: "completed" },
+    ]);
+    const text = document.querySelector('[aria-label="Crew Center schedules"]')!.textContent!;
+    expect(text).toContain("LOCAL4");
+    expect(text).toContain("COMPLETED7");
+    expect(text.includes("REJECTED5")).toBe(admin);
+    expect(text.includes("CANCELLED6")).toBe(admin);
+  });
+  it.each([false, true])("hides cancelled IF flights only for pilots while preserving arrived and diverted flights (admin: %s)", async admin => {
+    mocks.fetch.mockResolvedValue(Response.json({ success: true, data: snapshot({ schedules: [remote,
+      { ...remote, id: "cancelled", callsign: "CANCELLED-IF", status: 9 },
+      { ...remote, id: "arrived", callsign: "ARRIVED-IF", status: 11, editable: false },
+      { ...remote, id: "diverted", callsign: "DIVERTED-IF", status: 7 },
+    ] }) }));
+    await render(admin); await load();
+    const text = document.querySelector('[aria-label="Infinite Flight schedules"]')!.textContent!;
+    expect(text.includes("CANCELLED-IF")).toBe(admin);
+    expect(text).toContain("ARRIVED-IF");
+    expect(text).toContain("DIVERTED-IF");
+    expect(text).toContain("EXTERNAL8");
+  });
+  it("shows the empty IF state when a pilot's snapshot contains only cancelled schedules", async () => {
+    mocks.fetch.mockResolvedValue(Response.json({ success: true, data: snapshot({ schedules: [{ ...remote, status: 9 }] }) }));
+    await render(); await load();
+    expect(document.body.textContent).not.toContain("EXTERNAL8");
+    expect(document.body.textContent).toContain("No schedules returned by IF");
+  });
   it("shows local and Infinite Flight purposes using their respective labels", async () => {
     mocks.fetch.mockResolvedValue(Response.json({ success: true, data: snapshot({ schedules: [{ ...remote, flightType: 3 }] }) }));
-    await render(true, aircraft, [{ ...flight, flight_type: "ferry" }]); await load();
+    await render(true, aircraft, [{ ...flight, flight_type: "ferry", created_at: "2026-10-04T13:30:17Z" }]); await load();
     expect(document.querySelector('[aria-label="Crew Center schedules"]')?.textContent).toContain("Ferry");
+    expect(document.querySelector('[aria-label="Crew Center schedules"]')?.textContent).toContain("Requested 04 Oct 2026, 13:30:17 UTC");
     expect(document.querySelector('[aria-label="Infinite Flight schedules"]')?.textContent).toContain("Freight");
+    expect(document.querySelector('[aria-label="Infinite Flight schedules"]')?.textContent).not.toContain("Requested");
   });
   it("makes no automatic request on opening, elapsed time, focus, or visibility", async () => {
     vi.useFakeTimers();

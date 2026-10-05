@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ifScheduleFingerprint, meaningfulIfScheduleTime, toIfAircraftScheduleView } from "./schedule-view";
+import { ifScheduleFingerprint, isIfScheduleVisibleToPilot, meaningfulIfScheduleTime, toIfAircraftScheduleView } from "./schedule-view";
 import type { IfSchedule } from "./types";
 
 const ID = "10000000-0000-0000-0000-000000000001";
@@ -33,6 +33,23 @@ describe("temporary IF schedule display and edit guards", () => {
   });
   it("does not expose write access in a pilot view", () => {
     expect(toIfAircraftScheduleView(remote)).toMatchObject({ editable: false, editDisabledReason: expect.stringContaining("administrator") });
+  });
+  it("hides cancelled IF schedules from pilots without hiding arrived history", () => {
+    expect(isIfScheduleVisibleToPilot({ ...remote, status: 9 }, [])).toBe(false);
+    expect(isIfScheduleVisibleToPilot({ ...remote, status: 11 }, [])).toBe(true);
+    expect(isIfScheduleVisibleToPilot(remote, [])).toBe(true);
+  });
+  it.each(["rejected", "cancelled"])("hides a locally %s flight while IF still reports an unfinished schedule", status => {
+    const local = { id: 23, public_id: OTHER, if_schedule_id: ID, status };
+    expect(isIfScheduleVisibleToPilot(remote, [local])).toBe(false);
+    expect(isIfScheduleVisibleToPilot({ ...remote, id: OTHER, briefing: `[WNC schedule:${local.public_id}]` }, [{ ...local, if_schedule_id: null }])).toBe(false);
+    expect(toIfAircraftScheduleView(remote, [local], true)).toMatchObject({ managedFlightId: local.id, editable: false });
+  });
+  it("keeps an approved local flight visible and excludes any conflicting cancelled ownership marker", () => {
+    const approved = { id: 23, public_id: OTHER, if_schedule_id: ID, status: "approved" };
+    const cancelled = { id: 24, public_id: ID, if_schedule_id: null, status: "cancelled" };
+    expect(isIfScheduleVisibleToPilot(remote, [approved])).toBe(true);
+    expect(isIfScheduleVisibleToPilot({ ...remote, briefing: `[WNC schedule:${cancelled.public_id}]` }, [approved, cancelled])).toBe(false);
   });
   it.each([{ callsign: "IF2" }, { flightType: 3 }, { status: 11 }, { sequence: 4 }, { updatedAt: "2026-10-06T10:00:01Z" },
     { briefing: "Changed" }, { crew: [] }, { actualArrivalUtc: "2026-10-06T15:00:00Z" }])("detects concurrent provider changes without exposing source fields: %j", changes => {

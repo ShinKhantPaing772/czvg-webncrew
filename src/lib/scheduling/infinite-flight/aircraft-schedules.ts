@@ -3,7 +3,7 @@ import { getIfFleet, getIfSchedules } from "./client";
 import { getIfAuthorizationSnapshot } from "./connection";
 import { getIfLiveConfig, IF_LIVE_CACHE_MS, IfLiveError, isIfUuid } from "./config";
 import { ifBudgetRemainingMs, withIfRequestBudget } from "./request-budget";
-import { toIfAircraftScheduleView } from "./schedule-view";
+import { isIfScheduleVisibleToPilot, toIfAircraftScheduleView } from "./schedule-view";
 export type { IfAircraftScheduleView } from "./schedule-view";
 
 export function localAircraftIdFromRequest(request: Request): number {
@@ -52,8 +52,9 @@ export function loadIfAircraftSchedules(aircraftId: number, options: { admin?: b
     const loadedAt = Date.now();
     const config = getIfLiveConfig();
     const managedFlights = await LiveFlight.findAll({ where: { live_aircraft_id: aircraftId }, attributes: ["id", "public_id", "if_schedule_id", "status"], raw: true });
+    const visibleSchedules = options.admin === true ? schedules : schedules.filter(row => isIfScheduleVisibleToPilot(row, managedFlights));
     return {
-      schedules: schedules.map(row => toIfAircraftScheduleView(row, managedFlights, options.admin === true && config.bindingReady)),
+      schedules: visibleSchedules.map(row => toIfAircraftScheduleView(row, managedFlights, options.admin === true && config.bindingReady)),
       loadedAt: new Date(loadedAt).toISOString(), expiresAt: new Date(loadedAt + IF_LIVE_CACHE_MS).toISOString(),
       publishingReady: config.publishingReady, publishingDisabledReasons: config.publishingDisabledReasons,
     };
