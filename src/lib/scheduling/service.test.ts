@@ -379,22 +379,79 @@ describe("captain and administrator authority", () => {
 });
 
 describe("crew eligibility and capacity", () => {
-  it("rejects untimed cross-aircraft captain commitments but allows a continuous same-aircraft queue", async () => {
-    flight({ scheduled_departure: null, scheduled_arrival: null });
-    flight({ live_aircraft_id: 2, status: "pending", scheduled_departure: at(20), scheduled_arrival: at(21) });
+  const assignmentRoles = ["captain", "crew"] as const;
+  const rolePairs = assignmentRoles.flatMap(existingRole => assignmentRoles.map(nextRole => ({ existingRole, nextRole })));
+  const optionalTimeCases = [
+    { timing: "both flights untimed", existingTimed: false, nextTimed: false },
+    { timing: "existing flight untimed", existingTimed: false, nextTimed: true },
+    { timing: "next flight untimed", existingTimed: true, nextTimed: false },
+  ].flatMap(timing => rolePairs.map(roles => ({ ...timing, ...roles })));
+
+  it.each(optionalTimeCases)("allows another aircraft assignment ($timing, $existingRole to $nextRole)", async ({ existingTimed, nextTimed, existingRole, nextRole }) => {
     rows.LiveAircraft.push({ ...rows.LiveAircraft[0], id: 2, registration: "C-OTHER" });
-    await expect(changeFlight(administrator, { action: "approve", flight_id: 2 })).rejects.toThrow("unspecified times");
-    await requestFlight(captain, { live_aircraft_id: 1, arrival: "KBOS" });
-    await changeFlight(administrator, { action: "approve", flight_id: 3 });
-    expect(rows.LiveFlight[2]).toMatchObject({ status: "approved", queue_order: 2, departure: "KJFK" });
+    const existing = flight({ captain_id: existingRole === "captain" ? 1 : 2,
+      scheduled_departure: existingTimed ? at(10) : null, scheduled_arrival: existingTimed ? at(12) : null });
+    if (existingRole === "crew") member(1, "approved", existing.id);
+    const nextCaptain = nextRole === "captain" ? 1 : 3;
+    const next = flight({ live_aircraft_id: 2, captain_id: nextCaptain, status: nextRole === "captain" ? "pending" : "approved",
+      scheduled_departure: nextTimed ? at(11) : null, scheduled_arrival: nextTimed ? at(13) : null });
+
+    if (nextRole === "captain") await changeFlight(administrator, { action: "approve", flight_id: next.id });
+    else {
+      const joining = member(1, "pending", next.id);
+      await changeFlight({ id: nextCaptain, admin: false }, { action: "approve_join", flight_id: next.id, member_id: joining.id });
+      expect(rows.LiveFlightMember.find(row => row.id === joining.id)?.status).toBe("approved");
+    }
+
+    expect(rows.LiveFlight.map(row => row.status)).toEqual(["approved", "approved"]);
+    expect(rows.LiveFlight.map(row => row.queue_order)).toEqual([1, 1]);
+    expect(rows.LiveAircraft.map(row => row.current_airport)).toEqual(["CYYZ", "CYYZ"]);
+    if (existingRole === "crew") expect(rows.LiveFlightMember.find(row => row.flight_id === existing.id)?.status).toBe("approved");
   });
 
-  it("blocks a crew join approval when either aircraft's reservation has unspecified times", async () => {
+  it.each(rolePairs)("still rejects overlapping timed aircraft assignments ($existingRole to $nextRole)", async ({ existingRole, nextRole }) => {
+    rows.LiveAircraft.push({ ...rows.LiveAircraft[0], id: 2, registration: "C-OTHER" });
+    const existing = flight({ captain_id: existingRole === "captain" ? 1 : 2 });
+    if (existingRole === "crew") member(1, "approved", existing.id);
+    const nextCaptain = nextRole === "captain" ? 1 : 3;
+    const next = flight({ live_aircraft_id: 2, captain_id: nextCaptain, status: nextRole === "captain" ? "pending" : "approved",
+      scheduled_departure: at(11), scheduled_arrival: at(13) });
+    const joining = nextRole === "crew" ? member(1, "pending", next.id) : null;
+
+    await expect(changeFlight(nextRole === "captain" ? administrator : { id: nextCaptain, admin: false }, {
+      action: nextRole === "captain" ? "approve" : "approve_join", flight_id: next.id, ...(joining && { member_id: joining.id }),
+    })).rejects.toThrow(`A crew member is already assigned to flight ${existing.id} during this time`);
+
+    expect(rows.LiveFlight[1]).toMatchObject({ status: nextRole === "captain" ? "pending" : "approved", revision: 1 });
+    if (joining) expect(rows.LiveFlightMember.find(row => row.id === joining.id)?.status).toBe("pending");
+    expect(rows.LiveScheduleEvent).toHaveLength(0);
+  });
+
+  it.each(["edit", "amend"])("can %s a timed flight to untimed while keeping another aircraft's assignments", async action => {
+    rows.LiveAircraft.push({ ...rows.LiveAircraft[0], id: 2, registration: "C-OTHER" });
+    const current = flight({ status: action === "edit" ? "pending" : "approved" });
+    if (action === "amend") member(2, "approved", current.id);
+    const other = flight({ live_aircraft_id: 2, captain_id: 2, scheduled_departure: at(20), scheduled_arrival: at(21) });
+    const otherCrew = member(1, "approved", other.id);
+    const otherBefore = structuredClone(other);
+    const otherCrewBefore = structuredClone(otherCrew);
+
+    await changeFlight(action === "edit" ? captain : administrator, {
+      action, flight_id: current.id, scheduled_departure: null, scheduled_arrival: null,
+    });
+    if (action === "edit") await changeFlight(administrator, { action: "approve", flight_id: current.id });
+
+    expect(rows.LiveFlight[0]).toMatchObject({ status: "approved", queue_order: 1, scheduled_departure: null, scheduled_arrival: null });
+    expect(rows.LiveFlight[1]).toEqual(otherBefore);
+    expect(rows.LiveFlightMember.find(row => row.id === otherCrew.id)).toEqual(otherCrewBefore);
+    if (action === "amend") expect(rows.LiveFlightMember.find(row => row.flight_id === current.id)?.status).toBe("approved");
+  });
+
+  it("allows a continuous untimed same-aircraft queue", async () => {
     flight({ scheduled_departure: null, scheduled_arrival: null });
-    member(2);
-    flight({ live_aircraft_id: 2, captain_id: 2, scheduled_departure: at(20), scheduled_arrival: at(21) });
-    await expect(changeFlight(captain, { action: "approve_join", flight_id: 1, member_id: 1 })).rejects.toThrow("unspecified times");
-    expect(rows.LiveFlightMember[0].status).toBe("pending");
+    await requestFlight(captain, { live_aircraft_id: 1, arrival: "KBOS" });
+    await changeFlight(administrator, { action: "approve", flight_id: 2 });
+    expect(rows.LiveFlight[1]).toMatchObject({ status: "approved", queue_order: 2, departure: "KJFK" });
   });
 
   it("admits at most two additional approved crew while pending requests consume no seats", async () => {
@@ -627,11 +684,43 @@ describe("start and completion policies", () => {
     await expect(changeFlight(captain, { flight_id: 1, action: "start" })).rejects.toMatchObject({ status: 403 });
   });
 
-  it("prevents starting while a crew member is in another flight even when scheduled intervals differ", async () => {
-    flight(); member(2, "approved");
-    flight({ live_aircraft_id: 2, captain_id: 2, status: "in_progress", scheduled_departure: at(6), scheduled_arrival: at(8) });
-    await expect(changeFlight(captain, { flight_id: 1, action: "start" })).rejects.toMatchObject({ status: 409 });
-  });
+  it.each([{ timing: "differ", start: 6, end: 8 }, { timing: "overlap", start: 10, end: 12 }])(
+    "reports an active crew flight before any timed overlap when scheduled intervals $timing", async ({ start, end }) => {
+      flight(); member(2, "approved");
+      const active = flight({ live_aircraft_id: 2, captain_id: 2, status: "in_progress", scheduled_departure: at(start), scheduled_arrival: at(end) });
+      await expect(changeFlight(captain, { flight_id: 1, action: "start" }))
+        .rejects.toThrow(`A crew member is already flying flight ${active.id}. Complete that flight before starting another`);
+    },
+  );
+
+  it.each(["captain", "crew"].flatMap(existingRole => ["captain", "crew"].map(nextRole => ({ existingRole, nextRole }))))(
+    "allows an untimed booking but waits for the pilot's actual flight to finish ($existingRole to $nextRole)",
+    async ({ existingRole, nextRole }) => {
+      rows.LiveAircraft.push({ ...rows.LiveAircraft[0], id: 2, registration: "C-OTHER" });
+      const existingCaptain = existingRole === "captain" ? 1 : 2;
+      const existing = flight({ captain_id: existingCaptain, scheduled_departure: null, scheduled_arrival: null });
+      if (existingRole === "crew") member(1, "approved", existing.id);
+      const nextCaptain = nextRole === "captain" ? 1 : 3;
+      const next = flight({ live_aircraft_id: 2, captain_id: nextCaptain, status: nextRole === "captain" ? "pending" : "approved",
+        scheduled_departure: null, scheduled_arrival: null });
+      const joining = nextRole === "crew" ? member(1, "pending", next.id) : null;
+      await changeFlight({ id: existingCaptain, admin: false }, { action: "start", flight_id: existing.id });
+
+      await changeFlight(nextRole === "captain" ? administrator : { id: nextCaptain, admin: false }, {
+        action: nextRole === "captain" ? "approve" : "approve_join", flight_id: next.id, ...(joining && { member_id: joining.id }),
+      });
+      await expect(changeFlight({ id: nextCaptain, admin: false }, { action: "start", flight_id: next.id }))
+        .rejects.toThrow(`A crew member is already flying flight ${existing.id}. Complete that flight before starting another`);
+      expect(rows.LiveFlight.map(row => row.status)).toEqual(["in_progress", "approved"]);
+      expect(rows.LiveFlight[1].actual_departure_at).toBeUndefined();
+
+      await changeFlight({ id: existingCaptain, admin: false }, { action: "complete", flight_id: existing.id, actual_arrival: "KJFK" });
+      await changeFlight({ id: nextCaptain, admin: false }, { action: "start", flight_id: next.id });
+      expect(rows.LiveFlight.map(row => row.status)).toEqual(["completed", "in_progress"]);
+      expect(rows.LiveFlight[1].actual_departure_at).toBeInstanceOf(Date);
+      expect(rows.LiveAircraft.map(row => row.current_airport)).toEqual(["KJFK", "CYYZ"]);
+    },
+  );
 
   it("requires the latest external schedule revision before starting a bound aircraft", async () => {
     flight({ publishing_state: "published", revision: 2, published_revision: 1, if_schedule_id: IF_SCHEDULE });

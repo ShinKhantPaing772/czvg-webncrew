@@ -73,9 +73,11 @@ approve crew, start a flight, and confirm its actual arrival. A flight must be t
 aircraft's next approved leg and its departure must match the actual location.
 Scheduled arrival times never move aircraft automatically. Aircraft and pilot
 booking conflicts are checked again inside the approval transaction. Untimed
-legs follow the aircraft’s queue rather than a fabricated time interval. A pilot
-with an untimed reservation cannot also reserve another aircraft; add planned
-times or finish/cancel that reservation before accepting the other assignment.
+legs follow the aircraft’s queue rather than a fabricated time interval. Pilots
+can hold captain or crew assignments on multiple aircraft even when one or both
+flights have no planned times. When both flights have planned times, overlapping
+crew bookings are still rejected. A pilot must finish any flight in progress
+before another flight with that pilot as captain or approved crew can start.
 Pilots can edit or withdraw pending requests. Scheduling admins amend, reassign,
 or cancel approved flights.
 
@@ -381,11 +383,12 @@ migration, OAuth registration, and scheduler provisioning are operator steps.
 - Automated tests, TypeScript, and the production build passed; see the current
   task report for the latest test count.
 - Both pages were checked at desktop and mobile widths with fictional sample data.
-- Twenty-two isolated MySQL tests passed against disposable MySQL 8.4 databases,
+- Isolated MySQL tests passed against disposable MySQL 8.4 databases,
   covering concurrent reservations/crew, actual candidate SQL/advisory locks,
   aircraft-specific publishing/expired-lease isolation, Workbench safe-update
   mode, recovery from a partially applied optional-times migration, and
-  flight-type migration defaults, constraints, persistence, and amendment history.
+  flight-type migration defaults, constraints, persistence, amendment history,
+  untimed bookings on multiple aircraft, and serialized starts for shared pilots.
   The test containers were removed afterward. These suites remain opt-in for normal
   test runs; rerun the command above when changing database or publishing logic.
 - Real IF OAuth/publishing was not exercised. No production migration, account

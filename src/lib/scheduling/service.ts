@@ -122,10 +122,8 @@ async function checkPilotBookings(pilotIds: number[], flight: LiveFlight, transa
   const memberships = otherIds.length ? await LiveFlightMember.findAll({ where: { flight_id: { [Op.in]: otherIds }, status: "approved", pilot_id: { [Op.in]: pilotIds } }, transaction }) : [];
   for (const other of otherFlights) {
     if (!(pilotIds.includes(other.captain_id) || memberships.some(member => member.flight_id === other.id))) continue;
-    if (other.live_aircraft_id !== flight.live_aircraft_id && (!hasScheduledWindow(flight) || !hasScheduledWindow(other))) {
-      throw new SchedulingError(`A crew member is assigned to flight ${other.id} on another aircraft with unspecified times. Set both flights' times or resolve that assignment first`, 409);
-    }
-    if (overlaps(flight, other) || (starting && other.status === "in_progress")) throw new SchedulingError(`A crew member is already assigned to flight ${other.id} during this time`, 409);
+    if (starting && other.status === "in_progress") throw new SchedulingError(`A crew member is already flying flight ${other.id}. Complete that flight before starting another`, 409);
+    if (overlaps(flight, other)) throw new SchedulingError(`A crew member is already assigned to flight ${other.id} during this time`, 409);
   }
 }
 async function approvedCrew(flight: LiveFlight, transaction: Transaction) {

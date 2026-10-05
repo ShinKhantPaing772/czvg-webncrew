@@ -295,14 +295,50 @@ describe.skipIf(!suppliedUrl)("MySQL live scheduling transaction concurrency", (
     } finally { release(); observer.mockRestore(); await Promise.allSettled([first]); }
   });
 
-  it("allows only one concurrent untimed captain commitment across different aircraft", async () => {
+  it("allows concurrent untimed captain commitments across different aircraft", async () => {
     const one = await flight({ status: "pending", scheduled_departure: null, scheduled_arrival: null });
     const two = await flight({ live_aircraft_id: 2, status: "pending", scheduled_departure: null, scheduled_arrival: null });
-    expectOneWinner(await Promise.allSettled([
+    const results = await Promise.allSettled([
       service.changeFlight(administrator, { flight_id: one.id, action: "approve" }),
       service.changeFlight(administrator, { flight_id: two.id, action: "approve" }),
+    ]);
+    expect(results.every(result => result.status === "fulfilled")).toBe(true);
+    expect(await live.LiveFlight.count({ where: { status: "approved" } })).toBe(2);
+  });
+
+  it("allows concurrent untimed crew assignments on different aircraft", async () => {
+    const one = await flight({ scheduled_departure: null, scheduled_arrival: null });
+    const two = await flight({ live_aircraft_id: 2, captain_id: 2, scheduled_departure: null, scheduled_arrival: null });
+    const first = await live.LiveFlightMember.create({ flight_id: one.id, pilot_id: 3 });
+    const second = await live.LiveFlightMember.create({ flight_id: two.id, pilot_id: 3 });
+    const results = await Promise.allSettled([
+      service.changeFlight(captain, { flight_id: one.id, member_id: first.id, action: "approve_join" }),
+      service.changeFlight({ id: 2, admin: false }, { flight_id: two.id, member_id: second.id, action: "approve_join" }),
+    ]);
+    expect(results.every(result => result.status === "fulfilled")).toBe(true);
+    expect(await live.LiveFlightMember.count({ where: { pilot_id: 3, status: "approved" } })).toBe(2);
+  });
+
+  it.each(["captain", "crew"])("starts only one concurrent untimed flight for a shared %s, then allows the next after completion", async role => {
+    const one = await flight({ scheduled_departure: null, scheduled_arrival: null });
+    const two = await flight({ live_aircraft_id: 2, captain_id: role === "captain" ? 1 : 2, scheduled_departure: null, scheduled_arrival: null });
+    if (role === "crew") await live.LiveFlightMember.bulkCreate([
+      { flight_id: one.id, pilot_id: 3, status: "approved" },
+      { flight_id: two.id, pilot_id: 3, status: "approved" },
+    ]);
+    expectOneWinner(await Promise.allSettled([
+      service.changeFlight(administrator, { flight_id: one.id, action: "start" }),
+      service.changeFlight(administrator, { flight_id: two.id, action: "start" }),
     ]));
-    expect(await live.LiveFlight.count({ where: { status: "approved" } })).toBe(1);
+    const current = (await live.LiveFlight.findAll({ where: { status: "in_progress" } }))[0];
+    const next = current.id === one.id ? two : one;
+    expect(await live.LiveFlight.count({ where: { status: "in_progress" } })).toBe(1);
+    expect((await live.LiveFlight.findByPk(next.id))?.status).toBe("approved");
+    await service.changeFlight(administrator, { flight_id: current.id, action: "complete", actual_arrival: "KJFK" });
+    await service.changeFlight(administrator, { flight_id: next.id, action: "start" });
+    expect((await live.LiveFlight.findByPk(next.id))?.status).toBe("in_progress");
+    expect(await live.LiveFlight.count({ where: { status: "in_progress" } })).toBe(1);
+    expect(await live.LiveFlight.count({ where: { status: "completed" } })).toBe(1);
   });
 
   it("keeps untimed queue order through diversion, repair, reapproval and actual arrival", async () => {
