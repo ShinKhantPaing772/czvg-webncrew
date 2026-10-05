@@ -666,11 +666,17 @@ describe("persistent aircraft chain repair", () => {
 });
 
 describe("start and completion policies", () => {
-  it("starts only the aircraft's first approved leg", async () => {
-    flight(); flight({ departure: "KJFK", arrival: "KBOS", scheduled_departure: at(13), scheduled_arrival: at(15) });
+  it.each(["timed", "untimed"])("starts only the aircraft's first approved leg (%s)", async timing => {
+    flight({ scheduled_departure: timing === "timed" ? at(10) : null, scheduled_arrival: timing === "timed" ? at(12) : null });
+    flight({ departure: "KJFK", arrival: "KBOS", scheduled_departure: timing === "timed" ? at(13) : null, scheduled_arrival: timing === "timed" ? at(15) : null });
     await expect(changeFlight(captain, { flight_id: 2, action: "start" })).rejects.toMatchObject({ status: 409 });
     await changeFlight(captain, { flight_id: 1, action: "start" });
     expect(rows.LiveFlight[0].status).toBe("in_progress");
+    await expect(changeFlight(captain, { flight_id: 2, action: "start" })).rejects.toThrow("Finish the aircraft's preceding flight first");
+    expect(rows.LiveFlight.map(row => row.status)).toEqual(["in_progress", "approved"]);
+    await changeFlight(captain, { flight_id: 1, action: "complete", actual_arrival: "KJFK" });
+    await changeFlight(captain, { flight_id: 2, action: "start" });
+    expect(rows.LiveFlight.map(row => row.status)).toEqual(["completed", "in_progress"]);
   });
 
   it("requires the actual aircraft origin to match before starting", async () => {
@@ -684,40 +690,49 @@ describe("start and completion policies", () => {
     await expect(changeFlight(captain, { flight_id: 1, action: "start" })).rejects.toMatchObject({ status: 403 });
   });
 
-  it.each([{ timing: "differ", start: 6, end: 8 }, { timing: "overlap", start: 10, end: 12 }])(
-    "reports an active crew flight before any timed overlap when scheduled intervals $timing", async ({ start, end }) => {
-      flight(); member(2, "approved");
-      const active = flight({ live_aircraft_id: 2, captain_id: 2, status: "in_progress", scheduled_departure: at(start), scheduled_arrival: at(end) });
-      await expect(changeFlight(captain, { flight_id: 1, action: "start" }))
-        .rejects.toThrow(`A crew member is already flying flight ${active.id}. Complete that flight before starting another`);
-    },
-  );
+  it("allows another aircraft to start when a shared crew member's active flight has non-overlapping planned times", async () => {
+    flight(); member(2, "approved");
+    flight({ live_aircraft_id: 2, captain_id: 2, status: "in_progress", scheduled_departure: at(6), scheduled_arrival: at(8) });
+    await changeFlight(captain, { flight_id: 1, action: "start" });
+    expect(rows.LiveFlight.map(row => row.status)).toEqual(["in_progress", "in_progress"]);
+    expect(rows.LiveFlight[0].actual_departure_at).toBeInstanceOf(Date);
+  });
 
-  it.each(["captain", "crew"].flatMap(existingRole => ["captain", "crew"].map(nextRole => ({ existingRole, nextRole }))))(
-    "allows an untimed booking but waits for the pilot's actual flight to finish ($existingRole to $nextRole)",
-    async ({ existingRole, nextRole }) => {
+  it("continues to reject planned-time overlap with a shared crew member's active flight", async () => {
+    flight(); member(2, "approved");
+    const active = flight({ live_aircraft_id: 2, captain_id: 2, status: "in_progress" });
+    await expect(changeFlight(captain, { flight_id: 1, action: "start" }))
+      .rejects.toThrow(`A crew member is already assigned to flight ${active.id} during this time`);
+    expect(rows.LiveFlight.map(row => row.status)).toEqual(["approved", "in_progress"]);
+    expect(rows.LiveFlight[0].actual_departure_at).toBeUndefined();
+  });
+
+  it.each(["captain", "crew"].flatMap(existingRole => ["captain", "crew"].flatMap(nextRole =>
+    ["untimed", "active_timed", "next_timed"].map(timing => ({ existingRole, nextRole, timing })),
+  )))(
+    "starts different aircraft independently with a shared pilot ($existingRole to $nextRole, $timing)",
+    async ({ existingRole, nextRole, timing }) => {
       rows.LiveAircraft.push({ ...rows.LiveAircraft[0], id: 2, registration: "C-OTHER" });
       const existingCaptain = existingRole === "captain" ? 1 : 2;
-      const existing = flight({ captain_id: existingCaptain, scheduled_departure: null, scheduled_arrival: null });
+      const existing = flight({ captain_id: existingCaptain,
+        scheduled_departure: timing === "active_timed" ? at(6) : null, scheduled_arrival: timing === "active_timed" ? at(8) : null });
       if (existingRole === "crew") member(1, "approved", existing.id);
       const nextCaptain = nextRole === "captain" ? 1 : 3;
       const next = flight({ live_aircraft_id: 2, captain_id: nextCaptain, status: nextRole === "captain" ? "pending" : "approved",
-        scheduled_departure: null, scheduled_arrival: null });
+        scheduled_departure: timing === "next_timed" ? at(10) : null, scheduled_arrival: timing === "next_timed" ? at(12) : null });
       const joining = nextRole === "crew" ? member(1, "pending", next.id) : null;
       await changeFlight({ id: existingCaptain, admin: false }, { action: "start", flight_id: existing.id });
 
       await changeFlight(nextRole === "captain" ? administrator : { id: nextCaptain, admin: false }, {
         action: nextRole === "captain" ? "approve" : "approve_join", flight_id: next.id, ...(joining && { member_id: joining.id }),
       });
-      await expect(changeFlight({ id: nextCaptain, admin: false }, { action: "start", flight_id: next.id }))
-        .rejects.toThrow(`A crew member is already flying flight ${existing.id}. Complete that flight before starting another`);
-      expect(rows.LiveFlight.map(row => row.status)).toEqual(["in_progress", "approved"]);
-      expect(rows.LiveFlight[1].actual_departure_at).toBeUndefined();
+      await changeFlight({ id: nextCaptain, admin: false }, { action: "start", flight_id: next.id });
+      expect(rows.LiveFlight.map(row => row.status)).toEqual(["in_progress", "in_progress"]);
+      expect(rows.LiveFlight[1].actual_departure_at).toBeInstanceOf(Date);
+      expect(rows.LiveAircraft.map(row => row.current_airport)).toEqual(["CYYZ", "CYYZ"]);
 
       await changeFlight({ id: existingCaptain, admin: false }, { action: "complete", flight_id: existing.id, actual_arrival: "KJFK" });
-      await changeFlight({ id: nextCaptain, admin: false }, { action: "start", flight_id: next.id });
       expect(rows.LiveFlight.map(row => row.status)).toEqual(["completed", "in_progress"]);
-      expect(rows.LiveFlight[1].actual_departure_at).toBeInstanceOf(Date);
       expect(rows.LiveAircraft.map(row => row.current_airport)).toEqual(["KJFK", "CYYZ"]);
     },
   );

@@ -116,25 +116,24 @@ function flightFields(body: Body, current?: LiveFlight) {
   };
 }
 
-async function checkPilotBookings(pilotIds: number[], flight: LiveFlight, transaction: Transaction, starting = false) {
+async function checkPilotBookings(pilotIds: number[], flight: LiveFlight, transaction: Transaction) {
   const otherFlights = await LiveFlight.findAll({ where: { status: reserved, id: { [Op.ne]: flight.id } }, transaction });
   const otherIds = otherFlights.map(other => other.id);
   const memberships = otherIds.length ? await LiveFlightMember.findAll({ where: { flight_id: { [Op.in]: otherIds }, status: "approved", pilot_id: { [Op.in]: pilotIds } }, transaction }) : [];
   for (const other of otherFlights) {
     if (!(pilotIds.includes(other.captain_id) || memberships.some(member => member.flight_id === other.id))) continue;
-    if (starting && other.status === "in_progress") throw new SchedulingError(`A crew member is already flying flight ${other.id}. Complete that flight before starting another`, 409);
     if (overlaps(flight, other)) throw new SchedulingError(`A crew member is already assigned to flight ${other.id} during this time`, 409);
   }
 }
 async function approvedCrew(flight: LiveFlight, transaction: Transaction) {
   return LiveFlightMember.findAll({ where: { flight_id: flight.id, status: "approved" }, transaction });
 }
-async function validateCrew(flight: LiveFlight, transaction: Transaction, starting = false) {
+async function validateCrew(flight: LiveFlight, transaction: Transaction) {
   const members = await approvedCrew(flight, transaction);
   if (members.length > 2) throw new SchedulingError("A flight allows one captain and two additional crew", 409);
   const ids = [flight.captain_id, ...members.map(member => member.pilot_id)];
   for (const id of ids) await eligible(id, transaction);
-  await checkPilotBookings(ids, flight, transaction, starting);
+  await checkPilotBookings(ids, flight, transaction);
 }
 async function validateApproval(aircraft: LiveAircraft, flight: LiveFlight, transaction: Transaction, amend = false) {
   activeAircraft(aircraft);
@@ -317,7 +316,7 @@ export async function changeFlight(actor: SchedulingActor, body: Body) {
       const flights = await queue(aircraft.id, transaction);
       if (flights[0]?.id !== flight.id || flights.some(other => other.status === "in_progress")) throw new SchedulingError("Finish the aircraft's preceding flight first", 409);
       if (aircraft.current_airport !== flight.departure) throw new SchedulingError("Aircraft location must be confirmed at the departure airport", 409);
-      await validateCrew(flight, transaction, true);
+      await validateCrew(flight, transaction);
       if (aircraft.if_aircraft_id && (flight.publishing_state !== "published" || flight.published_revision !== flight.revision)) throw new SchedulingError("Wait until this flight's latest schedule and crew are published to IF", 409);
       if (aircraft.if_aircraft_id) {
         const catalog = await models.Aircraft.findByPk(aircraft.aircraft_id, { transaction, lock: transaction.LOCK.UPDATE });

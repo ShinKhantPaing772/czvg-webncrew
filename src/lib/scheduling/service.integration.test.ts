@@ -319,26 +319,37 @@ describe.skipIf(!suppliedUrl)("MySQL live scheduling transaction concurrency", (
     expect(await live.LiveFlightMember.count({ where: { pilot_id: 3, status: "approved" } })).toBe(2);
   });
 
-  it.each(["captain", "crew"])("starts only one concurrent untimed flight for a shared %s, then allows the next after completion", async role => {
+  it.each(["captain", "crew"])("starts both aircraft independently for a shared %s while preserving each aircraft's queue and location", async role => {
     const one = await flight({ scheduled_departure: null, scheduled_arrival: null });
     const two = await flight({ live_aircraft_id: 2, captain_id: role === "captain" ? 1 : 2, scheduled_departure: null, scheduled_arrival: null });
     if (role === "crew") await live.LiveFlightMember.bulkCreate([
       { flight_id: one.id, pilot_id: 3, status: "approved" },
       { flight_id: two.id, pilot_id: 3, status: "approved" },
     ]);
-    expectOneWinner(await Promise.allSettled([
+    const results = await Promise.allSettled([
       service.changeFlight(administrator, { flight_id: one.id, action: "start" }),
       service.changeFlight(administrator, { flight_id: two.id, action: "start" }),
-    ]));
-    const current = (await live.LiveFlight.findAll({ where: { status: "in_progress" } }))[0];
-    const next = current.id === one.id ? two : one;
-    expect(await live.LiveFlight.count({ where: { status: "in_progress" } })).toBe(1);
-    expect((await live.LiveFlight.findByPk(next.id))?.status).toBe("approved");
-    await service.changeFlight(administrator, { flight_id: current.id, action: "complete", actual_arrival: "KJFK" });
+    ]);
+    expect(results.every(result => result.status === "fulfilled")).toBe(true);
+    expect(await live.LiveFlight.count({ where: { status: "in_progress" } })).toBe(2);
+    expect((await live.LiveFlight.findByPk(one.id))?.actual_departure_at).toBeInstanceOf(Date);
+    expect((await live.LiveFlight.findByPk(two.id))?.actual_departure_at).toBeInstanceOf(Date);
+    expect((await live.LiveAircraft.findByPk(1))?.current_airport).toBe("CYYZ");
+    expect((await live.LiveAircraft.findByPk(2))?.current_airport).toBe("CYYZ");
+
+    const next = await flight({ departure: "KJFK", arrival: "KBOS", scheduled_departure: null, scheduled_arrival: null });
+    await expect(service.changeFlight(administrator, { flight_id: next.id, action: "start" })).rejects.toThrow("Finish the aircraft's preceding flight first");
+    await service.changeFlight(administrator, { flight_id: one.id, action: "complete", actual_arrival: "KJFK" });
+    expect((await live.LiveFlight.findByPk(two.id))?.status).toBe("in_progress");
+    expect((await live.LiveAircraft.findByPk(1))?.current_airport).toBe("KJFK");
+    expect((await live.LiveAircraft.findByPk(2))?.current_airport).toBe("CYYZ");
     await service.changeFlight(administrator, { flight_id: next.id, action: "start" });
+    expect(await live.LiveFlight.count({ where: { status: "in_progress" } })).toBe(2);
+    await service.changeFlight(administrator, { flight_id: two.id, action: "complete", actual_arrival: "EGLL" });
     expect((await live.LiveFlight.findByPk(next.id))?.status).toBe("in_progress");
-    expect(await live.LiveFlight.count({ where: { status: "in_progress" } })).toBe(1);
-    expect(await live.LiveFlight.count({ where: { status: "completed" } })).toBe(1);
+    expect((await live.LiveAircraft.findByPk(1))?.current_airport).toBe("KJFK");
+    expect((await live.LiveAircraft.findByPk(2))?.current_airport).toBe("EGLL");
+    expect(await live.LiveFlight.count({ where: { status: "completed" } })).toBe(2);
   });
 
   it("keeps untimed queue order through diversion, repair, reapproval and actual arrival", async () => {

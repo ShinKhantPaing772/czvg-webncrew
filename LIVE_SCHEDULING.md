@@ -76,8 +76,9 @@ booking conflicts are checked again inside the approval transaction. Untimed
 legs follow the aircraft’s queue rather than a fabricated time interval. Pilots
 can hold captain or crew assignments on multiple aircraft even when one or both
 flights have no planned times. When both flights have planned times, overlapping
-crew bookings are still rejected. A pilot must finish any flight in progress
-before another flight with that pilot as captain or approved crew can start.
+crew bookings are still rejected. Flights on different aircraft can start
+independently, including flights sharing a captain or approved crew. Each
+aircraft must finish its own flight in progress before starting its next leg.
 Pilots can edit or withdraw pending requests. Scheduling admins amend, reassign,
 or cancel approved flights.
 
@@ -388,7 +389,8 @@ migration, OAuth registration, and scheduler provisioning are operator steps.
   aircraft-specific publishing/expired-lease isolation, Workbench safe-update
   mode, recovery from a partially applied optional-times migration, and
   flight-type migration defaults, constraints, persistence, amendment history,
-  untimed bookings on multiple aircraft, and serialized starts for shared pilots.
+  untimed bookings and independent starts on multiple aircraft, including shared
+  pilots, while retaining each aircraft's queue and completion checks.
   The test containers were removed afterward. These suites remain opt-in for normal
   test runs; rerun the command above when changing database or publishing logic.
 - Real IF OAuth/publishing was not exercised. No production migration, account
