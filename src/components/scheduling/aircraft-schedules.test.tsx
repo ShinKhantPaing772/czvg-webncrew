@@ -27,6 +27,7 @@ const select = vi.fn();
 const close = vi.fn();
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
   mocks.fetch.mockImplementation(async () => Response.json({ success: true, data: snapshot() }));
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
 });
@@ -42,6 +43,41 @@ function button(label: string) {
 async function load() { await act(async () => button("Load IF schedules").click()); }
 
 describe("aircraft IF schedule view", () => {
+  it.each([false, true])("offers explicit matching only to admins for a fresh external unfinished schedule (admin: %s)", async admin => {
+    mocks.fetch.mockImplementation(async () => Response.json({ success: true, data: snapshot({ publishingReady: false, matchingReady: true, schedules: [{ ...remote, status: 1, matchable: true }] }) }));
+    await render(admin, aircraft, [{ ...flight, if_schedule_id: null }]); await load();
+    expect(Boolean(button("Match to Crew Center flight"))).toBe(admin);
+    if (admin) {
+      expect(button("Match to Crew Center flight").disabled).toBe(false);
+      await act(async () => button("Match to Crew Center flight").click());
+      expect(document.body.textContent).toContain("Match Infinite Flight to a Crew Center flight");
+      expect(button("Confirm flight match").disabled).toBe(true);
+    }
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+  });
+  it("keeps a match recovery action available when an uncertain adoption already saved the IF binding", async () => {
+    mocks.fetch.mockImplementation(async () => Response.json({ success: true, data: snapshot({ matchingReady: true, schedules: [{ ...remote, id: "linked-schedule", status: 1, matchable: true, managedFlightId: flight.id, editable: false }] }) }));
+    await render(true, aircraft, [{ ...flight, publishing_state: "reconciliation" }]); await load();
+    expect(button("Review flight match").disabled).toBe(false);
+    await act(async () => button("Review flight match").click());
+    expect(Array.from(document.querySelectorAll("#if-match-flight option")).map(item => (item as HTMLOptionElement).value)).toEqual(["", String(flight.id)]);
+  });
+  it("retains stale IF data while requiring an explicit refresh before matching", async () => {
+    vi.useFakeTimers();
+    mocks.fetch.mockImplementation(async () => Response.json({ success: true, data: snapshot({ matchingReady: true, schedules: [{ ...remote, status: 1, matchable: true }] }) }));
+    await render(true, aircraft, [{ ...flight, if_schedule_id: null }]); await load();
+    await act(async () => vi.advanceTimersByTime(60000));
+    expect(button("Match to Crew Center flight").disabled).toBe(true);
+    expect(document.body.textContent).toContain("EXTERNAL8");
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+    await act(async () => button("Refresh IF schedules").click());
+    expect(button("Match to Crew Center flight").disabled).toBe(false);
+  });
+  it("blocks matching when binding writes are unavailable even while publishing readiness is reported", async () => {
+    mocks.fetch.mockImplementation(async () => Response.json({ success: true, data: snapshot({ publishingReady: true, matchingReady: false, schedules: [{ ...remote, status: 1, matchable: true }] }) }));
+    await render(true, aircraft, [{ ...flight, if_schedule_id: null }]); await load();
+    expect(button("Match to Crew Center flight").disabled).toBe(true);
+  });
   it.each([false, true])("hides rejected and cancelled local flights only for pilots (admin: %s)", async admin => {
     await render(admin, aircraft, [flight,
       { ...flight, id: 5, callsign: "REJECTED5", status: "rejected" },

@@ -5,8 +5,9 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FlightStatus, ScheduledFlight, SchedulingData } from "./types";
 
-const mocks = vi.hoisted(() => ({ scheduling: vi.fn() }));
-vi.mock("./use-scheduling", () => ({ useScheduling: mocks.scheduling, schedulingResponse: vi.fn() }));
+const mocks = vi.hoisted(() => ({ scheduling: vi.fn(), response: vi.fn(), refresh: vi.fn(), mutate: vi.fn(), fetch: vi.fn() }));
+vi.mock("./use-scheduling", () => ({ useScheduling: mocks.scheduling, schedulingResponse: mocks.response }));
+vi.mock("@/lib/utils/api", () => ({ authFetch: mocks.fetch }));
 vi.mock("@/components/crew-header", () => ({ CrewHeader: ({ children }: { children: ReactNode }) => children }));
 import { SchedulingWorkspace } from "./workspace";
 
@@ -27,8 +28,51 @@ beforeEach(() => {
     flights: [flight(1, "approved"), flight(2, "pending"), flight(3, "completed"), flight(4, "rejected"), flight(5, "cancelled")],
     pilotId: 1, canAdmin: false,
   };
-  mocks.scheduling.mockImplementation(() => ({ data, loading: false, refreshing: false, error: "", refresh: vi.fn(), mutate: vi.fn() }));
+  mocks.refresh.mockResolvedValue(undefined);
+  mocks.mutate.mockResolvedValue(undefined);
+  mocks.response.mockImplementation((response: Response) => response.json());
+  mocks.scheduling.mockImplementation(() => ({ data, loading: false, refreshing: false, error: "", refresh: mocks.refresh, mutate: mocks.mutate }));
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
+});
+
+describe("individual admin IF publishing", () => {
+  it("adds the individual publishing button after approving a linked flight and disables other actions while publishing", async () => {
+    data = { ...data, aircraft: data.aircraft.map(tail => ({ ...tail, if_aircraft_id: "if-aircraft" })), flights: [flight(2, "pending")] };
+    mocks.mutate.mockImplementation(async (input: Record<string, unknown>) => {
+      if (input.action === "approve") data = { ...data, flights: [{ ...data.flights[0], status: "approved", publishing_state: "queued" }] };
+    });
+    await render(true); await selectFlight("pending");
+    expect(button("Publish to IF")).toBeUndefined();
+    await act(async () => button("Approve flight").click());
+    await act(async () => button("Confirm").click());
+    expect(button("Publish to IF")).toBeDefined();
+    let resolvePublish!: (response: Response) => void;
+    mocks.fetch.mockImplementation(() => new Promise<Response>(resolve => { resolvePublish = resolve; }));
+    await act(async () => button("Publish to IF").click());
+    expect(button("Edit flight").disabled).toBe(true);
+    expect(button("Cancel flight").disabled).toBe(true);
+    expect(button("Change captain").disabled).toBe(true);
+    expect(mocks.fetch).toHaveBeenCalledWith("/api/admin/scheduling/if/publish", expect.objectContaining({ method: "POST", body: '{"flightId":2}' }));
+    await act(async () => resolvePublish(new Response(JSON.stringify({ success: true, data: { processed: 1, published: 1, disabled: false, flight: { id: 2, state: "published", message: "This flight’s latest approved schedule and crew are published to IF.", revision: 1, publishedRevision: 1 } } }))));
+    expect(mocks.refresh).toHaveBeenCalledTimes(1);
+    expect(document.body.textContent).toContain("This flight’s latest approved schedule and crew are published to IF.");
+    expect(button("Edit flight").disabled).toBe(false);
+  });
+  it("does not expose the admin publication action to pilots", async () => {
+    data = { ...data, aircraft: data.aircraft.map(tail => ({ ...tail, if_aircraft_id: "if-aircraft" })), flights: [flight(1, "approved")] };
+    await render(); await selectFlight("approved");
+    expect(button("Publish to IF")).toBeUndefined();
+  });
+  it.each(["pending", "in_progress", "completed", "needs_review", "cancelled", "rejected"] as FlightStatus[])("does not publish a %s flight from its details", async status => {
+    data = { ...data, aircraft: data.aircraft.map(tail => ({ ...tail, if_aircraft_id: "if-aircraft" })), flights: [flight(1, status)] };
+    await render(true); await filter("all"); await selectFlight(status);
+    expect(button("Publish to IF")).toBeUndefined();
+  });
+  it("does not offer IF publishing for an unlinked aircraft", async () => {
+    data = { ...data, flights: [flight(1, "approved")] };
+    await render(true); await filter("all"); await selectFlight("approved");
+    expect(button("Publish to IF")).toBeUndefined();
+  });
 });
 afterEach(async () => {
   await act(async () => root.unmount()); container.remove(); vi.resetAllMocks(); vi.unstubAllGlobals();
@@ -47,6 +91,22 @@ async function selectFlight(status: FlightStatus) {
 }
 
 describe("pilot scheduling visibility", () => {
+  it.each([false, true])("honors the saved unpublished-start policy for pilots while showing the publishing issue (allowed: %s)", async allowed => {
+    data = { ...data, aircraft: data.aircraft.map(tail => ({ ...tail, if_aircraft_id: "if-aircraft" })), configuration: { liveAwardConfigured: true, allowUnpublishedIfStarts: allowed }, flights: [{ ...flight(1, "approved"), publishing_state: "conflict" }] };
+    await render(); await selectFlight("approved");
+    expect(button("Start flight").disabled).toBe(!allowed);
+    if (allowed) {
+      expect(document.body.textContent).toContain("An admin has enabled local starts");
+      await act(async () => button("Start flight").click());
+      expect(document.body.textContent).toContain("The admin start policy skips IF publication and departure checks");
+    } else expect(document.body.textContent).toContain("must be published to IF before departure");
+  });
+  it("continues blocking departures from a different local airport when the IF start policy is enabled", async () => {
+    data = { ...data, aircraft: data.aircraft.map(tail => ({ ...tail, current_airport: "EGLL", if_aircraft_id: "if-aircraft" })), configuration: { liveAwardConfigured: true, allowUnpublishedIfStarts: true }, flights: [flight(1, "approved")] };
+    await render(); await selectFlight("approved");
+    expect(button("Start flight").disabled).toBe(true);
+    expect(document.body.textContent).toContain("The aircraft must reach CYYZ");
+  });
   it("shows the original request time with UTC seconds on cards and details separately from the planned departure", async () => {
     data = { ...data, flights: [{ ...flight(1, "approved"), scheduled_departure: "2026-10-05T18:00:00Z" }] };
     await render();

@@ -36,6 +36,7 @@ type TableName = "Pilot" | "Aircraft" | "AwardGranted" | "LiveAircraft" | "LiveF
 let rows: Record<TableName, Row[]>;
 let eligiblePilots: Set<number>;
 let ifAircraftLockFree: number | null;
+let startPolicyValue: string | null;
 const captain = { id: 1, admin: false };
 const administrator = { id: 9, admin: true };
 const transaction = { LOCK: { UPDATE: "UPDATE" } };
@@ -142,7 +143,8 @@ beforeEach(() => {
   for (const name of Object.keys(rows) as TableName[]) installTable(name);
   mocks.eligible.mockReset().mockImplementation(async id => eligiblePilots.has(id));
   ifAircraftLockFree = 1;
-  mocks.query.mockReset().mockImplementation(async (sql: string) => sql.includes("IS_FREE_LOCK") ? [{ available: ifAircraftLockFree }] : [{ name: "live_scheduling_mutex" }]);
+  startPolicyValue = null;
+  mocks.query.mockReset().mockImplementation(async (sql: string) => sql.startsWith("SELECT value FROM options") ? startPolicyValue == null ? [] : [{ value: startPolicyValue }] : sql.includes("IS_FREE_LOCK") ? [{ available: ifAircraftLockFree }] : [{ name: "live_scheduling_mutex" }]);
   mocks.transaction.mockReset().mockImplementation(async (_options, work) => {
     const before = structuredClone(rows);
     try { return await work(transaction); }
@@ -757,6 +759,68 @@ describe("start and completion policies", () => {
     rows.IfLiveConnection.push({ id: 1, organization_id: IF_ORGANIZATION, state: "connected", access_token_encrypted: "test-encrypted", connected_by: 9 });
     return row;
   }
+
+  it("allows an unpublished linked flight under the administrator's local-start policy without falsifying publication", async () => {
+    linkedFlight(); Object.assign(rows.LiveFlight[0], { publishing_state: "conflict", published_revision: 0 });
+    rows.IfLiveConnection = [];
+    startPolicyValue = JSON.stringify({ allowUnpublishedIfStarts: true });
+    await changeFlight(captain, { action: "start", flight_id: 1, allowUnpublishedIfStarts: false });
+    expect(rows.LiveFlight[0]).toMatchObject({ status: "in_progress", publishing_state: "conflict", published_revision: 0 });
+    expect(mocks.ifToken).not.toHaveBeenCalled(); expect(mocks.ifSchedules).not.toHaveBeenCalled();
+    expect(rows.LiveScheduleEvent[0].details).toMatchObject({ if_publication_bypassed: true });
+    expect((await schedulingSnapshot(captain)).configuration.allowUnpublishedIfStarts).toBe(true);
+  });
+
+  it("ignores a pilot-submitted start bypass when the persisted policy is disabled", async () => {
+    linkedFlight(); rows.LiveFlight[0].publishing_state = "queued";
+    await expect(changeFlight(captain, { action: "start", flight_id: 1, allowUnpublishedIfStarts: true })).rejects.toMatchObject({ status: 409 });
+    expect(rows.LiveFlight[0].status).toBe("approved");
+  });
+
+  it.each(["ownership", "award", "location", "queue", "occupation"])("preserves local %s checks while IF start checks are bypassed", async kind => {
+    linkedFlight(); startPolicyValue = JSON.stringify({ allowUnpublishedIfStarts: true });
+    let actor = captain;
+    if (kind === "ownership") actor = { id: 4, admin: false };
+    if (kind === "award") eligiblePilots.delete(1);
+    if (kind === "location") rows.LiveAircraft[0].current_airport = "KJFK";
+    if (kind === "queue" || kind === "occupation") {
+      rows.LiveFlight[0].queue_order = 2;
+      flight({ queue_order: 1, captain_id: 2, status: kind === "occupation" ? "in_progress" : "approved" });
+    }
+    await expect(changeFlight(actor, { action: "start", flight_id: 1 })).rejects.toMatchObject({ status: kind === "award" || kind === "ownership" ? 403 : 409 });
+    expect(rows.LiveFlight[0].status).toBe("approved"); expect(rows.LiveScheduleEvent).toHaveLength(0);
+    expect(mocks.ifToken).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when the bypass is disabled while an unpublished start waits for the mutex", async () => {
+    linkedFlight(); rows.LiveFlight[0].publishing_state = "queued";
+    startPolicyValue = JSON.stringify({ allowUnpublishedIfStarts: true });
+    const originalQuery = mocks.query.getMockImplementation()!;
+    mocks.query.mockImplementation(async (sql: string, ...args: unknown[]) => {
+      if (sql.includes("live_scheduling_mutex") && sql.includes("FOR UPDATE")) startPolicyValue = JSON.stringify({ allowUnpublishedIfStarts: false });
+      return originalQuery(sql, ...args);
+    });
+    await expect(changeFlight(captain, { action: "start", flight_id: 1 })).rejects.toMatchObject({ status: 409 });
+    expect(rows.LiveFlight[0].status).toBe("approved"); expect(rows.LiveScheduleEvent).toHaveLength(0);
+  });
+
+  it("requires a fresh departure check after disabling bypass even when an old IF revision was published", async () => {
+    linkedFlight(); startPolicyValue = JSON.stringify({ allowUnpublishedIfStarts: true });
+    const originalQuery = mocks.query.getMockImplementation()!;
+    mocks.query.mockImplementation(async (sql: string, ...args: unknown[]) => {
+      if (sql.includes("live_scheduling_mutex") && sql.includes("FOR UPDATE")) startPolicyValue = JSON.stringify({ allowUnpublishedIfStarts: false });
+      return originalQuery(sql, ...args);
+    });
+    await expect(changeFlight(captain, { action: "start", flight_id: 1 })).rejects.toThrow("changed during the departure check");
+    expect(rows.LiveFlight[0].status).toBe("approved"); expect(mocks.ifSchedules).not.toHaveBeenCalled();
+  });
+
+  it("restores required publication after the administrator disables local-only starts", async () => {
+    linkedFlight(); rows.LiveFlight[0].publishing_state = "queued";
+    startPolicyValue = JSON.stringify({ allowUnpublishedIfStarts: false });
+    await expect(changeFlight(captain, { action: "start", flight_id: 1 })).rejects.toMatchObject({ status: 409 });
+    expect(rows.LiveFlight[0].status).toBe("approved");
+  });
 
   it("blocks a locally published flight whose IF reservation was deleted", async () => {
     linkedFlight(); mocks.ifSchedules.mockResolvedValue([]);

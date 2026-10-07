@@ -26,6 +26,8 @@ export type RemoteSchedule = {
   managedFlightId?: number | null;
   editable?: boolean;
   editDisabledReason?: string | null;
+  matchable?: boolean;
+  matchDisabledReason?: string | null;
 };
 
 export function IfScheduleEditor({ aircraftId, schedule, onClose, onSave, onDenied }: {

@@ -32,7 +32,16 @@ describe("temporary IF schedule display and edit guards", () => {
     expect(toIfAircraftScheduleView({ ...remote, briefing: `[WNC schedule:${OTHER}]` }, [], true)).toMatchObject({ managedFlightId: null, editable: false });
   });
   it("does not expose write access in a pilot view", () => {
-    expect(toIfAircraftScheduleView(remote)).toMatchObject({ editable: false, editDisabledReason: expect.stringContaining("administrator") });
+    expect(toIfAircraftScheduleView(remote)).toMatchObject({ editable: false, editDisabledReason: expect.stringContaining("administrator"), matchable: false });
+  });
+  it("offers matching only for an external unstarted reservation or an approved local flight needing reconciliation", () => {
+    expect(toIfAircraftScheduleView(remote, [], true)).toMatchObject({ matchable: true, matchDisabledReason: null });
+    const local = { id: 23, public_id: OTHER, if_schedule_id: ID, status: "approved", publishing_state: "reconciliation" };
+    expect(toIfAircraftScheduleView(remote, [local], true)).toMatchObject({ matchable: true, editable: false });
+    expect(toIfAircraftScheduleView(remote, [{ ...local, publishing_state: "published" }], true).matchable).toBe(false);
+    expect(toIfAircraftScheduleView({ ...remote, briefing: `[WNC schedule:${OTHER}]` }, [], true).matchable).toBe(false);
+    expect(toIfAircraftScheduleView({ ...remote, status: 2 }, [], true).matchable).toBe(false);
+    expect(toIfAircraftScheduleView({ ...remote, actualDepartureUtc: "2026-10-06T10:00:00Z" }, [], true).matchable).toBe(false);
   });
   it("hides cancelled IF schedules from pilots without hiding arrived history", () => {
     expect(isIfScheduleVisibleToPilot({ ...remote, status: 9 }, [])).toBe(false);

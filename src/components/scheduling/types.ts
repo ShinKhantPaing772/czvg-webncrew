@@ -68,7 +68,7 @@ export type SchedulingData = {
   canAdmin: boolean;
   pilots?: SchedulingPilot[];
   catalog?: Array<{ id: number; name: string; liveryname?: string | null }>;
-  configuration?: { liveAwardConfigured: boolean };
+  configuration?: { liveAwardConfigured: boolean; allowUnpublishedIfStarts?: boolean };
 };
 
 export type FlightInput = {

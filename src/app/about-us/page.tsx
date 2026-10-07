@@ -92,31 +92,79 @@ export default function AboutPage() {
                 One group, one connected aviation network.
               </h2>
               <p className="site-copy mt-5">
-                Our virtual group represents the passenger and cargo airlines
-                within the China Southern Air Holding network.
+                Our virtual group represents the passenger, cargo, and general
+                aviation operations within the China Southern Air Holding network.
               </p>
             </div>
             <div className="mt-10 grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
               {groupAirlines.map((airline) => (
-                <article key={airline.name} className="site-card p-5">
-                  <div className="flex h-28 items-center justify-center rounded-md bg-slate-50 p-4">
-                    <Image
-                      src={airline.logo}
-                      alt={`${airline.name} logo`}
-                      width={180}
-                      height={90}
-                      className="h-20 w-full object-contain"
-                    />
+                <article
+                  key={airline.name}
+                  className={`site-card ${
+                    airline.regionalAirlines
+                      ? "p-6 sm:p-8 md:col-span-2 lg:col-span-3"
+                      : "p-5"
+                  }`}
+                >
+                  <div
+                    className={
+                      airline.regionalAirlines
+                        ? "grid gap-6 md:grid-cols-[240px_1fr] md:items-center"
+                        : ""
+                    }
+                  >
+                    <div
+                      className={`flex items-center justify-center rounded-md bg-slate-50 p-4 ${
+                        airline.regionalAirlines ? "h-40" : "h-28"
+                      }`}
+                    >
+                      <Image
+                        src={airline.logo}
+                        alt={`${airline.name} logo`}
+                        width={180}
+                        height={90}
+                        className="h-20 w-full object-contain"
+                      />
+                    </div>
+                    <div>
+                      <h3
+                        className={`font-bold text-slate-950 ${
+                          airline.regionalAirlines
+                            ? "text-2xl sm:text-3xl"
+                            : "mt-5 text-lg"
+                        }`}
+                      >
+                        {airline.planespottersUrl ? (
+                          <a
+                            href={airline.planespottersUrl}
+                            className="rounded-sm underline decoration-slate-300 underline-offset-4 transition-colors hover:text-primary hover:decoration-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-4"
+                          >
+                            {airline.name}
+                          </a>
+                        ) : (
+                          airline.name
+                        )}
+                      </h3>
+                      {airline.type === "cargo" && (
+                        <span className="site-badge mt-3">CARGO</span>
+                      )}
+                      <p className="mt-3 text-sm leading-6 text-slate-600">
+                        {airline.description}
+                      </p>
+                    </div>
                   </div>
-                  <h3 className="mt-5 text-lg font-bold text-slate-950">
-                    {airline.name}
-                  </h3>
-                  {airline.type === "cargo" && (
-                    <span className="site-badge mt-2">CARGO</span>
+                  {airline.regionalAirlines && (
+                    <div className="mt-6 border-t border-slate-200 pt-6">
+                      <h4 className="text-sm font-semibold text-slate-950">
+                        Regional airlines
+                      </h4>
+                      <ul className="mt-3 grid list-disc gap-x-8 gap-y-2 pl-5 text-sm leading-6 text-slate-600 sm:grid-cols-2">
+                        {airline.regionalAirlines.map((regionalAirline) => (
+                          <li key={regionalAirline}>{regionalAirline}</li>
+                        ))}
+                      </ul>
+                    </div>
                   )}
-                  <p className="mt-2 text-sm leading-6 text-slate-600">
-                    {airline.description}
-                  </p>
                 </article>
               ))}
             </div>

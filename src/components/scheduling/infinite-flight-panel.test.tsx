@@ -4,8 +4,8 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ fetch: vi.fn() }));
-vi.mock("@/lib/utils/api", () => ({ authFetch: mocks.fetch }));
+const mocks = vi.hoisted(() => ({ fetch: vi.fn(), settings: vi.fn() }));
+vi.mock("@/lib/utils/api", () => ({ authFetch: (path: string, options?: RequestInit) => path === "/api/admin/scheduling/settings" ? mocks.settings(path, options) : mocks.fetch(path, options) }));
 import { InfiniteFlightPanel } from "./infinite-flight-panel";
 import type { LiveAircraft, ScheduledFlight, SchedulingData } from "./types";
 
@@ -45,6 +45,7 @@ beforeEach(() => {
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
   window.history.replaceState(null, "", "/crew/admin/scheduling");
   mocks.fetch.mockImplementation(async () => Response.json({ success: true, data: ready }));
+  mocks.settings.mockImplementation(async () => Response.json({ success: true, data: { allowUnpublishedIfStarts: false } }));
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
 });
 afterEach(async () => {
@@ -79,6 +80,55 @@ function mockFleet(status = bindingReady, remote = remoteAircraft) {
 }
 
 describe("Infinite Flight organization linking", () => {
+  it("saves the admin start toggle only after the server confirms it and refreshes local flight permissions", async () => {
+    mocks.fetch.mockImplementation(async () => Response.json({ success: true, data: bindingReady }));
+    let release!: (response: Response) => void;
+    mocks.settings.mockImplementation(async (_path: string, options?: RequestInit) => options?.method === "PATCH"
+      ? new Promise<Response>(resolve => { release = resolve; })
+      : Response.json({ success: true, data: { allowUnpublishedIfStarts: false } }));
+    await render();
+    const toggle = document.getElementById("allow-unpublished-if-starts") as HTMLButtonElement;
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+    await act(async () => toggle.click());
+    expect(toggle.getAttribute("aria-checked")).toBe("false"); expect(toggle.disabled).toBe(true);
+    expect(mocks.settings).toHaveBeenCalledWith("/api/admin/scheduling/settings", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ allowUnpublishedIfStarts: true }) }));
+    await act(async () => release(Response.json({ success: true, data: { allowUnpublishedIfStarts: true } })));
+    expect(toggle.getAttribute("aria-checked")).toBe("true"); expect(toggle.disabled).toBe(false);
+    expect(refresh).toHaveBeenCalledOnce();
+    expect(container.textContent).toContain("without IF publication or IF departure checks");
+    expect(container.textContent).not.toContain("Linked aircraft flights must be published");
+  });
+
+  it("does not assume an uncertain start-policy update succeeded and permits a status refresh", async () => {
+    mocks.settings.mockImplementation(async (_path: string, options?: RequestInit) => options?.method === "PATCH"
+      ? Response.json({ success: false, error: "Unable to save start policy. Refresh status." }, { status: 503 })
+      : Response.json({ success: true, data: { allowUnpublishedIfStarts: false } }));
+    await render();
+    const toggle = document.getElementById("allow-unpublished-if-starts") as HTMLButtonElement;
+    await act(async () => toggle.click());
+    expect(toggle.getAttribute("aria-checked")).toBe("false"); expect(toggle.disabled).toBe(true);
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Unable to save start policy");
+    expect(refresh).not.toHaveBeenCalled();
+    await act(async () => button("Refresh status").click());
+    expect(toggle.disabled).toBe(false); expect(container.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it("can turn off the saved policy and keeps linked aircraft start warnings consistent", async () => {
+    let allowed = true;
+    mocks.fetch.mockImplementation(async () => Response.json({ success: true, data: bindingReady }));
+    mocks.settings.mockImplementation(async (_path: string, options?: RequestInit) => {
+      if (options?.method === "PATCH") allowed = false;
+      return Response.json({ success: true, data: { allowUnpublishedIfStarts: allowed } });
+    });
+    await render();
+    const toggle = document.getElementById("allow-unpublished-if-starts") as HTMLButtonElement;
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
+    await act(async () => toggle.click());
+    expect(mocks.settings).toHaveBeenCalledWith("/api/admin/scheduling/settings", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ allowUnpublishedIfStarts: false }) }));
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+    expect(container.textContent).toContain("Linked aircraft flights must be published to IF before they can start");
+  });
+
   it("allows OAuth linking while automatic publishing and durable bindings are disabled", async () => {
     await render();
     expect(button("Connect Infinite Flight").disabled).toBe(false);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, ExternalLink, Link2, Loader2, Plus, RefreshCw, Unplug } from "lucide-react";
 import { authFetch } from "@/lib/utils/api";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { LiveAircraft, ScheduledFlight, SchedulingData, SchedulingPilot } from "./types";
 import { AircraftEditor } from "./aircraft-editor";
 import { errorMessage, formatIfScheduleTimeRange, formatUtc, ifScheduleStatusLabel } from "./utils";
@@ -79,6 +80,77 @@ export function InfiniteFlightPanel({ aircraft, flights, pilots = [], catalog = 
   const [fleetLoadedAt, setFleetLoadedAt] = useState<string | null>(null);
   const [fleetStale, setFleetStale] = useState(false);
   const [inspectionStale, setInspectionStale] = useState(false);
+  const [allowUnpublishedIfStarts, setAllowUnpublishedIfStarts] = useState<boolean | null>(null);
+  const [settingsError, setSettingsError] = useState("");
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const settingsController = useRef<AbortController | null>(null);
+  const settingsGeneration = useRef(0);
+  const settingsBusy = useRef(false);
+  const mounted = useRef(true);
+
+  const loadSettings = useCallback(async () => {
+    const current = ++settingsGeneration.current;
+    settingsController.current?.abort();
+    const controller = new AbortController(); settingsController.current = controller;
+    const timeout = window.setTimeout(() => controller.abort(), 25000);
+    try {
+      const response = await authFetch("/api/admin/scheduling/settings", { cache: "no-store", signal: controller.signal });
+      if ([401, 403].includes(response.status) && mounted.current && current === settingsGeneration.current) {
+        setAllowUnpublishedIfStarts(null); setStatus(null); setRemoteAircraft([]); setFleetLoaded(false); setFleetLoadedAt(null); setInspection(null); setOrganizations([]); setRecovery(null); setCreationAircraft(null);
+      }
+      const result = await schedulingResponse(response);
+      if (typeof result?.data?.allowUnpublishedIfStarts !== "boolean") throw new Error("The start policy could not be verified. Refresh status to try again.");
+      if (mounted.current && current === settingsGeneration.current) {
+        setAllowUnpublishedIfStarts(result.data.allowUnpublishedIfStarts); setSettingsError("");
+      }
+    } catch (loadError) {
+      if (mounted.current && current === settingsGeneration.current) {
+        setAllowUnpublishedIfStarts(null);
+        setSettingsError(controller.signal.aborted ? "The start policy took too long to load. Refresh status to try again." : errorMessage(loadError));
+      }
+    } finally { window.clearTimeout(timeout); }
+  }, []);
+
+  const cancelSettings = useCallback(() => {
+    mounted.current = false; ++settingsGeneration.current; settingsController.current?.abort();
+  }, []);
+
+  useEffect(() => {
+    mounted.current = true;
+    void loadSettings();
+    return cancelSettings;
+  }, [loadSettings, cancelSettings]);
+
+  async function saveStartPolicy(allow: boolean) {
+    if (settingsBusy.current || allowUnpublishedIfStarts === null) return;
+    settingsBusy.current = true; setSettingsSaving(true); setSettingsError("");
+    const current = ++settingsGeneration.current;
+    settingsController.current?.abort();
+    const controller = new AbortController(); settingsController.current = controller;
+    const timeout = window.setTimeout(() => controller.abort(), 25000);
+    let verified = false;
+    try {
+      const response = await authFetch("/api/admin/scheduling/settings", { method: "PATCH", signal: controller.signal, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ allowUnpublishedIfStarts: allow }) });
+      if ([401, 403].includes(response.status) && mounted.current && current === settingsGeneration.current) {
+        setAllowUnpublishedIfStarts(null); setStatus(null); setRemoteAircraft([]); setFleetLoaded(false); setFleetLoadedAt(null); setInspection(null); setOrganizations([]); setRecovery(null); setCreationAircraft(null);
+      }
+      const result = await schedulingResponse(response);
+      if (typeof result?.data?.allowUnpublishedIfStarts !== "boolean") throw new Error("The saved start policy could not be verified. Refresh status before relying on it.");
+      if (!mounted.current || current !== settingsGeneration.current) return;
+      verified = true;
+      setAllowUnpublishedIfStarts(result.data.allowUnpublishedIfStarts);
+      setMessage(result.data.allowUnpublishedIfStarts ? "IF-linked flights can now start locally without IF publication or departure checks. Local scheduling checks still apply." : "IF-linked flights require the latest IF publication and departure checks before starting.");
+      await onRefresh();
+    } catch (saveError) {
+      if (mounted.current && current === settingsGeneration.current) {
+        if (!verified) setAllowUnpublishedIfStarts(null);
+        setSettingsError(controller.signal.aborted ? "The start policy update took too long. Refresh status to verify the saved policy." : errorMessage(saveError));
+      }
+    } finally {
+      window.clearTimeout(timeout); settingsBusy.current = false;
+      if (mounted.current && current === settingsGeneration.current) setSettingsSaving(false);
+    }
+  }
 
   const loadStatus = useCallback(async () => {
     const result = await ifRequest("status");
@@ -145,7 +217,8 @@ export function InfiniteFlightPanel({ aircraft, flights, pilots = [], catalog = 
   return <div className="space-y-4">
     {error && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
     {message && <p role="status" className="rounded-md border bg-muted/30 p-3 text-sm">{message}</p>}
-    <Card><CardContent className="space-y-4 p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><div className="flex flex-wrap items-center gap-2"><h2 className="font-semibold">Infinite Flight Live preview</h2><Badge variant={connected ? "default" : "secondary"}>{connectionLabel}</Badge></div><p className="mt-1 text-sm text-muted-foreground">Connect an IF organization admin account to publish approved flights and crew assignments.</p></div><Button variant="outline" size="sm" disabled={busy} onClick={() => void run(loadStatus)}><RefreshCw className="mr-2 h-4 w-4" />Refresh status</Button></div>
+    <Card><CardContent className="space-y-4 p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><div className="flex flex-wrap items-center gap-2"><h2 className="font-semibold">Infinite Flight Live preview</h2><Badge variant={connected ? "default" : "secondary"}>{connectionLabel}</Badge></div><p className="mt-1 text-sm text-muted-foreground">Connect an IF organization admin account to publish approved flights and crew assignments.</p></div><Button variant="outline" size="sm" disabled={busy || settingsSaving} onClick={() => void run(async () => { await Promise.all([loadStatus(), loadSettings()]); })}><RefreshCw className="mr-2 h-4 w-4" />Refresh status</Button></div>
+      <div className="space-y-2 rounded-md border bg-muted/20 p-4"><div className="flex items-center justify-between gap-4"><Label htmlFor="allow-unpublished-if-starts">Allow starts without IF publishing</Label><Switch id="allow-unpublished-if-starts" checked={allowUnpublishedIfStarts === true} disabled={busy || settingsSaving || allowUnpublishedIfStarts === null} aria-describedby="if-start-policy-description" onCheckedChange={allow => void saveStartPolicy(allow)} /></div><p id="if-start-policy-description" className="text-sm text-muted-foreground">{allowUnpublishedIfStarts === true ? "Enabled: linked aircraft can start locally without IF publication or IF departure checks. Approval, crew eligibility, the confirmed airport, and each aircraft’s queue still apply. IF publishing status remains visible." : allowUnpublishedIfStarts === false ? "Disabled: linked aircraft require their latest approved revision to be published and checked against IF before starting. Approval, crew eligibility, the confirmed airport, and each aircraft’s queue still apply." : "The saved start policy is being checked. Refresh status if it remains unavailable."}</p>{settingsSaving && <p role="status" className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" />Saving start policy…</p>}{settingsError && <p role="alert" className="text-sm text-destructive">{settingsError}</p>}</div>
       {status && (!status.configured || !connected) && <div className="space-y-3 rounded-md border bg-muted/20 p-4 text-sm"><div><h3 className="font-medium">OAuth connection setup</h3><p className="mt-1 text-muted-foreground">Configure the connection in your hosting environment, then authorize an IF organization owner or admin. Client secrets stay on the server.</p></div><ul className="grid gap-2 sm:grid-cols-2">{status.oauthSetup.checks.map((check) => <li key={check.id} className="flex items-center gap-2"><span className={"flex h-5 w-5 shrink-0 items-center justify-center rounded-full border " + (check.ready ? "border-green-600/30 bg-green-600/10 text-green-700 dark:text-green-400" : "text-muted-foreground")} aria-hidden="true">{check.ready ? <Check className="h-3 w-3" /> : "·"}</span><span>{check.label}{check.required === false && !check.ready ? <span className="text-muted-foreground">: optional — unavailable</span> : <span className="sr-only">{check.ready ? ": ready" : ": required"}</span>}</span></li>)}</ul><div className="space-y-1"><p className="text-muted-foreground">Registered callback</p><p className="break-all rounded-md border bg-background p-2 font-mono text-xs">{status.oauthSetup.callbackUrl || "https://YOUR_DOMAIN/oauth/callback"}</p><p className="text-xs text-muted-foreground">Start the connection on the website registered for this callback. Testing clients require IF-approved users; your pilots use the existing site login.</p></div><a className="inline-flex items-center gap-1 font-medium underline underline-offset-4" href="https://infiniteflight.com/guide/developer-reference/live-api/v3-oauth-live-preview#how-to-gain-access" target="_blank" rel="noreferrer">IF client setup and review<ExternalLink className="h-3 w-3" /></a></div>}
       {status?.connection?.state === "reauth_required" && <p role="status" className="text-sm text-muted-foreground">Authorization needs to be renewed. Disconnect this grant, then connect the organization admin account again.</p>}
       {status?.connection?.state === "access_suspended" && <p role="status" className="text-sm text-muted-foreground">The admin who connected this account lost scheduling access. Disconnect it, then have a scheduling admin connect again.</p>}
@@ -169,7 +242,7 @@ export function InfiniteFlightPanel({ aircraft, flights, pilots = [], catalog = 
       {fleetStale && <p role="status" className="text-sm text-amber-700 dark:text-amber-400">The IF fleet was last refreshed more than 15 minutes ago. Refresh it to check for changes.</p>}
       {!status?.bindingReady && <div className="space-y-2 text-sm text-muted-foreground"><p>Aircraft linking requires a connected organization and IF permission to save the aircraft identifiers. You can still add an unlinked aircraft for local scheduling.</p>{Boolean(status?.bindingDisabledReasons?.length) && <ul className="list-disc space-y-1 pl-4">{status?.bindingDisabledReasons?.map(reason => <li key={reason}>{reason}</li>)}</ul>}</div>}
       {status?.bindingReady && status.connection?.organizationId !== organizationId && <p className="text-sm text-muted-foreground">Save this organization before linking its aircraft.</p>}
-      {!status?.publishingReady && <p className="text-sm text-muted-foreground">Linked aircraft flights must be published to IF before they can start. Publishing is currently disabled; unlinked aircraft remain available for local scheduling.</p>}
+      {!status?.publishingReady && <p className="text-sm text-muted-foreground">{allowUnpublishedIfStarts === true ? "Publishing is currently disabled. The start policy permits linked aircraft to start locally without IF publication or departure checks." : allowUnpublishedIfStarts === false ? "Linked aircraft flights must be published to IF before they can start. Publishing is currently disabled; unlinked aircraft remain available for local scheduling." : "Publishing is currently disabled. Check the start policy above before starting a linked aircraft flight."}</p>}
       {fleetLoaded && !remoteAircraft.length && <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">This organization has no live aircraft.</p>}
       {remoteAircraft.length > 0 && <div className="space-y-3">{remoteAircraft.map((remote) => {
         const linked = aircraft.find(tail => tail.if_aircraft_id?.toLowerCase() === remote.id.toLowerCase());
@@ -207,7 +280,7 @@ export function InfiniteFlightPanel({ aircraft, flights, pilots = [], catalog = 
         </div>;
       })}</div>}
     </CardContent></Card>}
-    {creationAircraft && <AircraftEditor catalog={catalog} ifAircraft={{ id: creationAircraft.id, registration: creationAircraft.registration }} canLink={canBind && creationAircraft.isFleetActiveSlot} publishingReady={Boolean(status?.publishingReady)} onClose={() => setCreationAircraft(null)} onSave={async input => {
+    {creationAircraft && <AircraftEditor catalog={catalog} ifAircraft={{ id: creationAircraft.id, registration: creationAircraft.registration }} canLink={canBind && creationAircraft.isFleetActiveSlot} publishingReady={Boolean(status?.publishingReady)} allowUnpublishedIfStarts={allowUnpublishedIfStarts === true} onClose={() => setCreationAircraft(null)} onSave={async input => {
       await schedulingResponse(await authFetch("/api/admin/scheduling", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
       await onRefresh();
       setMessage(input.if_aircraft_id ? "Aircraft added to the local fleet and linked to Infinite Flight." : "Aircraft added to the local fleet for manual scheduling.");

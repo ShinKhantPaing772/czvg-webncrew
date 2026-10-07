@@ -15,6 +15,7 @@ import { withIfRequestBudget } from "./infinite-flight/request-budget";
 import type { AuthoredIfPayload, IfCrew } from "./infinite-flight/types";
 import type { IfLocalFlight, IfPublishedPayload } from "./infinite-flight/itinerary";
 import { DEFAULT_FLIGHT_TYPE, isFlightType } from "./flight-types";
+import { getSchedulingSettings } from "./settings";
 
 export type SchedulingActor = { id: number; admin: boolean };
 type Body = Record<string, unknown>;
@@ -207,7 +208,9 @@ async function prepareIfStart(actor: SchedulingActor, body: Body) {
   const aircraft = await LiveAircraft.findByPk(flight.live_aircraft_id);
   if (!aircraft) throw new SchedulingError("Live aircraft not found", 404);
   activeAircraft(aircraft);
+  const { allowUnpublishedIfStarts } = await getSchedulingSettings();
   if (!aircraft.if_aircraft_id) return null;
+  if (allowUnpublishedIfStarts) return { allowUnpublishedIfStarts: true as const };
   if (flight.publishing_state !== "published" || flight.published_revision !== flight.revision) throw new SchedulingError("Wait until this flight's latest schedule and crew are published to IF", 409);
   return withIfRequestBudget(20_000, async () => {
     const { token, connection } = await connectedIfAccount();
@@ -224,7 +227,7 @@ async function prepareIfStart(actor: SchedulingActor, body: Body) {
     ]);
     assertIfDepartureReady({ publicId: flight.public_id, remoteId: flight.if_schedule_id, aircraftId: aircraft.if_aircraft_id!, organizationId: connection.organization_id!,
       desired, schedules, position, airport: departureAirport, localFlights: localFlights.map(ifLocalFlight) });
-    return { checkedAt, signature: startSignature(flight, aircraft, catalog, connection, desired, localFlights) };
+    return { allowUnpublishedIfStarts: false as const, checkedAt, signature: startSignature(flight, aircraft, catalog, connection, desired, localFlights) };
   });
 }
 
@@ -277,6 +280,7 @@ export async function changeFlight(actor: SchedulingActor, body: Body) {
   return mutate(actor, body, async (transaction, aircraft, flight) => {
     if (!aircraft || !flight) throw new SchedulingError("Select a flight");
     const before = flightState(flight);
+    let ifPublicationBypassed = false;
     const reason = text(body.reason, 500, "Reason");
     if (["approve", "reject", "amend", "reassign", "cancel"].includes(action) && !actor.admin) throw new SchedulingError("Scheduling administrator access required", 403);
 
@@ -317,17 +321,21 @@ export async function changeFlight(actor: SchedulingActor, body: Body) {
       if (flights[0]?.id !== flight.id || flights.some(other => other.status === "in_progress")) throw new SchedulingError("Finish the aircraft's preceding flight first", 409);
       if (aircraft.current_airport !== flight.departure) throw new SchedulingError("Aircraft location must be confirmed at the departure airport", 409);
       await validateCrew(flight, transaction);
-      if (aircraft.if_aircraft_id && (flight.publishing_state !== "published" || flight.published_revision !== flight.revision)) throw new SchedulingError("Wait until this flight's latest schedule and crew are published to IF", 409);
-      if (aircraft.if_aircraft_id) {
+      // Re-read under the shared mutex, including after a bypass preparation.
+      // Disabling the policy while a start waits for locks immediately takes effect.
+      const { allowUnpublishedIfStarts } = await getSchedulingSettings(transaction);
+      ifPublicationBypassed = Boolean(aircraft.if_aircraft_id && allowUnpublishedIfStarts);
+      if (aircraft.if_aircraft_id && !allowUnpublishedIfStarts && (flight.publishing_state !== "published" || flight.published_revision !== flight.revision)) throw new SchedulingError("Wait until this flight's latest schedule and crew are published to IF", 409);
+      if (aircraft.if_aircraft_id && !allowUnpublishedIfStarts) {
         const catalog = await models.Aircraft.findByPk(aircraft.aircraft_id, { transaction, lock: transaction.LOCK.UPDATE });
         const connection = await IfLiveConnection.findByPk(1, { transaction, lock: transaction.LOCK.UPDATE });
         const payload = await localIfPayload(flight, transaction);
         const localFlights = await LiveFlight.findAll({ where: { live_aircraft_id: aircraft.id, status: ifItineraryStatuses }, transaction });
-        if (!startCheck || !catalog || !connection || Date.now() - startCheck.checkedAt > IF_START_CHECK_MAX_AGE_MS ||
+        if (!startCheck || startCheck.allowUnpublishedIfStarts || !catalog || !connection || Date.now() - startCheck.checkedAt > IF_START_CHECK_MAX_AGE_MS ||
             startCheck.signature !== startSignature(flight, aircraft, catalog, connection, payload, localFlights)) {
           throw new SchedulingError("The flight, aircraft, crew, or IF connection changed during the departure check; try starting again", 409);
         }
-      } else if (startCheck) throw new SchedulingError("The IF aircraft binding changed during the departure check; try starting again", 409);
+      } else if (!aircraft.if_aircraft_id && startCheck) throw new SchedulingError("The IF aircraft binding changed during the departure check; try starting again", 409);
       await flight.update({ status: "in_progress", actual_departure_at: new Date() }, { transaction });
     } else if (action === "complete") {
       requireCaptain(actor, flight); requireState(flight, "in_progress");
@@ -364,7 +372,8 @@ export async function changeFlight(actor: SchedulingActor, body: Body) {
         if (wasApproved || action === "approve_join") await bumpAndQueue(flight, aircraft, transaction);
       }
     } else throw new SchedulingError("Unknown scheduling action");
-    await event(aircraft, flight, actor, action, { reason, before, after: flightState(flight), actual_arrival: body.actual_arrival ?? null, member_id: body.member_id ?? null }, transaction);
+    await event(aircraft, flight, actor, action, { reason, before, after: flightState(flight), actual_arrival: body.actual_arrival ?? null, member_id: body.member_id ?? null,
+      ...(action === "start" ? { if_publication_bypassed: ifPublicationBypassed } : {}) }, transaction);
     return { flight_id: flight.id };
   });
 }
@@ -445,6 +454,7 @@ export async function changeAircraft(actor: SchedulingActor, body: Body) {
 }
 
 export async function schedulingSnapshot(actor: SchedulingActor) {
+  const settings = await getSchedulingSettings();
   const catalog = await models.Aircraft.findAll({ attributes: ["id", "name", "liveryname", "status"], raw: true });
   const pilots = await models.Pilot.findAll({ attributes: ["id", "name", "callsign", "ifuserid", "status"], raw: true });
   const awardId = livePilotAwardId();
@@ -477,6 +487,7 @@ export async function schedulingSnapshot(actor: SchedulingActor) {
   });
   return {
     aircraft, pilotId: actor.id, canAdmin: actor.admin,
+    configuration: { ...(actor.admin ? { liveAwardConfigured: Boolean(awardId) } : {}), ...settings },
     flights: visibleFlights.map(flight => {
       const crew = memberships.filter(member => member.flight_id === flight.id);
       const issues = [flight.captain_id, ...crew.filter(member => member.status === "approved").map(member => member.pilot_id)].filter(id => !pilotMap.get(id)?.eligible).map(id => `${pilotMap.get(id)?.name ?? "Pilot"} no longer has live pilot access`);
@@ -485,7 +496,7 @@ export async function schedulingSnapshot(actor: SchedulingActor) {
         members: crew.filter(member => actor.admin || actor.id === flight.captain_id || member.status === "approved" || member.pilot_id === actor.id).map(member => { const pilot = pilotMap.get(member.pilot_id); return { ...member, pilot: pilot && { id: pilot.id, name: pilot.name, callsign: pilot.callsign } }; }),
       };
     }),
-    ...(actor.admin ? { pilots: [...pilotMap.values()], catalog: catalog.filter(item => item.status === 1), configuration: { liveAwardConfigured: Boolean(awardId) } } : {}),
+    ...(actor.admin ? { pilots: [...pilotMap.values()], catalog: catalog.filter(item => item.status === 1) } : {}),
   };
 }
 

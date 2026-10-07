@@ -22,7 +22,7 @@ const NOW = Date.parse("2026-10-04T10:00:00Z");
 const aircraft = { id: 7, aircraft_id: 10, if_aircraft_id: REMOTE };
 const connection = { state: "connected", access_token_encrypted: "encrypted-token", connected_by: 42, organization_id: ORG };
 const schedule = {
-  id: SCHEDULE, aircraftId: REMOTE, organizationId: ORG, callsign: "WNC1", originIcao: "CYYZ", destinationIcao: "CYVR",
+  id: SCHEDULE, aircraftId: REMOTE, organizationId: ORG, callsign: "WNC1", flightType: 1, originIcao: "CYYZ", destinationIcao: "CYVR",
   scheduledDepartureUtc: "2026-10-05T10:00:00Z", scheduledArrivalUtc: "2026-10-05T15:00:00Z", status: 1,
   crew: [{ userId: CREW, role: 0, privateCrewField: "private-crew" }],
   briefing: "private-briefing", flightPlan: "private-plan", unknownProviderField: "private-provider", sequence: 1,
@@ -48,11 +48,13 @@ describe("temporary schedules for a locally bound aircraft", () => {
   it("reads fresh schedules without publishing permission, allowlists the response, and writes nothing", async () => {
     const result = await loadIfAircraftSchedules(7);
     expect(result).toEqual({
-      schedules: [{ id: SCHEDULE, callsign: "WNC1", originIcao: "CYYZ", destinationIcao: "CYVR", scheduledDepartureUtc: "2026-10-05T10:00:00.000Z",
+      schedules: [{ id: SCHEDULE, callsign: "WNC1", flightType: 1, originIcao: "CYYZ", destinationIcao: "CYVR", scheduledDepartureUtc: "2026-10-05T10:00:00.000Z",
         scheduledArrivalUtc: "2026-10-05T15:00:00.000Z", status: 1, crew: [{ userId: CREW, role: 0 }], sequence: 1,
-        fingerprint: expect.stringMatching(/^[0-9a-f]{64}$/), managedFlightId: null, editable: false, editDisabledReason: expect.stringContaining("administrator") }],
+        fingerprint: expect.stringMatching(/^[0-9a-f]{64}$/), managedFlightId: null, editable: false, editDisabledReason: expect.stringContaining("administrator"),
+        matchable: false, matchDisabledReason: expect.stringContaining("administrator") }],
       loadedAt: "2026-10-04T10:00:00.000Z", expiresAt: "2026-10-04T10:01:00.000Z", publishingReady: false,
       publishingDisabledReasons: expect.arrayContaining(["Automatic IF publishing is disabled", "Durable IF mapping retention has not been authorized"]),
+      matchingReady: false,
     });
     expect(mocks.fleet).toHaveBeenCalledWith("private-token", ORG, { fresh: true });
     expect(mocks.schedules).toHaveBeenCalledWith("private-token", REMOTE, { fresh: true });
@@ -67,6 +69,22 @@ describe("temporary schedules for a locally bound aircraft", () => {
     mocks.schedules.mockResolvedValue([]);
     await expect(loadIfAircraftSchedules(7)).resolves.toMatchObject({ schedules: [] });
     expect(mocks.position).not.toHaveBeenCalled();
+  });
+
+  it("permits manual matching for administrators with durable binding permission while automatic publishing is off", async () => {
+    vi.stubEnv("IF_LIVE_DURABLE_BINDINGS_ALLOWED", "true");
+    const admin = await loadIfAircraftSchedules(7, { admin: true });
+    expect(admin).toMatchObject({ publishingReady: false, matchingReady: true, schedules: [{ matchable: true }] });
+    const pilot = await loadIfAircraftSchedules(7);
+    expect(pilot).toMatchObject({ matchingReady: false, schedules: [{ matchable: false }] });
+  });
+
+  it("exposes a retry for an approved local flight awaiting uncertain match confirmation", async () => {
+    vi.stubEnv("IF_LIVE_DURABLE_BINDINGS_ALLOWED", "true");
+    mocks.flights.findAll.mockResolvedValue([{ id: 23, public_id: OTHER, if_schedule_id: SCHEDULE, status: "approved", publishing_state: "reconciliation" }]);
+    const result = await loadIfAircraftSchedules(7, { admin: true });
+    expect(result.schedules[0]).toMatchObject({ managedFlightId: 23, editable: false, matchable: true });
+    expect(mocks.flights.findAll).toHaveBeenCalledWith(expect.objectContaining({ attributes: expect.arrayContaining(["publishing_state"]) }));
   });
 
   it.each([undefined, { admin: false }, { admin: true }])("applies role-specific visibility while preserving app ownership for %j", async options => {

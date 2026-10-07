@@ -18,7 +18,11 @@ const LEASE_MS = 180_000;
 const CANDIDATE_BATCH_SIZE = 10;
 const MAX_CANDIDATE_BATCHES = 3;
 const REMOVAL_STATES = new Set(["cancelled", "rejected", "needs_review"]);
-export type IfPublishOptions = { aircraftId?: number };
+export type IfPublishOptions = { aircraftId?: number; flightId?: number };
+export type IfFlightPublishResult = {
+  id: number; state: "published" | "queued" | "processing" | "conflict" | "reconciliation" | "failed" | "blocked" | "disabled";
+  message: string; revision: number; publishedRevision: number; nextAttemptAt?: string;
+};
 
 async function mutationMutex(transaction: Transaction) {
   const rows = await sequelize.query<{ name: string }>("SELECT name FROM options WHERE name = 'live_scheduling_mutex' FOR UPDATE", { transaction, type: QueryTypes.SELECT });
@@ -162,10 +166,59 @@ async function publishClaimedJob(job: IfLiveOutbox) {
 
 /** Protected worker and admin endpoints share the same bounded, leased queue. */
 export async function runIfLivePublisher(options: IfPublishOptions = {}) {
-  if (options.aircraftId !== undefined && (!Number.isSafeInteger(options.aircraftId) || options.aircraftId <= 0)) {
-    throw new IfLiveError("Select a valid local aircraft", "validation", 400);
+  if ((options.aircraftId !== undefined && options.flightId !== undefined) ||
+      [options.aircraftId, options.flightId].some(value => value !== undefined && (!Number.isSafeInteger(value) || value <= 0 || value > 2_147_483_647))) {
+    throw new IfLiveError("Select either one valid local aircraft or one local flight", "validation", 400);
   }
-  return withIfRequestBudget(25_000, () => runBoundedIfLivePublisher(options));
+  return withIfRequestBudget(25_000, async () => {
+    if (options.flightId !== undefined) {
+      const flight = await LiveFlight.findByPk(options.flightId);
+      if (!flight) throw new IfLiveError("Local flight not found", "not_found", 404);
+      if (flight.status !== "approved") throw new IfLiveError("Only an approved flight can be published individually", "validation", 409);
+    }
+    const result = await runBoundedIfLivePublisher(options);
+    if (options.flightId === undefined) return result;
+    return { ...result, flight: await selectedFlightResult(options.flightId, result.disabled, "reasons" in result ? result.reasons : []) };
+  });
+}
+
+/** Explain the selected flight's current local state without processing its dependencies. */
+async function selectedFlightResult(flightId: number, disabled: boolean, reasons: string[] = []): Promise<IfFlightPublishResult> {
+  const flight = await LiveFlight.findByPk(flightId);
+  if (!flight) throw new IfLiveError("Local flight no longer exists; refresh schedules", "not_found", 404);
+  const result = (state: IfFlightPublishResult["state"], message: string, nextAttemptAt?: string): IfFlightPublishResult => ({
+    id: flightId, state, message, revision: flight.revision, publishedRevision: flight.published_revision,
+    ...(nextAttemptAt ? { nextAttemptAt } : {}),
+  });
+  if (flight.status !== "approved") return result("blocked", "This flight is no longer approved; refresh its schedule before publishing");
+  if (disabled) return result("disabled", reasons.join("; ") || "IF publishing is disabled");
+  if (flight.publishing_state === "published" && flight.published_revision === flight.revision) return result("published", "This flight's latest schedule and approved crew are published to IF");
+  const job = await IfLiveOutbox.findOne({ where: { flight_id: flight.id, revision: flight.revision } });
+  if (!job) return result("blocked", "This flight has no publishing job for its latest revision; amend or reapprove it before publishing");
+  if (job.state === "processing") return result("processing", "This flight is currently publishing; wait for confirmation before trying again");
+  if (job.state === "conflict" || job.state === "reconciliation" || job.state === "failed") {
+    const message = flight.error || job.error || (job.state === "conflict" ? "Review and resolve this flight's IF conflict before publishing" :
+      job.state === "reconciliation" ? "Reconcile this flight's uncertain IF result before publishing" : "Review this flight's publishing failure and retry its job");
+    return result(job.state, message);
+  }
+  if (job.state !== "queued") return result("blocked", "The publishing job finished without confirming this flight's latest revision; review and retry its publishing job");
+  if (job.attempts >= MAX_ATTEMPTS) return result("failed", "This flight reached the publishing retry limit; review the failure and explicitly retry its job");
+  if (job.next_attempt_at > new Date()) return result("queued", [flight.error || job.error,
+    "This flight is waiting for its retry time; try publishing after the displayed retry time"].filter(Boolean).join(". "), job.next_attempt_at.toISOString());
+  const predecessors = await LiveFlight.findAll({ where: { live_aircraft_id: flight.live_aircraft_id, status: "approved", queue_order: { [Op.lt]: flight.queue_order } }, attributes: ["id", "revision", "published_revision", "publishing_state"] });
+  if (predecessors.some(row => row.publishing_state !== "published" || row.published_revision !== row.revision) ||
+      (predecessors.length && await IfLiveOutbox.count({ where: { flight_id: { [Op.in]: predecessors.map(row => row.id) }, state: { [Op.ne]: "done" } } }) > 0)) {
+    return result("blocked", "Publish or repair the aircraft's preceding approved flights first; this button publishes only the selected flight");
+  }
+  const removals = await LiveFlight.findAll({ where: { live_aircraft_id: flight.live_aircraft_id, status: { [Op.in]: [...REMOVAL_STATES] } }, attributes: ["id"] });
+  if (removals.length && await IfLiveOutbox.count({ where: { flight_id: { [Op.in]: removals.map(row => row.id) }, state: { [Op.ne]: "done" } } }) > 0) {
+    return result("blocked", "Resolve the aircraft's pending IF cancellations or invalidated reservations first; this button publishes only the selected flight");
+  }
+  const available = await sequelize.query<{ available: number | null }>("SELECT IS_FREE_LOCK(:lockName) AS available", {
+    replacements: { lockName: `wnc_if_aircraft_${flight.live_aircraft_id}` }, type: QueryTypes.SELECT,
+  });
+  if (available[0]?.available !== null && Number(available[0]?.available) === 0) return result("processing", "This aircraft is publishing or being edited; wait and try this flight again");
+  return result("queued", "This flight remains queued; refresh its publishing status and try again");
 }
 
 async function publishCandidates(attemptedIds: number[], options: IfPublishOptions) {
@@ -182,6 +235,7 @@ async function publishCandidates(attemptedIds: number[], options: IfPublishOptio
       AND pending.next_attempt_at <= :now
       AND pending.attempts < :maxAttempts
       ${options.aircraftId === undefined ? "" : "AND current_flight.live_aircraft_id = :aircraftId"}
+      ${options.flightId === undefined ? "" : "AND current_flight.id = :flightId AND current_flight.status = 'approved'"}
       ${attemptedIds.length ? "AND pending.id NOT IN (:attemptedIds)" : ""}
       AND IS_FREE_LOCK(CONCAT('wnc_if_aircraft_', current_flight.live_aircraft_id)) = 1
       AND (
@@ -223,7 +277,7 @@ async function publishCandidates(attemptedIds: number[], options: IfPublishOptio
       )
     ORDER BY pending.created_at ASC, pending.id ASC
     LIMIT :limit
-  `, { model: IfLiveOutbox, mapToModel: true, replacements: { now: new Date(), maxAttempts: MAX_ATTEMPTS, limit: CANDIDATE_BATCH_SIZE, attemptedIds: [...attemptedIds], aircraftId: options.aircraftId } });
+  `, { model: IfLiveOutbox, mapToModel: true, replacements: { now: new Date(), maxAttempts: MAX_ATTEMPTS, limit: CANDIDATE_BATCH_SIZE, attemptedIds: [...attemptedIds], aircraftId: options.aircraftId, flightId: options.flightId } });
 }
 
 async function runBoundedIfLivePublisher(options: IfPublishOptions) {
@@ -231,18 +285,20 @@ async function runBoundedIfLivePublisher(options: IfPublishOptions) {
   if (!config.publishingReady) return { processed: 0, published: 0, disabled: true, reasons: config.publishingDisabledReasons };
   requireIfLiveConfig(true);
   // A crashed lease may have sent POST. Require reconciliation rather than automatically resending it.
-  const expired = options.aircraftId === undefined
+  const expired = options.aircraftId === undefined && options.flightId === undefined
     ? await IfLiveOutbox.findAll({ where: { state: "processing", lease_until: { [Op.lt]: new Date() } }, limit: 20 })
     : await sequelize.query<IfLiveOutbox>(`
       SELECT /*+ MAX_EXECUTION_TIME(${Math.min(5000, Math.max(1, Math.floor(ifBudgetRemainingMs() - 750)))}) */ expired.* FROM if_live_outbox AS expired
       INNER JOIN live_flights AS scoped_flight ON scoped_flight.id = expired.flight_id
       WHERE expired.state = 'processing' AND expired.lease_until < :now
-        AND scoped_flight.live_aircraft_id = :aircraftId
+        ${options.aircraftId === undefined ? "" : "AND scoped_flight.live_aircraft_id = :aircraftId"}
+        ${options.flightId === undefined ? "" : "AND scoped_flight.id = :flightId"}
       ORDER BY expired.id ASC LIMIT 20
-    `, { model: IfLiveOutbox, mapToModel: true, replacements: { now: new Date(), aircraftId: options.aircraftId } });
+    `, { model: IfLiveOutbox, mapToModel: true, replacements: { now: new Date(), aircraftId: options.aircraftId, flightId: options.flightId } });
   for (const job of expired) {
     await sequelize.transaction(async transaction => {
       await mutationMutex(transaction);
+      if (options.flightId !== undefined && job.flight_id !== options.flightId) return;
       if (options.aircraftId !== undefined) {
         const currentFlight = await LiveFlight.findByPk(job.flight_id, { transaction });
         if (currentFlight?.live_aircraft_id !== options.aircraftId) return;
@@ -262,8 +318,10 @@ async function runBoundedIfLivePublisher(options: IfPublishOptions) {
     for (const candidate of candidates) {
       if (processed >= 2 || ifBudgetRemainingMs() < 1000) break;
       attemptedIds.push(candidate.id);
+      if (options.flightId !== undefined && candidate.flight_id !== options.flightId) continue;
       const flight = await LiveFlight.findByPk(candidate.flight_id); if (!flight) { await candidate.update({ state: "done" }); continue; }
       if (options.aircraftId !== undefined && flight.live_aircraft_id !== options.aircraftId) continue;
+      if (options.flightId !== undefined && (flight.id !== options.flightId || flight.status !== "approved")) continue;
       const lockName = `wnc_if_aircraft_${flight.live_aircraft_id}`;
       // A transaction pins the advisory lock to one pooled MySQL connection. No aircraft row lock is held during HTTP calls.
       const lockTransaction = await sequelize.transaction(); let acquired = false;
@@ -274,8 +332,10 @@ async function runBoundedIfLivePublisher(options: IfPublishOptions) {
           await mutationMutex(transaction);
           const job = await IfLiveOutbox.findByPk(candidate.id, { transaction, lock: transaction.LOCK.UPDATE });
           if (!job || job.state !== "queued" || job.next_attempt_at > new Date() || job.attempts >= MAX_ATTEMPTS) return null;
+          if (options.flightId !== undefined && job.flight_id !== options.flightId) return null;
           const currentFlight = await LiveFlight.findByPk(job.flight_id, { transaction });
           if (currentFlight && options.aircraftId !== undefined && currentFlight.live_aircraft_id !== options.aircraftId) return null;
+          if (options.flightId !== undefined && (!currentFlight || currentFlight.id !== options.flightId || currentFlight.status !== "approved")) return null;
           if (!currentFlight || currentFlight.revision !== job.revision || !["approved", ...REMOVAL_STATES].includes(currentFlight.status)) {
             await job.update({ state: "done", lease_until: null }, { transaction });
             return null;

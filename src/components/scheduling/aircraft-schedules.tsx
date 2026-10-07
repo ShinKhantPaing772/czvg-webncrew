@@ -1,22 +1,24 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Loader2, LockKeyhole, Pencil, RefreshCw, Send } from "lucide-react";
+import { Link2, Loader2, LockKeyhole, Pencil, RefreshCw, Send } from "lucide-react";
 import { authFetch } from "@/lib/utils/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import type { LiveAircraft, ScheduledFlight } from "./types";
+import type { LiveAircraft, ScheduledFlight, SchedulingPilot } from "./types";
 import { schedulingResponse } from "./use-scheduling";
 import { crewCount, errorMessage, formatIfScheduleTimeRange, formatRequestTime, formatUtc, ifScheduleStatusLabel, publishingLabel, statusLabels } from "./utils";
 import { IfScheduleEditor, type RemoteSchedule } from "./if-schedule-editor";
 import { flightTypeLabel, ifFlightTypeLabel } from "@/lib/scheduling/flight-types";
+import { IfScheduleMatchDialog } from "./if-schedule-match-dialog";
 
 type AircraftIfSchedules = {
   schedules: RemoteSchedule[];
   loadedAt: string;
   expiresAt: string;
   publishingReady: boolean;
+  matchingReady?: boolean;
   publishingDisabledReasons: string[];
 };
 
@@ -28,9 +30,10 @@ function newestSchedulesFirst(schedules: RemoteSchedule[]) {
   return reversed.map(schedule => typeof schedule.sequence === "number" && Number.isFinite(schedule.sequence) ? sequenced[cursor++] : schedule);
 }
 
-export function AircraftSchedulesDialog({ aircraft, flights, admin, onClose, onSelect, onRefresh }: {
+export function AircraftSchedulesDialog({ aircraft, flights, pilots = [], admin, onClose, onSelect, onRefresh }: {
   aircraft: LiveAircraft;
   flights: ScheduledFlight[];
+  pilots?: SchedulingPilot[];
   admin: boolean;
   onClose: () => void;
   onSelect: (flight: ScheduledFlight) => void;
@@ -40,6 +43,7 @@ export function AircraftSchedulesDialog({ aircraft, flights, admin, onClose, onS
   const [loading, setLoading] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [editing, setEditing] = useState<RemoteSchedule | null>(null);
+  const [matching, setMatching] = useState<RemoteSchedule | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [stale, setStale] = useState(false);
@@ -69,12 +73,12 @@ export function AircraftSchedulesDialog({ aircraft, flights, admin, onClose, onS
       const path = admin ? "/api/admin/scheduling/if/schedules" : "/api/scheduling/if/schedules";
       const response = await authFetch(`${path}?aircraftId=${aircraft.id}`, { cache: "no-store", signal: next.signal });
       if (mounted.current && current === generation.current && [401, 403].includes(response.status)) {
-        setSnapshot(null); setEditing(null); setStale(false);
+        setSnapshot(null); setEditing(null); setMatching(null); setStale(false);
       }
       if (!response.ok && response.status === 409) {
         const failure = await response.clone().json().catch(() => null);
         if (["binding", "connection_changed"].includes(failure?.code) && mounted.current && current === generation.current) {
-          setSnapshot(null); setEditing(null); setStale(false);
+          setSnapshot(null); setEditing(null); setMatching(null); setStale(false);
         }
       }
       const result = await schedulingResponse(response);
@@ -98,7 +102,7 @@ export function AircraftSchedulesDialog({ aircraft, flights, admin, onClose, onS
   useEffect(() => {
     mounted.current = true;
     ++scope.current;
-    setSnapshot(null); setError(""); setMessage(""); setStale(false); setPublishing(false); setLoading(false); setEditing(null);
+    setSnapshot(null); setError(""); setMessage(""); setStale(false); setPublishing(false); setLoading(false); setEditing(null); setMatching(null);
     return cancelRequests;
   }, [linked, aircraft.if_aircraft_id, aircraft.aircraft_id, load, cancelRequests]);
 
@@ -133,7 +137,7 @@ export function AircraftSchedulesDialog({ aircraft, flights, admin, onClose, onS
   }
 
   return <>
-    <Dialog open onOpenChange={open => { if (!open && !publishing && !editing) onClose(); }}>
+    <Dialog open onOpenChange={open => { if (!open && !publishing && !editing && !matching) onClose(); }}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>{aircraft.registration} · Aircraft schedules</DialogTitle>
@@ -152,7 +156,7 @@ export function AircraftSchedulesDialog({ aircraft, flights, admin, onClose, onS
           </button>)}
         </section>
         <section className="space-y-3 border-t pt-4" aria-label="Infinite Flight schedules">
-          <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold">Infinite Flight schedules</h3>{linked && <Button variant="outline" size="sm" disabled={loading || publishing || Boolean(editing)} onClick={() => void load()}><RefreshCw className={"mr-2 h-4 w-4 " + (loading ? "animate-spin" : "")} />{snapshot ? "Refresh IF schedules" : "Load IF schedules"}</Button>}</div>
+          <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold">Infinite Flight schedules</h3>{linked && <Button variant="outline" size="sm" disabled={loading || publishing || Boolean(editing) || Boolean(matching)} onClick={() => void load()}><RefreshCw className={"mr-2 h-4 w-4 " + (loading ? "animate-spin" : "")} />{snapshot ? "Refresh IF schedules" : "Load IF schedules"}</Button>}</div>
           {!linked ? <p className="text-sm text-muted-foreground">This aircraft uses local scheduling. An admin can link it to an IF aircraft to load its schedules.</p> : <>
             {loading && <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading IF schedules…</p>}
             {!snapshot && !loading && <p className="text-sm text-muted-foreground">Select Load IF schedules to request the aircraft’s current itinerary.</p>}
@@ -166,14 +170,16 @@ export function AircraftSchedulesDialog({ aircraft, flights, admin, onClose, onS
                   <p className="text-xs text-muted-foreground">{formatIfScheduleTimeRange(schedule.scheduledDepartureUtc, schedule.scheduledArrivalUtc)}</p>
                   <p className="text-xs text-muted-foreground">{ifFlightTypeLabel(schedule.flightType)} · {schedule.crew.length} assigned crew · {schedule.crew.some(member => member.role === 0) ? "Captain assigned" : "No captain assigned"} · {managed || schedule.managedFlightId ? "Linked to Crew Center" : "No local flight link"}{typeof schedule.sequence === "number" ? ` · Queue position ${schedule.sequence}` : ""}</p>
                   {schedule.status === 11 || schedule.editDisabledReason === "Arrived flights are locked" ? <p className="flex items-center gap-1 text-xs text-muted-foreground"><LockKeyhole className="h-3 w-3" />Arrived flights are locked.</p> : admin && !managed && !schedule.managedFlightId && !schedule.editable && <p className="text-xs text-muted-foreground">{schedule.editDisabledReason || "This IF flight cannot be edited in its current state."}</p>}
+                  {admin && schedule.status === 1 && schedule.matchable === false && schedule.matchDisabledReason && schedule.matchDisabledReason !== schedule.editDisabledReason && <p className="text-xs text-muted-foreground">{schedule.matchDisabledReason}</p>}
                   <div className="flex flex-wrap gap-3">
                     {managed && <Button variant="link" size="sm" className="h-auto p-0" disabled={publishing} onClick={() => onSelect(managed)}>{admin && schedule.status !== 11 ? "View or amend local flight" : "View local flight"}</Button>}
                     {admin && !managed && !schedule.managedFlightId && schedule.editable && schedule.fingerprint && schedule.status !== 11 && <Button variant="outline" size="sm" disabled={loading || publishing} onClick={() => setEditing(schedule)}><Pencil className="mr-2 h-4 w-4" />Edit IF schedule</Button>}
+                    {admin && schedule.matchable && schedule.fingerprint && schedule.status === 1 && <Button variant="outline" size="sm" disabled={loading || publishing || stale || !(snapshot.matchingReady ?? (snapshot.publishingReady || schedule.editable)) || !localFlights.some(flight => flight.status === "approved" && (!flight.if_schedule_id || flight.if_schedule_id.toLowerCase() === schedule.id.toLowerCase()) && (!schedule.managedFlightId || flight.id === schedule.managedFlightId))} onClick={() => setMatching(schedule)}><Link2 className="mr-2 h-4 w-4" />{managed || schedule.managedFlightId ? "Review flight match" : "Match to Crew Center flight"}</Button>}
                   </div>
                 </div>;
               }) : <p className="text-sm text-muted-foreground">No schedules returned by IF.</p>}
               {admin && <div className="space-y-2 rounded-md border bg-muted/20 p-3">
-                <p className="text-sm text-muted-foreground">Publish approved flights and crew changes queued for this aircraft. Edit an unfinished external IF flight using its edit button; Crew Center flights use local amendments.</p>
+                <p className="text-sm text-muted-foreground">Publish approved flights and crew changes queued for this aircraft. If an external IF schedule describes the same approved local flight, review and confirm a match before publishing. Edit other unfinished external IF flights using their edit button; Crew Center flights use local amendments.</p>
                 {!snapshot.publishingReady && <ul className="list-disc pl-4 text-xs text-muted-foreground">{snapshot.publishingDisabledReasons?.map(reason => <li key={reason}>{reason}</li>)}</ul>}
                 <Button disabled={publishing || loading || !snapshot.publishingReady} onClick={() => void publish()}>{publishing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}Publish queued flights</Button>
               </div>}
@@ -185,6 +191,12 @@ export function AircraftSchedulesDialog({ aircraft, flights, admin, onClose, onS
     {editing && admin && <IfScheduleEditor key={`${aircraft.id}:${editing.id}:${editing.fingerprint}`} aircraftId={aircraft.id} schedule={editing} onClose={() => setEditing(null)} onDenied={() => { setSnapshot(null); setEditing(null); }} onSave={saved => {
       setSnapshot(current => current ? { ...current, schedules: current.schedules.map(schedule => schedule.id === saved.id ? saved : schedule) } : null);
       setEditing(null); setStale(true); setMessage("IF schedule updated. Refresh IF schedules to check the full aircraft queue.");
+    }} />}
+    {matching && admin && snapshot && <IfScheduleMatchDialog key={`${aircraft.id}:${matching.id}:${matching.fingerprint}`} aircraft={aircraft} schedule={matching} flights={localFlights} pilots={pilots} loadedAt={snapshot.loadedAt} stale={stale} onClose={() => setMatching(null)} onDenied={() => { setSnapshot(null); setMatching(null); }} onStale={() => setStale(true)} onMatched={async () => {
+      const currentScope = scope.current;
+      setMatching(null); setStale(true); setMessage("Flight matched. Crew Center now manages this existing IF schedule. Approved crew synchronization is queued and runs when IF publishing is enabled; refresh IF schedules to check its current plan.");
+      try { await onRefresh(); }
+      catch (refreshError) { if (mounted.current && currentScope === scope.current) setError("Flight matched, but local flights could not be refreshed: " + errorMessage(refreshError)); }
     }} />}
   </>;
 }

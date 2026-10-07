@@ -26,13 +26,14 @@ describe.skipIf(!suppliedUrl)("MySQL live scheduling transaction concurrency", (
   let base: typeof import("@/lib/models").models;
   let live: typeof import("./models");
   let service: typeof import("./service");
+  let settings: typeof import("./settings");
   let mayCleanUp = false;
   let migratedQueue: Array<{ id: number; queue_order: number | null }>;
   let migratedTypes: Array<{ id: number; flight_type: string }>;
   const captain = { id: 1, admin: false };
   const administrator = { id: 9, admin: true };
   const at = (hour: number) => new Date(`2026-10-02T${String(hour).padStart(2, "0")}:00:00Z`);
-  const tables = ["if_live_outbox", "live_schedule_events", "live_flight_members", "live_flights", "live_aircraft", "if_live_connections", "awards_granted", "awards", "aircraft", "pilots", "options"];
+  const tables = ["if_live_outbox", "live_schedule_events", "live_flight_members", "live_flights", "live_aircraft", "if_live_connections", "awards_granted", "awards", "aircraft", "permissions", "pilots", "options"];
   const migrationTables = ["live_flights_migration_full", "live_flights_migration_repair", "live_flights_migration_types"];
   const createdMigrationTables = new Set<string>();
 
@@ -53,6 +54,7 @@ describe.skipIf(!suppliedUrl)("MySQL live scheduling transaction concurrency", (
     base = (await import("@/lib/models")).models;
     live = await import("./models");
     service = await import("./service");
+    settings = await import("./settings");
     vi.stubEnv("LIVE_PILOT_AWARD_ID", "7");
     vi.stubEnv("IF_LIVE_AUTO_PUBLISH_ENABLED", "false");
     mayCleanUp = true;
@@ -77,6 +79,10 @@ describe.skipIf(!suppliedUrl)("MySQL live scheduling transaction concurrency", (
         id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, pilotid INT NOT NULL, awardid INT NOT NULL,
         dateawarded DATE NOT NULL, UNIQUE KEY pilot_award (pilotid, awardid),
         FOREIGN KEY (pilotid) REFERENCES pilots(id), FOREIGN KEY (awardid) REFERENCES awards(id)
+      ) ENGINE=InnoDB;
+      CREATE TABLE permissions (
+        id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, name VARCHAR(120) NOT NULL,
+        userid INT NOT NULL, FOREIGN KEY (userid) REFERENCES pilots(id)
       ) ENGINE=InnoDB;
     `);
     const migration = await readFile(new URL("../../../migrations/20261002_live_scheduling.sql", import.meta.url), "utf8");
@@ -112,11 +118,13 @@ describe.skipIf(!suppliedUrl)("MySQL live scheduling transaction concurrency", (
 
   beforeEach(async () => {
     for (const table of tables.filter(name => name !== "options")) await database.query(`DELETE FROM \`${table}\``);
+    await database.query("DELETE FROM options WHERE name = :name", { replacements: { name: "live_scheduling_allow_unpublished_if_starts" } });
     await base.Pilot.bulkCreate([1, 2, 3, 4, 5, 9].map(id => ({
       id, name: `Test Pilot ${id}`, callsign: `TEST${id}`, ifc: `test${id}`,
       email: `pilot${id}@example.com`, password: "unused-test-password", status: 1,
     })));
     await base.Award.create({ id: 7, name: "Live Pilot", description: "Test gate", imageurl: "https://example.com/award.png" });
+    await base.Permission.create({ userid: 9, name: "scheduling" });
     await base.AwardGranted.bulkCreate([1, 2, 3, 4, 5].map(pilotid => ({ pilotid, awardid: 7, dateawarded: new Date() })));
     await base.Aircraft.create({ id: 1, name: "Test A350", status: 1 });
     await live.LiveAircraft.bulkCreate([
@@ -494,5 +502,68 @@ describe.skipIf(!suppliedUrl)("MySQL live scheduling transaction concurrency", (
     expect((await live.LiveFlightMember.findByPk(crew.id))?.status).toBe("approved");
     expect(await live.LiveScheduleEvent.count()).toBe(0);
     expect(await live.IfLiveOutbox.count()).toBe(0);
+  });
+
+  it("persists a local-start policy and preserves publication history when starting a linked aircraft", async () => {
+    const schedule = await flight({ publishing_state: "conflict" });
+    await live.LiveAircraft.update({ if_aircraft_id: randomUUID() }, { where: { id: 1 } });
+    await expect(service.changeFlight(captain, { action: "start", flight_id: schedule.id })).rejects.toMatchObject({ status: 409 });
+    await settings.changeSchedulingSettings(9, { allowUnpublishedIfStarts: true });
+    expect((await service.schedulingSnapshot(captain)).configuration.allowUnpublishedIfStarts).toBe(true);
+    await service.changeFlight(captain, { action: "start", flight_id: schedule.id });
+    expect((await live.LiveFlight.findByPk(schedule.id))?.toJSON()).toMatchObject({ status: "in_progress", publishing_state: "conflict", published_revision: 0 });
+    expect((await live.LiveScheduleEvent.findOne({ where: { flight_id: schedule.id, action: "start" } }))?.toJSON()).toMatchObject({ details: { if_publication_bypassed: true } });
+  });
+
+  it("rejects a pilot attempting to change the start policy without administrator permission", async () => {
+    await expect(settings.changeSchedulingSettings(1, { allowUnpublishedIfStarts: true })).rejects.toMatchObject({ status: 403 });
+    expect(await settings.getSchedulingSettings()).toEqual({ allowUnpublishedIfStarts: false });
+  });
+
+  it("rechecks a disabling policy committed before a waiting bypass start gets the scheduling mutex", async () => {
+    const schedule = await flight({ publishing_state: "queued" });
+    await live.LiveAircraft.update({ if_aircraft_id: randomUUID() }, { where: { id: 1 } });
+    await settings.changeSchedulingSettings(9, { allowUnpublishedIfStarts: true });
+    let locked!: () => void;
+    let release!: () => void;
+    let firstAttempt!: () => void;
+    let secondAttempt!: () => void;
+    const lockReady = new Promise<void>(resolve => { locked = resolve; });
+    const allowCommit = new Promise<void>(resolve => { release = resolve; });
+    const disablingAttempted = new Promise<void>(resolve => { firstAttempt = resolve; });
+    const startingAttempted = new Promise<void>(resolve => { secondAttempt = resolve; });
+    const blocker = database.transaction(async transaction => {
+      await database.query("SELECT name FROM options WHERE name = 'live_scheduling_mutex' FOR UPDATE", { transaction, type: QueryTypes.SELECT });
+      locked(); await allowCommit;
+    });
+    void blocker.catch(() => locked());
+    await lockReady;
+    const original = database.query.bind(database);
+    let lockAttempts = 0;
+    const observer = vi.spyOn(database, "query").mockImplementation(((sql: string, options: unknown) => {
+      if (typeof sql === "string" && sql.includes("live_scheduling_mutex") && sql.includes("FOR UPDATE")) {
+        if (++lockAttempts === 1) firstAttempt(); else secondAttempt();
+      }
+      return original(sql, options as any);
+    }) as typeof database.query);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<void>((_resolve, reject) => { timer = setTimeout(() => reject(new Error("Policy/start never attempted the held scheduling mutex")), 3_000); });
+    const disabling = settings.changeSchedulingSettings(9, { allowUnpublishedIfStarts: false });
+    void disabling.catch(() => {});
+    let starting: ReturnType<typeof service.changeFlight> | undefined;
+    try {
+      await Promise.race([disablingAttempted, timeout]);
+      starting = service.changeFlight(captain, { action: "start", flight_id: schedule.id });
+      void starting.catch(() => {});
+      await Promise.race([startingAttempted, timeout]);
+      release(); await blocker; await disabling;
+      await expect(starting).rejects.toMatchObject({ status: 409 });
+      expect((await live.LiveFlight.findByPk(schedule.id))?.status).toBe("approved");
+      expect(await live.LiveScheduleEvent.count({ where: { flight_id: schedule.id, action: "start" } })).toBe(0);
+    } finally {
+      if (timer) clearTimeout(timer);
+      release(); observer.mockRestore();
+      await Promise.allSettled([blocker, disabling, ...(starting ? [starting] : [])]);
+    }
   });
 });

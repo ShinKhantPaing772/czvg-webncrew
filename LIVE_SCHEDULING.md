@@ -209,9 +209,10 @@ duplicate. Drafts close when the organization changes or IF read access is lost.
 fleet is loaded/refreshed only by button, without polling; its snapshot remains
 visible and shows an age warning after 15 minutes. No position or fetched schedule is imported.
 
-Linking alone does not publish anything. Linked flights cannot start until
-their latest approved schedule and crew are published; keep a tail unlinked
-for local-only scheduling until publishing is enabled. Existing aircraft
+Linking alone does not publish anything. By default, linked flights cannot start
+until their latest approved schedule and crew are published. Scheduling admins
+can change this requirement using **Allow starts without IF publishing** in the
+Infinite Flight tab. Existing aircraft
 catalog entries and pilot/admin-confirmed airports remain the local source of
 truth. Publishing requires the publishing flag and permitted durable identifiers.
 Automatic unattended publishing additionally needs the protected worker.
@@ -272,6 +273,12 @@ Set `IF_LIVE_PREVIEW_ENABLED=true`,
 `IF_LIVE_DURABLE_BINDINGS_ALLOWED=true`, and
 `IF_LIVE_AUTO_PUBLISH_ENABLED=true` in hosting and redeploy. The connected IF
 owner/admin must have granted `live:schedules.read` and `live:schedules.write`.
+After approving a request, open that flight's details in **Approvals** and use
+**Publish to IF** to publish only its latest approved schedule and assigned crew.
+This button is available to scheduling admins for approved flights on IF-linked
+aircraft. It shows the selected flight's result and refreshes its local publishing
+status. Earlier legs and unresolved removals must be published separately first;
+blocked, failed, or conflicting jobs remain subject to the existing repair controls.
 Use **Publish queued flights** in an aircraft's schedule dialog to process that
 aircraft only, or use the same button in the Infinite Flight admin tab to process
 the whole eligible queue. Each click processes at most two jobs within 25 seconds;
@@ -288,8 +295,45 @@ temporary reference and are not silently adopted. Explicit admin edits are
 version-checked; automatic publishing never overwrites external flights. Conflict and
 uncertain-write recovery continue through the existing admin IF controls. The
 API provides no documented start/arrival mutation, so departure and actual
-arrival confirmation remain local. The latest revision must still publish before
-a linked local flight starts.
+arrival confirmation remain local.
+
+### Match an existing IF flight
+
+When an approved Crew Center flight and an existing IF schedule represent the
+same flight, open **Live fleet → View schedules**, load the IF schedules, and
+choose **Match to Crew Center flight**. Select the approved local flight and
+compare the route, flight type, callsign, planned times, captain, and crew before
+confirming. Matching uses the existing IF schedule ID and adds the local marker;
+it never creates another IF schedule. Crew Center's reviewed schedule fields and
+briefing become authoritative, any separate IF flight plan is cleared, and
+missing approved crew assignments are queued for publishing.
+
+Only unstarted IF schedules can be matched. The route and flight type must agree,
+and any existing IF captain and crew must belong to the local approved crew in
+the same roles. Arrived, cancelled, active, and differently linked flights are
+locked. A fresh IF version and the local revision are checked under the same
+aircraft lock used by publishing. Uncertain writes retain the selected ID for
+reconciliation; refresh and review the match again before retrying. Subsequent
+external edits still trigger normal publishing conflicts. Matching requires IF
+write access and enabled aircraft linking; fetched responses are never stored.
+It can be confirmed while automatic publishing is off; queued crew changes wait
+until publishing is enabled.
+
+### Allow local starts before IF publishing
+
+**Scheduling Administration → Infinite Flight → Allow starts without IF
+publishing** is a shared setting, off by default. It takes effect for both pilots
+and admins without a deployment or new environment variable. The existing
+`options` table stores the policy and the last changing admin/time; no SQL
+migration is required.
+
+When enabled, an approved local flight may start even if its IF publishing is
+queued, failed, conflicted, or unavailable. The start skips the IF publication and
+fresh departure checks. Captain/admin ownership, the Live Pilot award, approved
+crew eligibility, the aircraft's current airport, and its next-flight/occupied
+checks still apply. Publication status stays truthful, and each affected start
+records the override in its flight history. Turning the setting off restores the
+IF requirement for future starts; flights already in progress can still finish.
 
 Binding checks current organization ownership, active fleet status, and the local
 catalog's `ifaircraftid` and `ifliveryid` against IF's official content directory.
@@ -304,8 +348,9 @@ Confirmed local airports remain authoritative for local scheduling: IF positions
 show timestamped coordinates, not a confirmed ICAO airport.
 
 Approvals and crew changes enqueue publishing atomically. The worker sends the
-latest approved flight and complete crew assignment. A linked flight cannot start
-locally until that revision has been published and a fresh departure check passes.
+latest approved flight and complete crew assignment. With the default start
+policy, a linked flight cannot start locally until that revision has been
+published and a fresh departure check passes.
 Start the local flight **before departing in IF**: its IF reservation must still be
 scheduled, with the expected route, times, reference, and complete crew. No earlier
 active IF reservation may remain. The aircraft must be on the ground within five
@@ -367,9 +412,9 @@ them; its bearer-secret authentication must stay enabled.
 ## Verification
 
 Run `npm test`, `npx tsc --noEmit --incremental false`, and `npm run build`.
-The isolated MySQL concurrency and publisher-selection tests require a new, empty test database;
+The isolated MySQL concurrency, matching, and publisher-selection tests require a new, empty test database;
 they never use the application's production DB environment. Run them with
-`SCHEDULING_TEST_DATABASE_URL=mysql://user:password@127.0.0.1/webncrew_scheduling_test_local npm test -- src/lib/scheduling/service.integration.test.ts src/lib/scheduling/infinite-flight/publisher.test.ts --no-file-parallelism`.
+`SCHEDULING_TEST_DATABASE_URL=mysql://user:password@127.0.0.1/webncrew_scheduling_test_local npm test -- src/lib/scheduling/service.integration.test.ts src/lib/scheduling/infinite-flight/schedule-match.integration.test.ts src/lib/scheduling/infinite-flight/publisher.test.ts --no-file-parallelism`.
 Only database names starting with `webncrew_scheduling_test_` are accepted. A
 remote test server additionally requires `SCHEDULING_TEST_ALLOW_REMOTE=true`.
 The suite creates and removes its own tables after verifying the schema is empty.
@@ -390,7 +435,9 @@ migration, OAuth registration, and scheduler provisioning are operator steps.
   mode, recovery from a partially applied optional-times migration, and
   flight-type migration defaults, constraints, persistence, amendment history,
   untimed bookings and independent starts on multiple aircraft, including shared
-  pilots, while retaining each aircraft's queue and completion checks.
+  pilots, while retaining each aircraft's queue and completion checks, persisted
+  start-policy changes/races, same-flight matching checkpoints, uncertain writes,
+  ownership collisions, and matching-versus-start aircraft locks.
   The test containers were removed afterward. These suites remain opt-in for normal
   test runs; rerun the command above when changing database or publishing logic.
 - Real IF OAuth/publishing was not exercised. No production migration, account

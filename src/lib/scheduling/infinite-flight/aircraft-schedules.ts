@@ -51,12 +51,13 @@ export function loadIfAircraftSchedules(aircraftId: number, options: { admin?: b
     if (ifBudgetRemainingMs() <= 0) throw new IfLiveError("IF schedules took too long to load; try again", "budget", 503, 15);
     const loadedAt = Date.now();
     const config = getIfLiveConfig();
-    const managedFlights = await LiveFlight.findAll({ where: { live_aircraft_id: aircraftId }, attributes: ["id", "public_id", "if_schedule_id", "status"], raw: true });
+    const managedFlights = await LiveFlight.findAll({ where: { live_aircraft_id: aircraftId }, attributes: ["id", "public_id", "if_schedule_id", "status", "publishing_state"], raw: true });
     const visibleSchedules = options.admin === true ? schedules : schedules.filter(row => isIfScheduleVisibleToPilot(row, managedFlights));
     return {
       schedules: visibleSchedules.map(row => toIfAircraftScheduleView(row, managedFlights, options.admin === true && config.bindingReady)),
       loadedAt: new Date(loadedAt).toISOString(), expiresAt: new Date(loadedAt + IF_LIVE_CACHE_MS).toISOString(),
       publishingReady: config.publishingReady, publishingDisabledReasons: config.publishingDisabledReasons,
+      matchingReady: options.admin === true && config.bindingReady,
     };
   });
 }
