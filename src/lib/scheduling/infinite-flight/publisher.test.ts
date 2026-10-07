@@ -397,7 +397,8 @@ describe("individual approved-flight publishing", () => {
     });
     const result = await runIfLivePublisher({ flightId: 1 });
     expect(result).toMatchObject({ published: 1, flight: { state: "queued", revision: 2, publishedRevision: 1 } });
-    expect(result.flight?.message).not.toContain("are published");
+    if (!("flight" in result)) throw new Error("Expected the selected flight's publishing result");
+    expect(result.flight.message).not.toContain("are published");
   });
   it("reports partial crew publishing as reconciliation and retains the known schedule ID", async () => {
     mocks.putCrew.mockRejectedValue(new IfLiveError("IF did not confirm crew assignment", "invalid_response", 502, 60, true));

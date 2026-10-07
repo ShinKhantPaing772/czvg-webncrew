@@ -12,13 +12,15 @@ import { formatUtc } from "./utils";
 
 const FLEET_PAGE_SIZE = 6;
 
-export function LiveFleet({ aircraft, admin, onAdd, onEdit, onRequest, onSchedules }: {
+export function LiveFleet({ aircraft, admin, onAdd, onEdit, onRequest, onSchedules, title = "Persistent live aircraft", description }: {
   aircraft: LiveAircraft[];
   admin: boolean;
   onAdd: () => void;
   onEdit: (aircraft: LiveAircraft) => void;
   onRequest: (aircraft: LiveAircraft) => void;
   onSchedules: (aircraft: LiveAircraft) => void;
+  title?: string;
+  description?: string;
 }) {
   const [selectedPage, setSelectedPage] = useState(1);
   const pageCount = Math.max(1, Math.ceil(aircraft.length / FLEET_PAGE_SIZE));
@@ -28,7 +30,7 @@ export function LiveFleet({ aircraft, admin, onAdd, onEdit, onRequest, onSchedul
 
   return <div className="space-y-4">
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <div><h2 className="font-semibold">Persistent live aircraft</h2><p className="mt-1 text-sm text-muted-foreground">Confirmed airports change on arrival or admin correction.{admin && " Request IF positions using Refresh IF locations."}</p></div>
+      <div><h2 className="font-semibold">{title}</h2><p className="mt-1 text-sm text-muted-foreground">{description || "Confirmed airports change on arrival or admin correction."}{admin && " Request IF positions using Refresh IF locations."}</p></div>
       <div className="flex flex-wrap gap-2">{positions.hasLinkedAircraft && <Button variant="outline" disabled={positions.loading} onClick={() => void positions.refresh()}><RefreshCw className={"mr-2 h-4 w-4 " + (positions.loading ? "animate-spin" : "")} />Refresh IF locations</Button>}{admin && <Button onClick={onAdd}><Plus className="mr-2 h-4 w-4" />Add aircraft</Button>}</div>
     </div>
     {positions.error && <p role="alert" className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm">{positions.error}</p>}

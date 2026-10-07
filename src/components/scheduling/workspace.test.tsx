@@ -90,6 +90,62 @@ async function selectFlight(status: FlightStatus) {
   expect(card).toBeDefined(); await act(async () => card.click());
 }
 
+describe("pilot unscheduled aircraft", () => {
+  function emptyAircraft(id: number, registration: string) {
+    return { ...data.aircraft[0], id, registration, current_airport: "EGLL", pending_request_count: 0, approved_schedule_count: 0, in_progress_count: 0 };
+  }
+  it("shows active aircraft with no pending or reserved flights in the default Flights view and preselects them for a request", async () => {
+    data = { ...data, aircraft: [...data.aircraft, emptyAircraft(2, "B-AVAILABLE")], flights: [...data.flights, ...(["completed", "cancelled", "rejected"] as const).map((status, index) => ({ ...flight(10 + index, status), live_aircraft_id: 2 }))] };
+    await render();
+    const section = document.querySelector('section[aria-label="Unscheduled aircraft"]')!;
+    expect(section).not.toBeNull();
+    expect(section.textContent).toContain("B-AVAILABLE");
+    expect(section.textContent).toContain("Confirmed airport EGLL");
+    expect(section.textContent).toContain("No scheduled flights");
+    expect(section.textContent).not.toContain("C-TEST");
+    expect(mocks.fetch).not.toHaveBeenCalled();
+    await act(async () => Array.from(section.querySelectorAll("button")).find(item => item.textContent === "Request flight")!.click());
+    expect((document.querySelector("#flight-aircraft") as HTMLSelectElement).value).toBe("2");
+    expect((document.querySelector("#flight-departure") as HTMLInputElement).value).toBe("EGLL");
+  });
+  it("uses complete per-aircraft counts rather than visible flights, and excludes inactive or unknown availability", async () => {
+    data = { ...data, flights: [], aircraft: [
+      emptyAircraft(2, "B-AVAILABLE"),
+      { ...emptyAircraft(3, "B-PRIVATE-PENDING"), pending_request_count: 1 },
+      { ...emptyAircraft(4, "B-APPROVED"), approved_schedule_count: 1 },
+      { ...emptyAircraft(5, "B-IN-PROGRESS"), in_progress_count: 1 },
+      { ...emptyAircraft(6, "B-INACTIVE"), active: false },
+      { ...emptyAircraft(7, "B-UNKNOWN"), pending_request_count: undefined },
+    ] };
+    await render();
+    const section = document.querySelector('section[aria-label="Unscheduled aircraft"]')!;
+    expect(section.textContent).toContain("B-AVAILABLE");
+    for (const registration of ["B-PRIVATE-PENDING", "B-APPROVED", "B-IN-PROGRESS", "B-INACTIVE", "B-UNKNOWN"]) expect(section.textContent).not.toContain(registration);
+  });
+  it("respects aircraft and airport search filters without mislabeling scheduled aircraft", async () => {
+    data = { ...data, aircraft: [data.aircraft[0], emptyAircraft(2, "B-AVAILABLE"), { ...emptyAircraft(3, "B-OTHER"), current_airport: "KJFK" }] };
+    await render();
+    const search = document.querySelector('[aria-label="Search flights"]') as HTMLInputElement;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(search, "EGLL");
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(document.querySelector('section[aria-label="Unscheduled aircraft"]')!.textContent).toContain("B-AVAILABLE");
+    expect(document.querySelector('section[aria-label="Unscheduled aircraft"]')!.textContent).not.toContain("B-OTHER");
+    const aircraftFilter = document.querySelector('[aria-label="Filter aircraft"]') as HTMLSelectElement;
+    await act(async () => { aircraftFilter.value = "1"; aircraftFilter.dispatchEvent(new Event("change", { bubbles: true })); });
+    expect(document.querySelector('section[aria-label="Unscheduled aircraft"]')).toBeNull();
+  });
+  it("removes aircraft from the unscheduled section after a refreshed request and keeps history focused on flights", async () => {
+    data = { ...data, aircraft: [...data.aircraft, emptyAircraft(2, "B-AVAILABLE")] };
+    await render(); expect(document.querySelector('section[aria-label="Unscheduled aircraft"]')).not.toBeNull();
+    await filter("history"); expect(document.querySelector('section[aria-label="Unscheduled aircraft"]')).toBeNull();
+    await filter("upcoming");
+    data = { ...data, aircraft: data.aircraft.map(tail => tail.id === 2 ? { ...tail, pending_request_count: 1 } : tail) };
+    await render(); expect(document.querySelector('section[aria-label="Unscheduled aircraft"]')).toBeNull();
+  });
+});
+
 describe("pilot scheduling visibility", () => {
   it.each([false, true])("honors the saved unpublished-start policy for pilots while showing the publishing issue (allowed: %s)", async allowed => {
     data = { ...data, aircraft: data.aircraft.map(tail => ({ ...tail, if_aircraft_id: "if-aircraft" })), configuration: { liveAwardConfigured: true, allowUnpublishedIfStarts: allowed }, flights: [{ ...flight(1, "approved"), publishing_state: "conflict" }] };

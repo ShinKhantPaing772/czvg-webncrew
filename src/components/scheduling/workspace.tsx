@@ -77,6 +77,14 @@ export function SchedulingWorkspace({ admin = false }: { admin?: boolean }) {
   const scheduleAircraft = data?.aircraft.find(aircraft => aircraft.id === scheduleAircraftId);
   const awaitingFlights = data?.flights.filter((flight) => ["pending", "needs_review"].includes(flight.status)).length || 0;
   const awaitingCrew = data?.flights.reduce((total, flight) => total + flight.members.filter((member) => member.status === "pending").length, 0) || 0;
+  const unscheduledAircraft = useMemo(() => {
+    if (admin || !data) return [];
+    const search = query.trim().toLowerCase();
+    return data.aircraft.filter(aircraft => aircraft.active &&
+      aircraft.pending_request_count === 0 && aircraft.approved_schedule_count === 0 && aircraft.in_progress_count === 0 &&
+      (aircraftFilter === "all" || aircraft.id === Number(aircraftFilter)) &&
+      (!search || [aircraft.registration, aircraft.name, aircraft.liveryname, aircraft.current_airport].some(value => value?.toLowerCase().includes(search))));
+  }, [admin, data, query, aircraftFilter]);
 
   useEffect(() => {
     if (admin && new URLSearchParams(window.location.search).has("if")) setTab("if");
@@ -152,6 +160,9 @@ export function SchedulingWorkspace({ admin = false }: { admin?: boolean }) {
           <p className="text-xs text-muted-foreground">All times are UTC. Each flight has one captain and up to two additional crew members.</p>
           {admin && ["attention", "pending"].includes(statusFilter) && <p className="text-xs text-muted-foreground">Oldest flight requests first. Check conflicts before approving.</p>}
           <FlightList flights={visibleFlights} aircraft={data.aircraft} onSelect={(flight) => { setActionError(""); setDetailId(flight.id); }} />
+          {!admin && flightTab === "flights" && ["upcoming", "all"].includes(statusFilter) && unscheduledAircraft.length > 0 && <section aria-label="Unscheduled aircraft">
+            <LiveFleet aircraft={unscheduledAircraft} admin={false} title="Unscheduled aircraft" description="These active aircraft have no pending requests, approved flights, or flights in progress in Crew Center. Request a flight from their confirmed airport." onAdd={() => setAircraftEditor({})} onEdit={aircraft => setAircraftEditor({ aircraft })} onRequest={aircraft => setFlightForm({ aircraftId: aircraft.id })} onSchedules={aircraft => setScheduleAircraftId(aircraft.id)} />
+          </section>}
         </TabsContent>)}
         <TabsContent value="fleet" className="space-y-4">
           <LiveFleet aircraft={data.aircraft} admin={admin} onAdd={() => setAircraftEditor({})} onEdit={aircraft => setAircraftEditor({ aircraft })} onRequest={aircraft => setFlightForm({ aircraftId: aircraft.id })} onSchedules={aircraft => setScheduleAircraftId(aircraft.id)} />
