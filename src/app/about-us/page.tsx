@@ -134,16 +134,7 @@ export default function AboutPage() {
                             : "mt-5 text-lg"
                         }`}
                       >
-                        {airline.planespottersUrl ? (
-                          <a
-                            href={airline.planespottersUrl}
-                            className="rounded-sm underline decoration-slate-300 underline-offset-4 transition-colors hover:text-primary hover:decoration-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-4"
-                          >
-                            {airline.name}
-                          </a>
-                        ) : (
-                          airline.name
-                        )}
+                        {airline.name}
                       </h3>
                       {airline.type === "cargo" && (
                         <span className="site-badge mt-3">CARGO</span>
