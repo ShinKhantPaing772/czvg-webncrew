@@ -1,42 +1,28 @@
 "use client";
 
+import Link from "next/link";
+import type { ReactNode } from "react";
 import { useState, useEffect } from "react";
 import {
-  Calendar,
   FileText,
   CheckCircle2,
   XCircle,
   AlertCircle,
-  Eye,
   Loader2,
-  Search,
+  ArrowRight,
+  CalendarClock,
+  Plus,
 } from "lucide-react";
 import { CrewHeader } from "@/components/crew-header";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Pagination,
@@ -50,14 +36,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useSession } from "@/hooks/use-session";
+import { getAirlineLogoForFlight } from "@/lib/group-airlines";
 import {
   MAX_PIREP_COMMENTS,
   PIREP_COMMENT_LIMIT_MESSAGE,
@@ -107,11 +87,46 @@ interface PirepsResponse {
   pagination?: PaginationData;
 }
 
+function SummaryCard({
+  icon,
+  label,
+  count,
+}: {
+  icon: ReactNode;
+  label: string;
+  count: number | string;
+}) {
+  return (
+    <Card>
+      <CardContent className="flex items-center gap-3 p-3 sm:p-4">
+        <span className="hidden rounded-md bg-[#eef4fb] p-2 text-[#0052a5] sm:block">
+          {icon}
+        </span>
+        <div>
+          <p className="text-xl font-semibold sm:text-2xl">{count}</p>
+          <p className="text-xs text-muted-foreground">{label}</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function StatusBadge({ status }: { status: number }) {
+  if (status === 1) {
+    return <Badge variant="default">Approved</Badge>;
+  }
+  if (status === 0) {
+    return <Badge variant="secondary">Awaiting approval</Badge>;
+  }
+  return <Badge variant="destructive">Rejected</Badge>;
+}
+
 export default function ViewPireps() {
   const { user } = useSession();
-  const [_selectedPirep, setSelectedPirep] = useState<Pirep | null>(null);
+  const [selectedPirep, setSelectedPirep] = useState<Pirep | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [statusFilter, setStatusFilter] = useState("all");
 
   const [pirepsData, setPirepsData] = useState<Pirep[]>([]);
   const [pagination, setPagination] = useState<PaginationData>({
@@ -150,10 +165,10 @@ export default function ViewPireps() {
         );
         if (!response.ok) throw new Error("Failed to fetch PIREPs");
         const data: PirepsResponse = await response.json();
-        setPirepsData(data.pireps);
+        setPirepsData(data.pireps || []);
         setPagination(
           data.pagination ?? {
-            total: data.pireps.length,
+            total: (data.pireps || []).length,
             totalPages: 1,
             currentPage: 1,
             limit: itemsPerPage,
@@ -165,7 +180,7 @@ export default function ViewPireps() {
         setLoading(false);
       }
     };
-    if (user?.id) fetchPireps();
+    if (user?.id) void fetchPireps();
   }, [user?.id, currentPage, itemsPerPage, searchTerm]);
 
   useEffect(() => {
@@ -174,6 +189,10 @@ export default function ViewPireps() {
       setCurrentPage(lastPage);
     }
   }, [currentPage, pagination.totalPages]);
+
+  const visiblePireps = pirepsData.filter((pirep) =>
+    statusFilter === "all" ? true : String(pirep.status) === statusFilter,
+  );
 
   const totalPages = Math.max(pagination.totalPages, 1);
   const currentPageStart =
@@ -185,51 +204,10 @@ export default function ViewPireps() {
     pagination.total,
   );
 
-  const getStatusBadge = (status: number) => {
-    switch (status) {
-      case 1:
-        return (
-          <Badge
-            variant="outline"
-            className="bg-green-50 text-green-700 border-green-200"
-          >
-            Approved
-          </Badge>
-        );
-      case 0:
-        return (
-          <Badge
-            variant="outline"
-            className="bg-amber-50 text-amber-700 border-amber-200"
-          >
-            Pending
-          </Badge>
-        );
-      case 2:
-        return (
-          <Badge
-            variant="outline"
-            className="bg-red-50 text-red-700 border-red-200"
-          >
-            Rejected
-          </Badge>
-        );
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status.toLowerCase()) {
-      case "approved":
-        return <CheckCircle2 className="h-5 w-5 text-green-600" />;
-      case "pending":
-        return <AlertCircle className="h-5 w-5 text-amber-600" />;
-      case "rejected":
-        return <XCircle className="h-5 w-5 text-red-600" />;
-      default:
-        return <FileText className="h-5 w-5" />;
-    }
+  const getStatusIcon = (status: number) => {
+    if (status === 1) return <CheckCircle2 className="h-4 w-4 text-emerald-600" />;
+    if (status === 0) return <AlertCircle className="h-4 w-4 text-amber-600" />;
+    return <XCircle className="h-4 w-4 text-red-600" />;
   };
 
   const handleAddComment = async (pirepId: number) => {
@@ -246,7 +224,9 @@ export default function ViewPireps() {
     }
 
     if (!user?.id) {
-      setCommentError("Your session could not be verified. Please sign in again.");
+      setCommentError(
+        "Your session could not be verified. Please sign in again.",
+      );
       return;
     }
 
@@ -267,16 +247,30 @@ export default function ViewPireps() {
         throw new Error(data.error || "Failed to add comment");
       }
 
-      const comment = data.comment as PirepComment;
+      const comment = (data.comment ?? data.data?.comment) as
+        | PirepComment
+        | undefined;
+      if (!comment) {
+        throw new Error("Invalid comment response");
+      }
+
       setPirepsData((currentPireps) =>
-        currentPireps.map((pirep) =>
-          pirep.id === pirepId
+        currentPireps.map((item) =>
+          item.id === pirepId
             ? {
-                ...pirep,
-                Comments: [...(pirep.Comments ?? []), comment],
+                ...item,
+                Comments: [...(item.Comments ?? []), comment],
               }
-            : pirep,
+            : item,
         ),
+      );
+      setSelectedPirep((current) =>
+        current && current.id === pirepId
+          ? {
+              ...current,
+              Comments: [...(current.Comments ?? []), comment],
+            }
+          : current,
       );
       setNewComment("");
     } catch (err) {
@@ -290,418 +284,409 @@ export default function ViewPireps() {
 
   return (
     <CrewHeader>
-      <main className="flex flex-1 flex-col gap-4 md:gap-8">
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <main className="flex-1 space-y-5 pb-24 md:pb-6">
+        {/* Top Header — Matches `Live aircraft scheduling` */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
             <h1 className="text-2xl font-bold">My PIREPs</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Review your submitted pilot reports, check approval status, and
+              discuss with staff.
+            </p>
+          </div>
+          <Button asChild>
+            <Link href="/crew/file-pirep">
+              <Plus className="mr-1 h-4 w-4" />
+              File PIREP
+            </Link>
+          </Button>
+        </div>
 
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-end">
-              <div className="w-full space-y-2 sm:w-64">
-                <Label htmlFor="pirep-search">Search</Label>
-                <div className="relative">
-                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="pirep-search"
-                    placeholder="Search PIREPs..."
-                    value={searchTerm}
-                    onChange={(e) => {
-                      setSearchTerm(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                    className="pl-8"
-                  />
+        {/* Summary Row — Matches `Live aircraft scheduling` */}
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+          <SummaryCard
+            icon={<FileText className="h-4 w-4" />}
+            label="Total submitted"
+            count={pagination.total}
+          />
+          <SummaryCard
+            icon={<CheckCircle2 className="h-4 w-4" />}
+            label="Approved on page"
+            count={pirepsData.filter((item) => item.status === 1).length}
+          />
+          <SummaryCard
+            icon={<CalendarClock className="h-4 w-4" />}
+            label="Awaiting review"
+            count={pirepsData.filter((item) => item.status === 0).length}
+          />
+        </div>
+
+        {/* Search & Filter Bar — Matches `Live aircraft scheduling` */}
+        <div className="grid gap-3 sm:grid-cols-[1fr_auto_auto]">
+          <Input
+            id="pirep-search"
+            aria-label="Search PIREPs"
+            placeholder="Search route, flight number, or aircraft"
+            value={searchTerm}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setCurrentPage(1);
+            }}
+          />
+          <select
+            aria-label="Filter status"
+            className="h-8 rounded-[6px] border-0 bg-[var(--v2-background-bg-layer-02,#f2f2f2)]/75 px-2.5 text-[13px] outline-none"
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+          >
+            <option value="all">All statuses</option>
+            <option value="1">Approved</option>
+            <option value="0">Awaiting approval</option>
+            <option value="2">Rejected</option>
+          </select>
+          <select
+            aria-label="Items per page"
+            className="h-8 rounded-[6px] border-0 bg-[var(--v2-background-bg-layer-02,#f2f2f2)]/75 px-2.5 text-[13px] outline-none"
+            value={String(itemsPerPage)}
+            onChange={(event) => {
+              setItemsPerPage(Number(event.target.value));
+              setCurrentPage(1);
+            }}
+          >
+            <option value="10">10 / page</option>
+            <option value="20">20 / page</option>
+            <option value="50">50 / page</option>
+            <option value="100">100 / page</option>
+          </select>
+        </div>
+
+        {/* PIREP Cards — Matches `FlightList` in `Live aircraft scheduling` 1:1 */}
+        {loading ? (
+          <div
+            role="status"
+            className="flex items-center justify-center gap-2 py-16 text-muted-foreground"
+          >
+            <Loader2 className="h-5 w-5 animate-spin" />
+            Loading PIREPs…
+          </div>
+        ) : error ? (
+          <div
+            role="alert"
+            className="rounded-md bg-destructive/10 p-3 text-sm text-destructive"
+          >
+            {error}
+          </div>
+        ) : visiblePireps.length === 0 ? (
+          <div className="rounded-[6px] bg-[var(--v2-background-bg-layer-01,#fafafa)] px-6 py-10 text-center">
+            <FileText className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
+            <p className="text-[13px] font-medium">No PIREPs to show</p>
+            <p className="mt-1 text-[12px] text-muted-foreground">
+              Try another filter, or file a new pilot report.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            {visiblePireps.map((pirep) => (
+              <Card key={pirep.id}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedPirep(pirep);
+                    setNewComment("");
+                    setCommentError(null);
+                  }}
+                  className="grid w-full gap-4 rounded-[6px] bg-[var(--v2-background-bg-layer-01,#fafafa)] px-4 py-3.5 text-left transition-colors hover:bg-[var(--v2-background-bg-layer-02,#f2f2f2)] focus-visible:outline-none md:grid-cols-[1fr_1.3fr_1fr]"
+                >
+                  <div>
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={
+                          getAirlineLogoForFlight(
+                            pirep.flightnum,
+                            pirep.Aircraft?.liveryname,
+                          ).logo
+                        }
+                        alt=""
+                        className="h-4 w-auto max-w-[54px] shrink-0 object-contain"
+                      />
+                      <span className="font-semibold">{pirep.flightnum}</span>
+                      <StatusBadge status={pirep.status} />
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      {pirep.Aircraft?.name || "Fleet aircraft"}
+                      {pirep.Aircraft?.liveryname
+                        ? ` · ${pirep.Aircraft.liveryname}`
+                        : ""}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Logged {pirep.date}
+                    </p>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center gap-3 text-xl font-semibold tracking-tight">
+                      <span>{pirep.departure}</span>
+                      <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                      <span>{pirep.arrival}</span>
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Block duration {pirep.flighttime}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Fuel {Number(pirep.fuelused || 0).toLocaleString()} kg ·
+                      Multiplier {pirep.multi}x
+                    </p>
+                  </div>
+
+                  <div className="space-y-2 md:text-right">
+                    <p className="text-sm">
+                      {user?.name || "Pilot"}
+                      <span className="ml-1 text-xs text-muted-foreground">
+                        {user?.callsign}
+                      </span>
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {pirep.Comments?.length || 0} comment
+                      {(pirep.Comments?.length || 0) === 1 ? "" : "s"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Click to inspect &amp; comment
+                    </p>
+                  </div>
+                </button>
+              </Card>
+            ))}
+          </div>
+        )}
+
+        {/* PIREP Detail Dialog */}
+        {selectedPirep && (
+          <Dialog
+            open={Boolean(selectedPirep)}
+            onOpenChange={(open) => {
+              if (!open) setSelectedPirep(null);
+            }}
+          >
+            <DialogContent className="max-h-[90vh] w-full max-w-2xl overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 tabular-nums">
+                  {getStatusIcon(selectedPirep.status)}
+                  <span>PIREP #{selectedPirep.id}</span>
+                  <StatusBadge status={selectedPirep.status} />
+                </DialogTitle>
+                <DialogDescription>
+                  {selectedPirep.flightnum} · {selectedPirep.departure} →{" "}
+                  {selectedPirep.arrival}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="grid gap-4 rounded-lg bg-[var(--v2-background-bg-layer-01,#fafafa)] p-4 sm:grid-cols-2">
+                <div>
+                  <p className="text-xs text-muted-foreground">Flight number</p>
+                  <p className="mt-1 text-sm font-medium">
+                    {selectedPirep.flightnum}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Date</p>
+                  <p className="mt-1 text-sm font-medium">
+                    {selectedPirep.date}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Block duration</p>
+                  <p className="mt-1 text-sm font-medium">
+                    {selectedPirep.flighttime}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Aircraft</p>
+                  <p className="mt-1 text-sm font-medium">
+                    {selectedPirep.Aircraft?.name} (
+                    {selectedPirep.Aircraft?.liveryname})
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Fuel used</p>
+                  <p className="mt-1 text-sm font-medium">
+                    {Number(selectedPirep.fuelused || 0).toLocaleString()} kg
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Multiplier</p>
+                  <p className="mt-1 text-sm font-medium">
+                    {selectedPirep.multi}x
+                  </p>
                 </div>
               </div>
 
-              <div className="space-y-2 sm:w-32">
-                <Label htmlFor="pireps-per-page">Per Page</Label>
-                <Select
-                  value={String(itemsPerPage)}
-                  onValueChange={(value) => {
-                    setItemsPerPage(Number(value));
-                    setCurrentPage(1);
-                  }}
-                >
-                  <SelectTrigger id="pireps-per-page" className="w-full">
-                    <SelectValue placeholder="Per page" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-white">
-                    <SelectItem value="10">10</SelectItem>
-                    <SelectItem value="20">20</SelectItem>
-                    <SelectItem value="50">50</SelectItem>
-                    <SelectItem value="100">100</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold">Comments</h3>
+                  <span className="text-xs text-muted-foreground">
+                    {selectedPirep.Comments?.length ?? 0}/{MAX_PIREP_COMMENTS}
+                  </span>
+                </div>
 
-              <Button asChild className="sm:self-end">
-                <a href="/crew/file-pirep">Submit New PIREP</a>
-              </Button>
-            </div>
+                {selectedPirep.Comments && selectedPirep.Comments.length > 0 ? (
+                  <div className="space-y-2">
+                    {selectedPirep.Comments.map((comment) => (
+                      <div
+                        key={comment.id}
+                        className="rounded-md bg-[var(--v2-background-bg-layer-01,#fafafa)] p-3"
+                      >
+                        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                          <span className="font-medium text-foreground">
+                            {comment.User
+                              ? `${comment.User.name} (${comment.User.callsign})`
+                              : `User #${comment.userid}`}
+                          </span>
+                          <span>
+                            {new Date(comment.dateposted).toLocaleString()}
+                          </span>
+                        </div>
+                        <p className="mt-1 whitespace-pre-wrap text-sm">
+                          {comment.content}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    No comments yet.
+                  </p>
+                )}
+
+                {(selectedPirep.Comments?.length ?? 0) >=
+                MAX_PIREP_COMMENTS ? (
+                  <p className="text-xs text-muted-foreground">
+                    This PIREP has reached the {MAX_PIREP_COMMENTS}-comment
+                    limit.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    <Label
+                      htmlFor={`pirep-comment-${selectedPirep.id}`}
+                      className="text-xs"
+                    >
+                      Add a comment
+                    </Label>
+                    <Textarea
+                      id={`pirep-comment-${selectedPirep.id}`}
+                      value={newComment}
+                      onChange={(event) => {
+                        setNewComment(event.target.value);
+                        setCommentError(null);
+                      }}
+                      placeholder="Write a comment about this PIREP..."
+                      disabled={submittingCommentId === selectedPirep.id}
+                      aria-invalid={Boolean(commentError)}
+                    />
+                    {commentError && (
+                      <p className="text-xs text-red-600" role="alert">
+                        {commentError}
+                      </p>
+                    )}
+                    <div className="flex justify-end">
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => handleAddComment(selectedPirep.id)}
+                        disabled={
+                          submittingCommentId === selectedPirep.id ||
+                          !newComment.trim()
+                        }
+                      >
+                        {submittingCommentId === selectedPirep.id && (
+                          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                        )}
+                        Post comment
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
+
+        <div className="flex items-center justify-between pt-2">
+          <div className="text-xs text-muted-foreground tabular-nums">
+            Showing {currentPageStart}-{currentPageEnd} of {pagination.total}{" "}
+            PIREPs
           </div>
 
-          <Card>
-            <CardHeader className="p-4">
-              <CardTitle>Flight Reports</CardTitle>
-              <CardDescription>
-                View and search your submitted pilot reports
-              </CardDescription>
-            </CardHeader>
+          {totalPages > 1 && (
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setCurrentPage((p) => Math.max(p - 1, 1));
+                    }}
+                    aria-disabled={currentPage === 1}
+                    className={
+                      currentPage === 1 ? "pointer-events-none opacity-50" : ""
+                    }
+                  />
+                </PaginationItem>
 
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Flight</TableHead>
-                    <TableHead>
-                      <div className="flex items-center gap-1">
-                        <Calendar className="h-4 w-4" />
-                        <span>Date</span>
-                      </div>
-                    </TableHead>
-                    <TableHead>Route</TableHead>
-                    <TableHead className="hidden md:table-cell">
-                      Aircraft
-                    </TableHead>
-                    <TableHead className="hidden md:table-cell">
-                      Duration
-                    </TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loading && (
-                    <TableRow>
-                      <TableCell colSpan={8}>
-                        <div className="flex items-center justify-center gap-2">
-                          <Loader2 className="h-5 w-5 animate-spin" />
-                          <span>Loading...</span>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                  {!loading && pirepsData.length === 0 && (
-                    <TableRow>
-                      <TableCell
-                        colSpan={8}
-                        className="text-center py-8 text-muted-foreground"
-                      >
-                        No PIREPs found for your search.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                  {pirepsData.map((pirep) => (
-                    <TableRow key={pirep.id}>
-                      <TableCell>{pirep.flightnum}</TableCell>
-                      <TableCell>{pirep.date}</TableCell>
-                      <TableCell>
-                        {pirep.departure} → {pirep.arrival}
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        {pirep.Aircraft?.name +
-                          " (" +
-                          pirep.Aircraft?.liveryname +
-                          ")"}
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        {pirep.flighttime}
-                      </TableCell>
-                      <TableCell>{getStatusBadge(pirep.status)}</TableCell>
-                      <TableCell className="text-right">
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedPirep(pirep);
-                                setNewComment("");
-                                setCommentError(null);
-                              }}
-                            >
-                              <Eye className="h-4 w-4 mr-1" />
-                              <span className="hidden sm:inline">View</span>
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="max-h-[90vh] w-full max-w-5xl overflow-y-auto bg-white">
-                            <DialogHeader>
-                              <DialogTitle className="flex items-center gap-2">
-                                {getStatusIcon(
-                                  pirep.status === 1
-                                    ? "approved"
-                                    : pirep.status === 0
-                                      ? "pending"
-                                      : "rejected",
-                                )}
-                                <span>PIREP Details: {pirep.id}</span>
-                              </DialogTitle>
-                              <DialogDescription>
-                                Flight {pirep.flightnum} from {pirep.departure}{" "}
-                                to {pirep.arrival}
-                              </DialogDescription>
-                            </DialogHeader>
+                {Array.from({ length: totalPages }).map((_, i) => {
+                  const page = i + 1;
+                  if (
+                    page === 1 ||
+                    page === totalPages ||
+                    (page >= currentPage - 1 && page <= currentPage + 1)
+                  ) {
+                    return (
+                      <PaginationItem key={page}>
+                        <PaginationLink
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setCurrentPage(page);
+                          }}
+                          isActive={page === currentPage}
+                        >
+                          {page}
+                        </PaginationLink>
+                      </PaginationItem>
+                    );
+                  }
+                  if (
+                    (page === 2 && currentPage > 3) ||
+                    (page === totalPages - 1 && currentPage < totalPages - 2)
+                  ) {
+                    return (
+                      <PaginationItem key={page}>
+                        <PaginationEllipsis />
+                      </PaginationItem>
+                    );
+                  }
+                  return null;
+                })}
 
-                            <div className="grid gap-4">
-                              <Card>
-                                <CardHeader>
-                                  <CardTitle className="text-sm font-medium">
-                                    Flight Information
-                                  </CardTitle>
-                                </CardHeader>
-                                <CardContent className="pt-0">
-                                  <dl className="space-y-2 text-sm">
-                                    <div className="flex justify-between">
-                                      <dt className="text-muted-foreground">
-                                        Flight Number:
-                                      </dt>
-                                      <dd>{pirep.flightnum}</dd>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <dt className="text-muted-foreground">
-                                        Date:
-                                      </dt>
-                                      <dd>{pirep.date}</dd>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <dt className="text-muted-foreground">
-                                        Route:
-                                      </dt>
-                                      <dd>
-                                        {pirep.departure} → {pirep.arrival}
-                                      </dd>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <dt className="text-muted-foreground">
-                                        Duration:
-                                      </dt>
-                                      <dd>{pirep.flighttime}</dd>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <dt className="text-muted-foreground">
-                                        Aircraft Type:
-                                      </dt>
-                                      <dd>
-                                        {pirep.Aircraft.name} (
-                                        {pirep.Aircraft.liveryname})
-                                      </dd>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <dt className="text-muted-foreground">
-                                        Fuel Used:
-                                      </dt>
-                                      <dd>{pirep.fuelused} kg</dd>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <dt className="text-muted-foreground">
-                                        Status:
-                                      </dt>
-                                      <dd>{getStatusBadge(pirep.status)}</dd>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <dt className="text-muted-foreground">
-                                        Multiplier:
-                                      </dt>
-                                      <dd>{pirep.multi}</dd>
-                                    </div>
-                                  </dl>
-                                </CardContent>
-                              </Card>
-
-                              <Card>
-                                <CardHeader>
-                                  <div className="flex items-center justify-between gap-4">
-                                    <CardTitle className="text-sm font-medium">
-                                      Comments
-                                    </CardTitle>
-                                    <span className="text-xs text-muted-foreground">
-                                      {pirep.Comments?.length ?? 0}/
-                                      {MAX_PIREP_COMMENTS}
-                                    </span>
-                                  </div>
-                                  <CardDescription>
-                                    Discuss this PIREP with the review team.
-                                  </CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-4 pt-0">
-                                  {pirep.Comments &&
-                                  pirep.Comments.length > 0 ? (
-                                    <div className="space-y-3 text-sm">
-                                      {pirep.Comments.map((comment) => (
-                                        <div
-                                          key={comment.id}
-                                          className="rounded-lg border border-slate-200 bg-slate-50 p-3"
-                                        >
-                                          <div className="flex items-center justify-between gap-4 text-xs text-slate-500">
-                                            <span>
-                                              {comment.User
-                                                ? `${comment.User.name}`
-                                                : `User #${comment.userid}`}
-                                            </span>
-                                            <span>
-                                              {new Date(
-                                                comment.dateposted,
-                                              ).toLocaleString()}
-                                            </span>
-                                          </div>
-                                          <p className="mt-2 text-sm text-slate-700">
-                                            {comment.content}
-                                          </p>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ) : (
-                                    <p className="text-sm text-muted-foreground">
-                                      No comments yet.
-                                    </p>
-                                  )}
-
-                                  {(pirep.Comments?.length ?? 0) >=
-                                  MAX_PIREP_COMMENTS ? (
-                                    <p className="border-t pt-4 text-sm text-muted-foreground">
-                                      This PIREP has reached the{" "}
-                                      {MAX_PIREP_COMMENTS}-comment limit.
-                                    </p>
-                                  ) : (
-                                    <div className="space-y-2 border-t pt-4">
-                                      <Label
-                                        htmlFor={`pirep-comment-${pirep.id}`}
-                                      >
-                                        Add a comment
-                                      </Label>
-                                      <Textarea
-                                        id={`pirep-comment-${pirep.id}`}
-                                        value={newComment}
-                                        onChange={(event) => {
-                                          setNewComment(event.target.value);
-                                          setCommentError(null);
-                                        }}
-                                        placeholder="Write a comment about this PIREP..."
-                                        disabled={
-                                          submittingCommentId === pirep.id
-                                        }
-                                        aria-invalid={Boolean(commentError)}
-                                      />
-                                      {commentError && (
-                                        <p
-                                          className="text-sm text-red-600"
-                                          role="alert"
-                                        >
-                                          {commentError}
-                                        </p>
-                                      )}
-                                      <div className="flex justify-end">
-                                        <Button
-                                          type="button"
-                                          onClick={() =>
-                                            handleAddComment(pirep.id)
-                                          }
-                                          disabled={
-                                            submittingCommentId === pirep.id ||
-                                            !newComment.trim()
-                                          }
-                                        >
-                                          {submittingCommentId === pirep.id && (
-                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                          )}
-                                          Post Comment
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  )}
-                                </CardContent>
-                              </Card>
-                            </div>
-                          </DialogContent>
-                        </Dialog>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-
-            <CardFooter className="flex items-center justify-between p-4">
-              <div className="text-sm text-muted-foreground">
-                Showing {currentPageStart}-{currentPageEnd} of{" "}
-                {pagination.total} PIREPs
-              </div>
-
-              {totalPages > 1 && (
-                <Pagination>
-                  <PaginationContent>
-                    <PaginationItem>
-                      <PaginationPrevious
-                        href="#"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          setCurrentPage((p) => Math.max(p - 1, 1));
-                        }}
-                        aria-disabled={currentPage === 1}
-                        className={
-                          currentPage === 1
-                            ? "pointer-events-none opacity-50"
-                            : ""
-                        }
-                      />
-                    </PaginationItem>
-
-                    {Array.from({ length: totalPages }).map((_, i) => {
-                      const page = i + 1;
-                      if (
-                        page === 1 ||
-                        page === totalPages ||
-                        (page >= currentPage - 1 && page <= currentPage + 1)
-                      ) {
-                        return (
-                          <PaginationItem key={page}>
-                            <PaginationLink
-                              href="#"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                setCurrentPage(page);
-                              }}
-                              isActive={page === currentPage}
-                            >
-                              {page}
-                            </PaginationLink>
-                          </PaginationItem>
-                        );
-                      }
-                      if (
-                        (page === 2 && currentPage > 3) ||
-                        (page === totalPages - 1 &&
-                          currentPage < totalPages - 2)
-                      ) {
-                        return (
-                          <PaginationItem key={page}>
-                            <PaginationEllipsis />
-                          </PaginationItem>
-                        );
-                      }
-                      return null;
-                    })}
-
-                    <PaginationItem>
-                      <PaginationNext
-                        href="#"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          setCurrentPage((p) => Math.min(p + 1, totalPages));
-                        }}
-                        aria-disabled={currentPage === totalPages}
-                        className={
-                          currentPage === totalPages
-                            ? "pointer-events-none opacity-50"
-                            : ""
-                        }
-                      />
-                    </PaginationItem>
-                  </PaginationContent>
-                </Pagination>
-              )}
-            </CardFooter>
-          </Card>
+                <PaginationItem>
+                  <PaginationNext
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setCurrentPage((p) => Math.min(p + 1, totalPages));
+                    }}
+                    aria-disabled={currentPage === totalPages}
+                    className={
+                      currentPage === totalPages
+                        ? "pointer-events-none opacity-50"
+                        : ""
+                    }
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          )}
         </div>
       </main>
     </CrewHeader>

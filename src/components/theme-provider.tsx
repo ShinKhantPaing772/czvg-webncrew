@@ -3,6 +3,7 @@
 import type React from "react";
 
 import { createContext, useContext, useEffect, useState } from "react";
+import { I18nProvider } from "@/lib/i18n";
 
 type Theme = "dark" | "light" | "system";
 
@@ -42,7 +43,7 @@ export function ThemeProvider({
 
   return (
     <ThemeProviderContext.Provider {...props} value={value}>
-      {children}
+      <I18nProvider>{children}</I18nProvider>
     </ThemeProviderContext.Provider>
   );
 }

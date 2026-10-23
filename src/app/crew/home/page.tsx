@@ -2,40 +2,36 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
+  ArrowRight,
+  Award,
+  CalendarClock,
+  CheckCircle2,
   Clock,
-  FileText,
   ImageOff,
   Loader2,
   Plane,
-  Search,
-  Trophy,
-  UserIcon,
+  Plus,
+  RefreshCw,
 } from "lucide-react";
 
+import {
+  BarList,
+  DonutChart,
+  TrendChart,
+} from "@/components/admin/dashboard-charts";
 import { CrewHeader } from "@/components/crew-header";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSession } from "@/hooks/use-session";
+import { getAirlineLogoForFlight } from "@/lib/group-airlines";
 import { authFetch } from "@/lib/utils/api";
 
 type RecentPirep = {
@@ -96,20 +92,69 @@ type DashboardData = {
   recentPireps: RecentPirep[];
 };
 
-function statusBadge(status: number) {
-  if (status === 0) {
-    return "border-yellow-200 bg-yellow-50 text-yellow-700";
-  }
-  if (status === 1) {
-    return "border-green-200 bg-green-50 text-green-700";
-  }
-  return "border-red-200 bg-red-50 text-red-700";
+function SummaryCard({
+  icon,
+  label,
+  value,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string | number;
+}) {
+  return (
+    <Card>
+      <CardContent className="flex items-center gap-3 p-3 sm:p-4">
+        <span className="hidden rounded-md bg-[#eef4fb] p-2 text-[#0052a5] sm:block">
+          {icon}
+        </span>
+        <div>
+          <p className="text-xl font-semibold sm:text-2xl">{value}</p>
+          <p className="text-xs text-muted-foreground">{label}</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
-function statusLabel(status: number) {
-  if (status === 0) return "Pending";
-  if (status === 1) return "Accepted";
-  return "Rejected";
+function StatusBadge({ status }: { status: number }) {
+  if (status === 1) {
+    return <Badge variant="default">Approved</Badge>;
+  }
+  if (status === 0) {
+    return <Badge variant="secondary">Awaiting approval</Badge>;
+  }
+  return <Badge variant="destructive">Rejected</Badge>;
+}
+
+function parseHoursFromDuration(duration: string) {
+  const [hours, minutes] = duration.split(":").map(Number);
+  if (!Number.isFinite(hours)) return 0;
+  return Number((hours + (Number(minutes) || 0) / 60).toFixed(2));
+}
+
+function formatUtcDate(dateStr: string) {
+  const dateOnly = dateStr.slice(0, 10);
+  const parsed = new Date(`${dateOnly}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) return dateStr;
+  return parsed.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+function buildReflyHref(flight: RecentPirep) {
+  const params = new URLSearchParams({
+    flightnum: flight.flightnum,
+    departure: flight.departure,
+    arrival: flight.arrival,
+    flightTime: flight.flightTimeInput || flight.flighttime,
+  });
+  if (flight.aircraft?.id) {
+    params.set("aircraftId", String(flight.aircraft.id));
+  }
+  return `/crew/file-pirep?${params}`;
 }
 
 function displayImageUrl(value: unknown) {
@@ -126,11 +171,6 @@ function displayImageUrl(value: unknown) {
   }
 }
 
-function formatAwardDate(value: string) {
-  const dateOnly = value.slice(0, 10);
-  return new Date(`${dateOnly}T00:00:00`).toLocaleDateString();
-}
-
 function AwardArtwork({ award }: { award: ReceivedAward }) {
   const imageUrl = displayImageUrl(award.imageurl);
 
@@ -139,44 +179,17 @@ function AwardArtwork({ award }: { award: ReceivedAward }) {
       <Image
         src={imageUrl}
         alt=""
-        width={48}
-        height={48}
+        width={32}
+        height={32}
         unoptimized
-        className="h-12 w-12 shrink-0 object-contain"
+        className="h-8 w-8 shrink-0 object-contain"
       />
     );
   }
 
   return (
-    <span className="flex h-12 w-12 shrink-0 items-center justify-center">
-      <ImageOff className="h-5 w-5 text-muted-foreground" />
-    </span>
-  );
-}
-
-function ProfileAwardIcon({ award }: { award: ReceivedAward }) {
-  const imageUrl = displayImageUrl(award.imageurl);
-  const awardName = award.name?.trim() || "Unnamed award";
-
-  return (
-    <span
-      role="img"
-      aria-label={awardName}
-      title={awardName}
-      className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-md bg-background p-0.5 shadow-sm"
-    >
-      {imageUrl ? (
-        <Image
-          src={imageUrl}
-          alt=""
-          width={28}
-          height={28}
-          unoptimized
-          className="h-full w-full object-contain"
-        />
-      ) : (
-        <Trophy aria-hidden="true" className="h-4 w-4 text-amber-500" />
-      )}
+    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted">
+      <ImageOff className="h-4 w-4 text-muted-foreground" />
     </span>
   );
 }
@@ -185,358 +198,458 @@ export default function UserDashboard() {
   const { user, loading: sessionLoading } = useSession();
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let mounted = true;
+  const [tab, setTab] = useState("overview");
+  const [query, setQuery] = useState("");
+  const [aircraftFilter, setAircraftFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
 
-    async function fetchDashboard() {
-      if (!user?.id) return;
+  async function fetchDashboard(isRefresh = false) {
+    if (!user?.id) return;
 
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
       setLoading(true);
-      setError(null);
+    }
+    setError(null);
 
-      try {
-        const response = await authFetch(`/api/pilots/${user.id}/dashboard`);
-        const data = await response.json();
+    try {
+      const response = await authFetch(`/api/pilots/${user.id}/dashboard`);
+      const data = await response.json();
 
-        if (!response.ok) {
-          throw new Error(data.error || "Failed to load pilot dashboard");
-        }
-
-        if (mounted) {
-          setDashboard(data);
-        }
-      } catch (fetchError) {
-        if (mounted) {
-          setDashboard(null);
-          setError(
-            fetchError instanceof Error
-              ? fetchError.message
-              : "Failed to load pilot dashboard",
-          );
-        }
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to load pilot dashboard");
       }
+
+      setDashboard(data);
+    } catch (fetchError) {
+      setDashboard(null);
+      setError(
+        fetchError instanceof Error
+          ? fetchError.message
+          : "Failed to load pilot dashboard",
+      );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }
+
+  useEffect(() => {
+    void fetchDashboard(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
+  const aircraftOptions = useMemo(() => {
+    if (!dashboard) return [];
+    return Array.from(
+      new Set(
+        dashboard.recentPireps
+          .map((item) => item.aircraft?.name)
+          .filter((name): name is string => Boolean(name)),
+      ),
+    );
+  }, [dashboard]);
+
+  const visibleFlights = useMemo(() => {
+    if (!dashboard) return [];
+    const search = query.trim().toLowerCase();
+
+    return dashboard.recentPireps.filter((flight) => {
+      if (
+        aircraftFilter !== "all" &&
+        flight.aircraft?.name !== aircraftFilter
+      ) {
+        return false;
+      }
+      if (statusFilter !== "all" && String(flight.status) !== statusFilter) {
+        return false;
+      }
+      if (!search) return true;
+      return [
+        flight.flightnum,
+        flight.departure,
+        flight.arrival,
+        flight.aircraft?.name,
+        flight.aircraft?.liveryname,
+      ].some((val) => val?.toLowerCase().includes(search));
+    });
+  }, [dashboard, query, aircraftFilter, statusFilter]);
+
+  const chartMetrics = useMemo(() => {
+    if (!dashboard) return null;
+
+    const statusData = [
+      { label: "Approved", value: dashboard.statistics.approvedPireps },
+      { label: "Pending", value: dashboard.statistics.pendingPireps },
+      { label: "Rejected", value: dashboard.statistics.rejectedPireps },
+    ];
+
+    const chronological = [...dashboard.recentPireps].reverse();
+    const trendData = chronological.map((flight) => ({
+      date: flight.date,
+      label: flight.date.slice(5),
+      flights: 1,
+      hours: parseHoursFromDuration(flight.flighttime),
+      pilots: 1,
+    }));
+
+    const depCounts = new Map<string, number>();
+    const arrCounts = new Map<string, number>();
+    const aircraftCounts = new Map<string, number>();
+
+    for (const flight of dashboard.recentPireps) {
+      depCounts.set(flight.departure, (depCounts.get(flight.departure) || 0) + 1);
+      arrCounts.set(flight.arrival, (arrCounts.get(flight.arrival) || 0) + 1);
+      const acName = flight.aircraft?.name || "Unknown";
+      aircraftCounts.set(acName, (aircraftCounts.get(acName) || 0) + 1);
     }
 
-    fetchDashboard();
+    const toCountPoints = (map: Map<string, number>) =>
+      Array.from(map.entries())
+        .map(([label, value]) => ({ label, value }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 4);
 
-    return () => {
-      mounted = false;
+    return {
+      statusData,
+      trendData,
+      topDepartures: toCountPoints(depCounts),
+      topArrivals: toCountPoints(arrCounts),
+      topAircraft: toCountPoints(aircraftCounts),
     };
-  }, [user?.id]);
+  }, [dashboard]);
 
   return (
     <CrewHeader>
-      {(sessionLoading || loading) && (
-        <div className="flex min-h-[420px] items-center justify-center">
-          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-          Loading pilot dashboard...
-        </div>
-      )}
+      <main className="flex-1 space-y-6 pb-24 md:pb-6">
+        {(sessionLoading || loading) && (
+          <div
+            role="status"
+            className="flex items-center justify-center gap-2 py-16 text-muted-foreground"
+          >
+            <Loader2 className="h-5 w-5 animate-spin" />
+            Loading pilot workspace…
+          </div>
+        )}
 
-      {!sessionLoading && !loading && error && (
-        <Card>
-          <CardContent className="py-8">
-            <div className="flex items-center gap-2 text-red-700">
-              <AlertCircle className="h-5 w-5" />
-              <p className="font-medium">{error}</p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+        {!sessionLoading && !loading && error && (
+          <div
+            role="alert"
+            className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive"
+          >
+            <AlertCircle className="h-4 w-4" />
+            <span>{error}</span>
+          </div>
+        )}
 
-      {!sessionLoading && !loading && user && dashboard && (
-        <main className="flex flex-1 flex-col gap-5 md:gap-7">
-          <section className="grid gap-3">
-            <Card className="py-0">
-              <CardContent className="p-3 sm:p-4">
-                <div className="flex w-full flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="flex items-center gap-3">
-                    <Avatar className="h-10 w-10">
-                      <AvatarImage alt={user.name} />
-                      <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
-                    </Avatar>
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h1 className="truncate text-xl font-bold sm:text-2xl">
-                          {user.name}
-                        </h1>
-                        <Badge variant="outline">{dashboard.standing.label}</Badge>
-                        {dashboard.awards.received.length > 0 && (
-                          <span
-                            role="group"
-                            className="flex flex-wrap items-center gap-1"
-                            aria-label="Received awards"
-                          >
-                            {dashboard.awards.received.map((award) => (
-                              <ProfileAwardIcon key={award.id} award={award} />
-                            ))}
-                          </span>
-                        )}
-                      </div>
-                      <div className="mt-1.5 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                        <Badge variant="outline" className="bg-slate-50">
-                          {user.callsign}
-                        </Badge>
-                        <span className="truncate">{user.email}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button asChild size="sm">
-                      <Link href="/crew/file-pirep">
-                        <FileText className="mr-2 h-4 w-4" />
-                        File PIREP
-                      </Link>
-                    </Button>
-                    <Button asChild variant="outline" size="sm">
-                      <Link href="/crew/find-routes">
-                        <Search className="mr-2 h-4 w-4" />
-                        Find Routes
-                      </Link>
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="gap-3 py-4">
-              <CardHeader className="px-4 pb-0 sm:px-5">
-                <CardTitle className="text-base">Rank Progress</CardTitle>
-                <CardDescription>
+        {!sessionLoading && !loading && user && dashboard && (
+          <>
+            {/* Top Header */}
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h1 className="text-2xl font-bold">{user.name}</h1>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {user.callsign} · {dashboard.rank.current.name} ·{" "}
                   {dashboard.rank.next
-                    ? `${dashboard.rank.next.remainingFormatted} until ${dashboard.rank.next.name}`
-                    : "Top rank reached"}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="px-4 pb-0 sm:px-5">
-                <div className="flex items-center justify-between gap-3 text-sm">
-                  <span className="font-medium">{dashboard.rank.current.name}</span>
-                  <span className="text-muted-foreground">
-                    {dashboard.rank.next?.name || "Maximum rank"}
-                  </span>
-                </div>
-                <Progress
-                  value={dashboard.rank.progressToNextRank}
-                  className="mt-2 h-2.5 bg-slate-200"
-                />
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {Math.round(dashboard.rank.progressToNextRank)}% complete
+                    ? `${dashboard.rank.next.remainingFormatted} remaining to ${dashboard.rank.next.name}`
+                    : "Top rank achieved"}
                 </p>
-              </CardContent>
-            </Card>
-          </section>
+              </div>
 
-          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">
-                  Flight Time
-                </CardTitle>
-                <Clock className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {dashboard.statistics.totalFlightTime}
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Approved PIREP time
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">
-                  Approved PIREPs
-                </CardTitle>
-                <Plane className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {dashboard.statistics.approvedPireps}
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Counted toward rank
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">
-                  Pending PIREPs
-                </CardTitle>
-                <FileText className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {dashboard.statistics.pendingPireps}
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Awaiting staff review
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">Member Since</CardTitle>
-                <UserIcon className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {new Date(user.joined).toLocaleDateString()}
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Current rank: {dashboard.rank.current.name}
-                </p>
-              </CardContent>
-            </Card>
-          </section>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => void fetchDashboard(true)}
+                  disabled={refreshing}
+                  aria-label="Refresh dashboard"
+                >
+                  <RefreshCw
+                    className={"h-4 w-4 " + (refreshing ? "animate-spin" : "")}
+                  />
+                </Button>
+                <Button asChild>
+                  <Link href="/crew/file-pirep">
+                    <Plus className="mr-1 h-4 w-4" />
+                    File PIREP
+                  </Link>
+                </Button>
+              </div>
+            </div>
 
-          {dashboard.statistics.recentRejectedPireps > 0 && (
-            <Card className="border-red-200 bg-red-50">
-              <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-3 text-red-800">
-                  <AlertCircle className="h-5 w-5" />
-                  <p className="text-sm font-medium">
-                    Within your latest{" "}
-                    {dashboard.statistics.recentPirepWarningLimit} PIREPs,{" "}
-                    {dashboard.statistics.recentRejectedPireps}{" "}
-                    {dashboard.statistics.recentRejectedPireps === 1
-                      ? "was"
-                      : "were"}{" "}
-                    rejected and may need attention.
-                  </p>
-                </div>
-                <Button asChild variant="outline" size="sm">
+            {dashboard.statistics.recentRejectedPireps > 0 && (
+              <div
+                role="status"
+                className="flex flex-col gap-2 rounded-md bg-[var(--v2-state-bg-danger,#fceceb)] px-4 py-2.5 text-sm text-[var(--v2-state-fg-danger,#b82d35)] sm:flex-row sm:items-center sm:justify-between"
+              >
+                <span>
+                  {dashboard.statistics.recentRejectedPireps} of your latest{" "}
+                  {dashboard.statistics.recentPirepWarningLimit} PIREPs{" "}
+                  {dashboard.statistics.recentRejectedPireps === 1
+                    ? "was"
+                    : "were"}{" "}
+                  rejected.
+                </span>
+                <Button asChild variant="secondary">
                   <Link href="/crew/view-pireps">Review PIREPs</Link>
                 </Button>
-              </CardContent>
-            </Card>
-          )}
+              </div>
+            )}
 
-          <section>
-            <Card>
-              <CardHeader className="flex flex-row items-start justify-between gap-3">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <Trophy className="h-5 w-5 text-amber-500" />
-                    Awards
-                  </CardTitle>
-                  <CardDescription>
-                    Recognition you have received from the airline
-                  </CardDescription>
-                </div>
-                <Badge variant="secondary">
-                  {dashboard.awards.received.length}
-                </Badge>
-              </CardHeader>
-              <CardContent>
-                {dashboard.awards.received.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center gap-2 py-10 text-center text-muted-foreground">
-                    <span className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-                      <Trophy className="h-5 w-5" />
-                    </span>
-                    <p className="text-sm">No awards received yet.</p>
+            {/* Summary Metric Row */}
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
+              <SummaryCard
+                icon={<Clock className="h-4 w-4" />}
+                label="Total flight time"
+                value={dashboard.statistics.totalFlightTime}
+              />
+              <SummaryCard
+                icon={<CheckCircle2 className="h-4 w-4" />}
+                label="Approved PIREPs"
+                value={dashboard.statistics.approvedPireps}
+              />
+              <SummaryCard
+                icon={<CalendarClock className="h-4 w-4" />}
+                label="Pending PIREPs"
+                value={dashboard.statistics.pendingPireps}
+              />
+              <SummaryCard
+                icon={<Award className="h-4 w-4" />}
+                label={
+                  dashboard.rank.next
+                    ? `Next: ${dashboard.rank.next.name}`
+                    : "Pilot rank"
+                }
+                value={dashboard.rank.current.name}
+              />
+            </div>
+
+            <Tabs value={tab} onValueChange={setTab}>
+              <TabsList className="mb-4 grid w-full grid-cols-2 sm:w-auto sm:inline-flex">
+                <TabsTrigger value="overview">
+                  Flights &amp; analytics
+                </TabsTrigger>
+                <TabsTrigger value="awards">Awards &amp; rank</TabsTrigger>
+              </TabsList>
+
+              {/* Tab 1: Fused Analytics + Recent Flights (Clean 2-Column Row + Flight List) */}
+              <TabsContent value="overview" className="space-y-6">
+                {chartMetrics && (
+                  <section className="grid items-start gap-10 lg:grid-cols-2">
+                    <div>
+                      <div className="mb-3 flex items-center justify-between">
+                        <h2 className="text-sm font-medium">
+                          Recent Flight Time
+                        </h2>
+                        <span className="text-xs text-muted-foreground">
+                          Latest {chartMetrics.trendData.length} sectors
+                        </span>
+                      </div>
+                      <TrendChart
+                        data={chartMetrics.trendData}
+                        dataKey="hours"
+                        className="h-[172px]"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="mb-3 flex items-center justify-between">
+                        <h2 className="text-sm font-medium">
+                          Most Flown Aircraft
+                        </h2>
+                        <Link
+                          href="/crew/view-pireps"
+                          className="text-xs text-muted-foreground hover:text-foreground"
+                        >
+                          All PIREPs →
+                        </Link>
+                      </div>
+                      <BarList data={chartMetrics.topAircraft} />
+                    </div>
+                  </section>
+                )}
+
+                {/* Part B: Recent Flights List (Live aircraft scheduling style) */}
+                <section className="space-y-3">
+                  <div className="grid gap-3 sm:grid-cols-[1fr_auto_auto]">
+                    <Input
+                      aria-label="Search recent flights"
+                      placeholder="Search route, flight number, or aircraft"
+                      value={query}
+                      onChange={(event) => setQuery(event.target.value)}
+                    />
+                    <select
+                      aria-label="Filter aircraft"
+                      className="h-8 rounded-[6px] border-0 bg-[var(--v2-background-bg-layer-02,#f2f2f2)]/75 px-2.5 text-[13px] outline-none"
+                      value={aircraftFilter}
+                      onChange={(event) =>
+                        setAircraftFilter(event.target.value)
+                      }
+                    >
+                      <option value="all">All aircraft</option>
+                      {aircraftOptions.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      aria-label="Filter status"
+                      className="h-8 rounded-[6px] border-0 bg-[var(--v2-background-bg-layer-02,#f2f2f2)]/75 px-2.5 text-[13px] outline-none"
+                      value={statusFilter}
+                      onChange={(event) => setStatusFilter(event.target.value)}
+                    >
+                      <option value="all">All statuses</option>
+                      <option value="1">Approved</option>
+                      <option value="0">Awaiting approval</option>
+                      <option value="2">Rejected</option>
+                    </select>
                   </div>
-                ) : (
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    {dashboard.awards.received.map((award) => (
-                      <article
-                        key={award.id}
-                        className="flex h-full items-start gap-3 rounded-lg border p-4"
-                      >
+
+                  {visibleFlights.length === 0 ? (
+                    <div className="rounded-[6px] bg-[var(--v2-background-bg-layer-01,#fafafa)] px-6 py-10 text-center">
+                      <Plane className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
+                      <p className="text-[13px] font-medium">
+                        No flights to show
+                      </p>
+                      <p className="mt-1 text-[12px] text-muted-foreground">
+                        Try another filter, or file a new PIREP.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {visibleFlights.map((flight) => (
+                        <Card key={flight.id}>
+                          <Link
+                            href={buildReflyHref(flight)}
+                            className="grid w-full gap-4 rounded-[6px] bg-[var(--v2-background-bg-layer-01,#fafafa)] px-4 py-3.5 text-left transition-colors hover:bg-[var(--v2-background-bg-layer-02,#f2f2f2)] focus-visible:outline-none md:grid-cols-[1fr_1.3fr_1fr]"
+                          >
+                            <div>
+                              <div className="mb-2 flex flex-wrap items-center gap-2">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={
+                                    getAirlineLogoForFlight(
+                                      flight.flightnum,
+                                      flight.aircraft?.liveryname,
+                                    ).logo
+                                  }
+                                  alt=""
+                                  className="h-4 w-auto max-w-[54px] shrink-0 object-contain"
+                                />
+                                <span className="font-semibold">
+                                  {flight.flightnum}
+                                </span>
+                                <StatusBadge status={flight.status} />
+                              </div>
+                              <p className="text-sm text-muted-foreground">
+                                {flight.aircraft?.name || "Fleet aircraft"}
+                                {flight.aircraft?.liveryname
+                                  ? ` · ${flight.aircraft.liveryname}`
+                                  : ""}
+                              </p>
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                Logged {formatUtcDate(flight.date)}
+                              </p>
+                            </div>
+
+                            <div>
+                              <div className="flex items-center gap-3 text-xl font-semibold tracking-tight">
+                                <span>{flight.departure}</span>
+                                <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                                <span>{flight.arrival}</span>
+                              </div>
+                              <p className="mt-2 text-xs text-muted-foreground">
+                                Block duration {flight.flighttime}
+                              </p>
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                Date {flight.date}
+                              </p>
+                            </div>
+
+                            <div className="space-y-2 md:text-right">
+                              <p className="text-sm">
+                                {user.name}
+                                <span className="ml-1 text-xs text-muted-foreground">
+                                  {user.callsign}
+                                </span>
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {dashboard.rank.current.name}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                Click to file again
+                              </p>
+                            </div>
+                          </Link>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              </TabsContent>
+
+              {/* Tab 2: Awards & Rank */}
+              <TabsContent value="awards" className="space-y-4">
+                <div className="rounded-[6px] bg-[var(--v2-background-bg-layer-01,#fafafa)] px-4 py-3.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="font-semibold">
+                        {dashboard.rank.current.name}
+                      </p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {dashboard.rank.next
+                          ? `${dashboard.rank.next.remainingFormatted} remaining to reach ${dashboard.rank.next.name} (${dashboard.rank.next.timeReqFormatted} required)`
+                          : "Maximum pilot rank achieved"}
+                      </p>
+                    </div>
+                    <Badge variant="default">
+                      {Math.round(dashboard.rank.progressToNextRank)}%
+                    </Badge>
+                  </div>
+                  <Progress
+                    value={dashboard.rank.progressToNextRank}
+                    className="mt-3 h-1.5"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  {dashboard.awards.received.map((award) => (
+                    <div
+                      key={award.id}
+                      className="grid w-full items-center gap-4 rounded-[6px] bg-[var(--v2-background-bg-layer-01,#fafafa)] px-4 py-3.5 md:grid-cols-[1fr_1.5fr_auto]"
+                    >
+                      <div className="flex items-center gap-3">
                         <AwardArtwork award={award} />
-                        <div className="min-w-0">
-                          <h3 className="font-semibold">
+                        <div>
+                          <p className="font-semibold">
                             {award.name || "Unnamed award"}
-                          </h3>
-                          <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
-                            {award.description || "No description"}
                           </p>
-                          <p className="mt-2 text-xs text-muted-foreground">
-                            Awarded {formatAwardDate(award.dateAwarded)}
+                          <p className="text-xs text-muted-foreground">
+                            Pilot Commendation
                           </p>
                         </div>
-                      </article>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </section>
+                      </div>
 
-          <section>
-            <Card>
-              <CardHeader>
-                <CardTitle>Recent Flights</CardTitle>
-                <CardDescription>Your latest PIREP activity</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Flight</TableHead>
-                      <TableHead>Route</TableHead>
-                      <TableHead>Aircraft</TableHead>
-                      <TableHead>Time</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {dashboard.recentPireps.length === 0 ? (
-                      <TableRow>
-                        <TableCell
-                          colSpan={5}
-                          className="text-center text-muted-foreground"
-                        >
-                          No PIREPs filed yet.
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      dashboard.recentPireps.slice(0, 6).map((flight) => (
-                        <TableRow key={flight.id}>
-                          <TableCell className="font-medium">
-                            <div>{flight.flightnum}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {flight.date}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {flight.departure} → {flight.arrival}
-                          </TableCell>
-                          <TableCell>
-                            {flight.aircraft
-                              ? `${flight.aircraft.name}${
-                                  flight.aircraft.liveryname
-                                    ? ` (${flight.aircraft.liveryname})`
-                                    : ""
-                                }`
-                              : "N/A"}
-                          </TableCell>
-                          <TableCell>{flight.flighttime}</TableCell>
-                          <TableCell>
-                            <Badge
-                              variant="outline"
-                              className={statusBadge(flight.status)}
-                            >
-                              {statusLabel(flight.status)}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </section>
-        </main>
-      )}
+                      <p className="text-sm text-muted-foreground">
+                        {award.description ||
+                          "Awarded for operational service."}
+                      </p>
+
+                      <div className="text-xs text-muted-foreground md:text-right">
+                        Awarded {formatUtcDate(award.dateAwarded)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </TabsContent>
+            </Tabs>
+          </>
+        )}
+      </main>
     </CrewHeader>
   );
 }

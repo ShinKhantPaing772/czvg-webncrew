@@ -479,13 +479,13 @@ export default function AdminDashboard() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                  <MapPinned className="h-4 w-4" />
+                  <MapPinned className="h-4 w-4 text-[#0052a5]" />
                   Live Flight Map
                 </CardTitle>
-                <Badge variant="outline">External</Badge>
+                <Badge variant="outline">Live Radar</Badge>
               </CardHeader>
               <CardContent>
-                <div className="h-[420px] w-full overflow-hidden rounded-md border bg-slate-50 md:h-[560px]">
+                <div className="h-[460px] w-full overflow-hidden rounded-[8px] bg-[#e9eff6] shadow-[var(--v2-elevation-raised)] md:h-[580px]">
                   <iframe
                     src={overview.liveMapUrl}
                     title="CZVG Live Flight Map"

@@ -10,7 +10,7 @@ export function ThemedCard({ className, ...props }: Props) {
   return (
     <Card
       className={cn(
-        "bg-card text-card-foreground shadow-md border-transparent",
+        "bg-white text-[var(--v2-text-text-base,#161616)] border-0 shadow-none",
         className,
       )}
       {...props}

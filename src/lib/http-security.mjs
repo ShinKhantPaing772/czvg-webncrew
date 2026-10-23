@@ -1,6 +1,10 @@
+const isDev = process.env.NODE_ENV === "development";
+
 const contentSecurityPolicy = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
+  isDev
+    ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+    : "script-src 'self' 'unsafe-inline'",
   "style-src 'self' 'unsafe-inline'",
   [
     "img-src 'self' data: blob:",
@@ -11,15 +15,18 @@ const contentSecurityPolicy = [
     "https://aireuropavirtual.digitalweb.app",
     "https://static.wixstatic.com",
     "https:",
+    ...(isDev ? ["http:"] : []),
   ].join(" "),
   "font-src 'self' data:",
-  "connect-src 'self'",
-  "frame-src https://www.google.com https://docs.google.com https://map.ifczvg.com",
+  isDev ? "connect-src 'self' ws: wss: http: https:" : "connect-src 'self'",
+  isDev
+    ? "frame-src 'self' http://localhost:5173 https://www.google.com https://docs.google.com https://map.ifczvg.com"
+    : "frame-src https://www.google.com https://docs.google.com https://map.ifczvg.com",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
   "frame-ancestors 'self'",
-  "upgrade-insecure-requests",
+  ...(isDev ? [] : ["upgrade-insecure-requests"]),
 ].join("; ");
 
 export const securityHeaders = [

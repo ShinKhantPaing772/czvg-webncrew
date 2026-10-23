@@ -56,3 +56,47 @@ export const groupAirlines: readonly GroupAirline[] = [
     logo: "/airlines/jiangxi.webp",
   },
 ];
+
+/**
+ * Resolves the authentic airline logo asset from `/public/airlines/` based on flight number or livery name.
+ */
+export function getAirlineLogoForFlight(
+  flightnum?: string | null,
+  liveryname?: string | null,
+): { logo: string; name: string } {
+  const code = (flightnum || "").trim().toUpperCase();
+  const livery = (liveryname || "").trim().toLowerCase();
+
+  if (
+    code.startsWith("CXA") ||
+    code.startsWith("MF") ||
+    livery.includes("xiamen")
+  ) {
+    return { logo: "/airlines/xiamenair.svg", name: "Xiamen Airlines" };
+  }
+  if (
+    code.startsWith("CQN") ||
+    code.startsWith("OQ") ||
+    livery.includes("chongqing")
+  ) {
+    return { logo: "/airlines/chongqing.webp", name: "Chongqing Airlines" };
+  }
+  if (
+    code.startsWith("HBH") ||
+    code.startsWith("NS") ||
+    livery.includes("hebei")
+  ) {
+    return { logo: "/airlines/hebei.webp", name: "Hebei Airlines" };
+  }
+  if (
+    code.startsWith("CJX") ||
+    code.startsWith("RY") ||
+    livery.includes("jiangxi")
+  ) {
+    return { logo: "/airlines/jiangxi.webp", name: "Jiangxi Air" };
+  }
+  return {
+    logo: "/airlines/china-southern.svg",
+    name: "China Southern Airlines",
+  };
+}

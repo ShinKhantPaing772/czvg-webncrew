@@ -278,7 +278,14 @@ export default function RoutesPage() {
       }
 
       const data = await response.json();
-      setRoutes(data.data.routes);
+      const nextRoutes = Array.isArray(data?.data?.routes)
+        ? data.data.routes
+        : Array.isArray(data?.data)
+          ? data.data
+          : Array.isArray(data?.routes)
+            ? data.routes
+            : [];
+      setRoutes(nextRoutes);
       setError("");
     } catch (err) {
       setError("Error fetching routes. Please try again.");
@@ -318,7 +325,7 @@ export default function RoutesPage() {
     fetchAircraft();
   }, []);
 
-  const filteredRoutes = routes;
+  const filteredRoutes = Array.isArray(routes) ? routes : [];
   const sortedRoutes = [...filteredRoutes];
 
   const pageCount = Math.max(

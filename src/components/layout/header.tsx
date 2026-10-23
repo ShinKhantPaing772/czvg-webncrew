@@ -11,6 +11,7 @@ import {
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 import { useSession } from "@/hooks/use-session";
+import { LanguageSwitcher, useI18n } from "@/lib/i18n";
 import { getCrewLandingPath, usesApplicantPortal } from "@/lib/pilot-status";
 import { logout } from "@/lib/utils/auth";
 
@@ -20,22 +21,23 @@ export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const { user } = useSession();
+  const { t } = useI18n();
   const pathname = usePathname();
   const portalHref = getCrewLandingPath(user?.status ?? null);
   const portalLabel = usesApplicantPortal(user?.status ?? null)
-    ? "Applicant Portal"
-    : "Crew Center";
+    ? t("Applicant Portal", "申请人中心")
+    : t("Crew Center", "机组中心");
 
   const navLinks = [
-    { href: "/", label: "Home" },
-    { href: "/about-us", label: "About Us" },
+    { href: "/", label: t("Home", "首页") },
+    { href: "/about-us", label: t("About Us", "关于我们") },
   ];
 
   const operationLinks = [
-    { href: "/operations/hubs", label: "Hubs" },
-    { href: "/operations/fleet", label: "Fleet" },
-    { href: "/operations/ranks", label: "Ranks" },
-    { href: "/operations/routes", label: "Routes" },
+    { href: "/operations/hubs", label: t("Hubs", "枢纽机场") },
+    { href: "/operations/fleet", label: t("Fleet", "机队规模") },
+    { href: "/operations/ranks", label: t("Ranks", "飞行员职级") },
+    { href: "/operations/routes", label: t("Routes", "航线网络") },
   ];
 
   const isActive = (href: string) =>
@@ -54,7 +56,7 @@ export function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-slate-200 bg-white shadow-sm">
+    <header className="sticky top-0 z-50 w-full border-b border-slate-200/80 bg-white/95 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between px-4 md:px-6">
         <div className="flex min-w-0 items-center gap-2">
           <Link href="/" className="flex min-w-0 items-center gap-2">
@@ -70,10 +72,10 @@ export function Header() {
             <Link
               key={link.href}
               href={link.href}
-              className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                 isActive(link.href)
-                  ? "bg-primary/10 text-primary"
-                  : "text-slate-700 hover:bg-slate-100 hover:text-slate-950"
+                  ? "bg-[#eef6ff] text-[#0052a5]"
+                  : "text-slate-600 hover:bg-[#0052a5]/[0.05] hover:text-[#003a74]"
               }`}
             >
               {link.label}
@@ -81,16 +83,16 @@ export function Header() {
           ))}
           <DropdownMenu>
             <DropdownMenuTrigger
-              className={`flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+              className={`flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                 isActive("/operations")
-                  ? "bg-primary/10 text-primary"
-                  : "text-slate-700 hover:bg-slate-100 hover:text-slate-950"
+                  ? "bg-[#eef6ff] text-[#0052a5]"
+                  : "text-slate-600 hover:bg-[#0052a5]/[0.05] hover:text-[#003a74]"
               }`}
             >
-              Operations
+              {t("Operations", "运行中心")}
               <ChevronDown className="h-4 w-4" />
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="rounded-md border border-slate-200 bg-white shadow-lg">
+            <DropdownMenuContent className="rounded-xl border-0 bg-white p-1 shadow-[var(--v2-elevation-floating)]">
               {operationLinks.map((link) => (
                 <DropdownMenuItem key={link.href}>
                   <Link href={link.href} className="flex w-full">
@@ -103,20 +105,21 @@ export function Header() {
           {!user ? (
             <Link
               href="/crew?type=signup"
-              className="rounded-md px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-950"
+              className="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-[#0052a5]/[0.05] hover:text-[#003a74]"
             >
-              Join Us
+              {t("Join Us", "加入我们")}
             </Link>
           ) : (
             <Link
               href={portalHref}
-              className="rounded-md px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-950"
+              className="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-[#0052a5]/[0.05] hover:text-[#003a74]"
             >
               {portalLabel}
             </Link>
           )}
         </nav>
-        <div className="flex shrink-0 items-center gap-4">
+        <div className="flex shrink-0 items-center gap-2">
+          <LanguageSwitcher />
           {user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -137,7 +140,9 @@ export function Header() {
                 >
                   <div className="flex w-full items-center">
                     <LogOut className="mr-2 h-4 w-4" />
-                    {isLoggingOut ? "Logging out..." : "Log Out"}
+                    {isLoggingOut
+                      ? t("Logging out...", "正在退出...")
+                      : t("Log Out", "退出登录")}
                   </div>
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -148,7 +153,7 @@ export function Header() {
               variant="default"
               className="bg-primary text-white hidden md:inline-flex"
             >
-              <Link href="/crew">Pilot Portal</Link>
+              <Link href="/crew">{t("Pilot Portal", "飞行员门户")}</Link>
             </Button>
           )}
           <Button

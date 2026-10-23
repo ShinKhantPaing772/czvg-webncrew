@@ -1,23 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
+  CheckCircle2,
+  Compass,
   Loader2,
+  Plane,
   PlaneTakeoff,
   Save,
-  Search,
   X,
 } from "lucide-react";
 
 import { CrewHeader } from "@/components/crew-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Pagination,
   PaginationContent,
@@ -27,22 +29,8 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { useSession } from "@/hooks/use-session";
+import { getAirlineLogoForFlight } from "@/lib/group-airlines";
 import { authFetch } from "@/lib/utils/api";
 import { formatFlightTime } from "@/lib/utils/time";
 
@@ -93,6 +81,30 @@ type PilotDashboard = {
     ownedAwardIds: number[];
   };
 };
+
+function SummaryCard({
+  icon,
+  label,
+  count,
+}: {
+  icon: ReactNode;
+  label: string;
+  count: number | string;
+}) {
+  return (
+    <Card>
+      <CardContent className="flex items-center gap-3 p-3 sm:p-4">
+        <span className="hidden rounded-md bg-[#eef4fb] p-2 text-[#0052a5] sm:block">
+          {icon}
+        </span>
+        <div>
+          <p className="text-xl font-semibold sm:text-2xl">{count}</p>
+          <p className="text-xs text-muted-foreground">{label}</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 function readStorage<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
@@ -149,15 +161,11 @@ export default function FindRoutes() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [aircraftData, setAircraftData] = useState<Aircraft[]>([]);
-  const [loadingAircraft, setLoadingAircraft] = useState(false);
   const [eligibleRankIds, setEligibleRankIds] = useState<number[]>([]);
   const [ownedAwardIds, setOwnedAwardIds] = useState<number[]>([]);
   const [loadingEligibility, setLoadingEligibility] = useState(true);
   const [savedFilters, setSavedFilters] = useState<SavedFilter[]>([]);
-  const [sortConfig, setSortConfig] = useState<{
-    key: "fltnum" | "dep" | "arr" | "duration" | "aircraft";
-    direction: "ascending" | "descending";
-  } | null>(null);
+  const isInitialRouteFetch = useRef(true);
 
   useEffect(() => {
     setSavedFilters(readStorage<SavedFilter[]>(SAVED_FILTERS_KEY, []));
@@ -166,19 +174,16 @@ export default function FindRoutes() {
   useEffect(() => {
     async function fetchAircraft() {
       try {
-        setLoadingAircraft(true);
-        const response = await fetch("/api/aircraft");
+        const response = await authFetch("/api/aircraft");
         if (!response.ok) throw new Error("Failed to fetch aircraft");
         const data = await response.json();
         setAircraftData(data.aircrafts || []);
       } catch (fetchError) {
         console.error("Error fetching aircraft:", fetchError);
-      } finally {
-        setLoadingAircraft(false);
       }
     }
 
-    fetchAircraft();
+    void fetchAircraft();
   }, []);
 
   useEffect(() => {
@@ -198,10 +203,13 @@ export default function FindRoutes() {
       }
     }
 
-    fetchEligibility();
+    void fetchEligibility();
   }, [user?.id]);
 
   useEffect(() => {
+    const delayMs = isInitialRouteFetch.current ? 0 : 180;
+    isInitialRouteFetch.current = false;
+
     const timeout = window.setTimeout(async () => {
       try {
         setLoading(true);
@@ -228,21 +236,26 @@ export default function FindRoutes() {
           }
         }
 
-        const response = await fetch(url.toString());
+        const response = await authFetch(`${url.pathname}${url.search}`);
         const data = await response.json();
         if (!response.ok || !data.success) {
           throw new Error(data.message || "Failed to fetch routes");
         }
 
+        const rawRoutes = Array.isArray(data.data)
+          ? data.data
+          : Array.isArray(data.routes)
+            ? data.routes
+            : [];
+
         setRoutesData(
-          (data.data || []).map((route: RouteItem) => ({
+          rawRoutes.map((route: RouteItem) => ({
             ...route,
             durationSeconds: Number(route.durationSeconds) || 0,
             duration: secondsToLabel(Number(route.durationSeconds) || 0),
             aircraft: route.aircraft || [],
           })),
         );
-
       } catch (fetchError) {
         setRoutesData([]);
         setError(
@@ -253,21 +266,24 @@ export default function FindRoutes() {
       } finally {
         setLoading(false);
       }
-    }, 450);
+    }, delayMs);
 
     return () => window.clearTimeout(timeout);
   }, [filters]);
 
-  const isAircraftEligible = useCallback((aircraft: Aircraft) => {
-    const rankRequirement = Number(aircraft.rankreq) || null;
-    const awardRequirement = Number(aircraft.awardreq) || null;
-    if (!rankRequirement && !awardRequirement) return false;
+  const isAircraftEligible = useCallback(
+    (aircraft: Aircraft) => {
+      const rankRequirement = Number(aircraft.rankreq) || null;
+      const awardRequirement = Number(aircraft.awardreq) || null;
+      if (!rankRequirement && !awardRequirement) return false;
 
-    return Boolean(
-      (rankRequirement && eligibleRankIds.includes(rankRequirement)) ||
-        (awardRequirement && ownedAwardIds.includes(awardRequirement)),
-    );
-  }, [eligibleRankIds, ownedAwardIds]);
+      return Boolean(
+        (rankRequirement && eligibleRankIds.includes(rankRequirement)) ||
+          (awardRequirement && ownedAwardIds.includes(awardRequirement)),
+      );
+    },
+    [eligibleRankIds, ownedAwardIds],
+  );
 
   const eligibleAircraft = useCallback(
     (route: RouteItem) => route.aircraft.filter(isAircraftEligible),
@@ -275,7 +291,7 @@ export default function FindRoutes() {
   );
 
   const filteredRoutes = useMemo(() => {
-    const visibleRoutes = filters.eligibleOnly
+    return filters.eligibleOnly
       ? routesData
           .map((route) => ({
             ...route,
@@ -283,31 +299,18 @@ export default function FindRoutes() {
           }))
           .filter((route) => route.aircraft.length > 0)
       : routesData;
+  }, [routesData, filters.eligibleOnly, eligibleAircraft]);
 
-    if (!sortConfig) return visibleRoutes;
+  const eligibleRoutesCount = useMemo(
+    () =>
+      routesData.filter((route) => eligibleAircraft(route).length > 0).length,
+    [routesData, eligibleAircraft],
+  );
 
-    return [...visibleRoutes].sort((a, b) => {
-      if (sortConfig.key === "duration") {
-        return sortConfig.direction === "ascending"
-          ? a.durationSeconds - b.durationSeconds
-          : b.durationSeconds - a.durationSeconds;
-      }
-
-      if (sortConfig.key === "aircraft") {
-        const aircraftA = a.aircraft[0]?.name.toLowerCase() || "";
-        const aircraftB = b.aircraft[0]?.name.toLowerCase() || "";
-        return sortConfig.direction === "ascending"
-          ? aircraftA.localeCompare(aircraftB)
-          : aircraftB.localeCompare(aircraftA);
-      }
-
-      const valueA = String(a[sortConfig.key] || "").toLowerCase();
-      const valueB = String(b[sortConfig.key] || "").toLowerCase();
-      return sortConfig.direction === "ascending"
-        ? valueA.localeCompare(valueB)
-        : valueB.localeCompare(valueA);
-    });
-  }, [routesData, sortConfig, filters.eligibleOnly, eligibleAircraft]);
+  const unlockedFleetCount = useMemo(
+    () => aircraftData.filter(isAircraftEligible).length,
+    [aircraftData, isAircraftEligible],
+  );
 
   const totalPages = Math.ceil(filteredRoutes.length / itemsPerPage);
   const paginatedRoutes = filteredRoutes.slice(
@@ -327,16 +330,6 @@ export default function FindRoutes() {
     setFilters((current) => ({ ...current, ...next }));
   }
 
-  function requestSort(key: "fltnum" | "dep" | "arr" | "duration" | "aircraft") {
-    setSortConfig((current) => ({
-      key,
-      direction:
-        current?.key === key && current.direction === "ascending"
-          ? "descending"
-          : "ascending",
-    }));
-  }
-
   function saveCurrentFilter() {
     const saved: SavedFilter = {
       ...filters,
@@ -344,8 +337,10 @@ export default function FindRoutes() {
       label: filterLabel(filters),
     };
     setSavedFilters((current) => {
-      const next = [saved, ...current.filter((item) => item.label !== saved.label)]
-        .slice(0, 6);
+      const next = [
+        saved,
+        ...current.filter((item) => item.label !== saved.label),
+      ].slice(0, 6);
       writeStorage(SAVED_FILTERS_KEY, next);
       return next;
     });
@@ -365,9 +360,10 @@ export default function FindRoutes() {
   }
 
   function filePirepHref(route: RouteItem) {
-    const aircraft = eligibleAircraft(route).find(
-      (item) => String(item.id) === filters.aircraftFilter,
-    ) || eligibleAircraft(route)[0];
+    const aircraft =
+      eligibleAircraft(route).find(
+        (item) => String(item.id) === filters.aircraftFilter,
+      ) || eligibleAircraft(route)[0];
     const params = new URLSearchParams({
       flightnum: route.fltnum || "",
       departure: route.dep,
@@ -382,325 +378,290 @@ export default function FindRoutes() {
 
   return (
     <CrewHeader>
-      <main className="flex flex-1 flex-col gap-5 md:gap-7">
-        <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+      <main className="flex-1 space-y-5 pb-24 md:pb-6">
+        {/* Top Header — Matches `Live aircraft scheduling` */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold">Find Routes</h1>
+            <h1 className="text-2xl font-bold">Find routes</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Search updates automatically. Save filters for this browser.
+              Search active commercial and partner routes, filter by aircraft or
+              duration, and dispatch a PIREP.
             </p>
           </div>
-          <Button type="button" variant="outline" onClick={saveCurrentFilter}>
-            <Save className="mr-2 h-4 w-4" />
-            Save Filter
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={saveCurrentFilter}
+            >
+              <Save className="h-4 w-4" />
+              Save filter
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setCurrentPage(1);
+                setFilters({
+                  searchQuery: "",
+                  departureFilter: "",
+                  arrivalFilter: "",
+                  aircraftFilter: "all",
+                  durationRange: "",
+                  eligibleOnly: false,
+                });
+              }}
+            >
+              Clear
+            </Button>
+          </div>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Filters</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-              <div className="space-y-2">
-                <Label htmlFor="departure">Departure</Label>
-                <Input
-                  id="departure"
-                  placeholder="ICAO"
-                  value={filters.departureFilter}
-                  onChange={(event) =>
-                    updateFilters({
-                      departureFilter: normalizeIcao(event.target.value),
-                    })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="arrival">Arrival</Label>
-                <Input
-                  id="arrival"
-                  placeholder="ICAO"
-                  value={filters.arrivalFilter}
-                  onChange={(event) =>
-                    updateFilters({
-                      arrivalFilter: normalizeIcao(event.target.value),
-                    })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Aircraft</Label>
-                <Select
-                  value={filters.aircraftFilter}
-                  onValueChange={(value) => updateFilters({ aircraftFilter: value })}
-                >
-                  <SelectTrigger className="w-full">
-                    {loadingAircraft ? (
-                      <span className="flex items-center gap-2">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Loading
-                      </span>
-                    ) : (
-                      <SelectValue placeholder="Any aircraft" />
-                    )}
-                  </SelectTrigger>
-                  <SelectContent className="max-h-[240px] bg-white">
-                    <SelectItem value="all">Any aircraft</SelectItem>
-                    {aircraftData.map((aircraft) => (
-                      <SelectItem
-                        key={aircraft.id}
-                        value={String(aircraft.id)}
-                        disabled={!isAircraftEligible(aircraft)}
-                      >
-                        {aircraft.name}
-                        {aircraft.liveryname ? ` (${aircraft.liveryname})` : ""}
-                        {!isAircraftEligible(aircraft) ? " — Locked" : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Duration</Label>
-                <Select
-                  value={filters.durationRange || "all"}
-                  onValueChange={(value) =>
-                    updateFilters({ durationRange: value === "all" ? "" : value })
-                  }
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Any duration" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-white">
-                    <SelectItem value="all">Any duration</SelectItem>
-                    <SelectItem value="0-3600">&lt; 01:00</SelectItem>
-                    <SelectItem value="3600-7200">01:00–02:00</SelectItem>
-                    <SelectItem value="7200-14400">02:00–04:00</SelectItem>
-                    <SelectItem value="14400-28800">04:00–08:00</SelectItem>
-                    <SelectItem value="28800-">08:00+</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="search">Flight Number</Label>
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="search"
-                    placeholder="CZ123"
-                    className="pl-8"
-                    value={filters.searchQuery}
-                    onChange={(event) =>
-                      updateFilters({ searchQuery: event.target.value })
-                    }
-                  />
-                </div>
-              </div>
-            </div>
+        {/* Summary Row — Matches `Live aircraft scheduling` */}
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+          <SummaryCard
+            icon={<Compass className="h-4 w-4" />}
+            label="Matching routes"
+            count={filteredRoutes.length}
+          />
+          <SummaryCard
+            icon={<CheckCircle2 className="h-4 w-4" />}
+            label="Eligible routes"
+            count={eligibleRoutesCount}
+          />
+          <SummaryCard
+            icon={<Plane className="h-4 w-4" />}
+            label="Unlocked aircraft"
+            count={unlockedFleetCount}
+          />
+        </div>
 
-            <div className="flex flex-wrap items-center gap-4">
-              <label className="flex items-center gap-2 text-sm">
-                <Checkbox
-                  checked={filters.eligibleOnly}
-                  onCheckedChange={(checked) =>
-                    updateFilters({ eligibleOnly: checked === true })
-                  }
-                />
-                Eligible aircraft only
-              </label>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setCurrentPage(1);
-                  setFilters({
-                    searchQuery: "",
-                    departureFilter: "",
-                    arrivalFilter: "",
-                    aircraftFilter: "all",
-                    durationRange: "",
-                    eligibleOnly: false,
-                  })
-                }}
-              >
-                <X className="mr-2 h-4 w-4" />
-                Clear
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {savedFilters.length > 0 && (
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Saved Filters</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-wrap gap-2">
-              {savedFilters.map((saved) => (
-                <span key={saved.id} className="inline-flex items-center gap-1">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => applyFilter(saved)}
-                  >
-                    {saved.label}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => removeSavedFilter(saved.id)}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </span>
+        {/* Filter Bar — Matches `Live aircraft scheduling` */}
+        <section className="space-y-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1.4fr_110px_110px_auto_auto]">
+            <Input
+              aria-label="Search flight number"
+              placeholder="Search flight number (e.g. CSN327, CXA801)"
+              value={filters.searchQuery}
+              onChange={(event) =>
+                updateFilters({ searchQuery: event.target.value })
+              }
+            />
+            <Input
+              aria-label="Departure ICAO"
+              placeholder="Dep ICAO"
+              className="font-mono uppercase"
+              value={filters.departureFilter}
+              onChange={(event) =>
+                updateFilters({
+                  departureFilter: normalizeIcao(event.target.value),
+                })
+              }
+            />
+            <Input
+              aria-label="Arrival ICAO"
+              placeholder="Arr ICAO"
+              className="font-mono uppercase"
+              value={filters.arrivalFilter}
+              onChange={(event) =>
+                updateFilters({
+                  arrivalFilter: normalizeIcao(event.target.value),
+                })
+              }
+            />
+            <select
+              aria-label="Filter aircraft"
+              className="h-8 rounded-[6px] border-0 bg-[var(--v2-background-bg-layer-02,#f2f2f2)]/75 px-2.5 text-[13px] outline-none"
+              value={filters.aircraftFilter}
+              onChange={(event) =>
+                updateFilters({ aircraftFilter: event.target.value })
+              }
+            >
+              <option value="all">All aircraft</option>
+              {aircraftData.map((aircraft) => (
+                <option
+                  key={aircraft.id}
+                  value={String(aircraft.id)}
+                  disabled={!isAircraftEligible(aircraft)}
+                >
+                  {aircraft.name}
+                  {aircraft.liveryname ? ` (${aircraft.liveryname})` : ""}
+                  {!isAircraftEligible(aircraft) ? " — Locked" : ""}
+                </option>
               ))}
-            </CardContent>
-          </Card>
+            </select>
+            <select
+              aria-label="Filter duration"
+              className="h-8 rounded-[6px] border-0 bg-[var(--v2-background-bg-layer-02,#f2f2f2)]/75 px-2.5 text-[13px] outline-none"
+              value={filters.durationRange || "all"}
+              onChange={(event) =>
+                updateFilters({
+                  durationRange:
+                    event.target.value === "all" ? "" : event.target.value,
+                })
+              }
+            >
+              <option value="all">Any duration</option>
+              <option value="0-3600">&lt; 01:00</option>
+              <option value="3600-7200">01:00–02:00</option>
+              <option value="7200-14400">02:00–04:00</option>
+              <option value="14400-28800">04:00–08:00</option>
+              <option value="28800-">08:00+</option>
+            </select>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Checkbox
+                checked={filters.eligibleOnly}
+                onCheckedChange={(checked) =>
+                  updateFilters({ eligibleOnly: checked === true })
+                }
+              />
+              Show only routes with unlocked aircraft
+            </label>
+
+            {savedFilters.map((saved) => (
+              <span
+                key={saved.id}
+                className="inline-flex items-center gap-1 rounded-[5px] bg-[var(--v2-background-bg-layer-02,#f2f2f2)] px-2 py-0.5 text-xs"
+              >
+                <button
+                  type="button"
+                  onClick={() => applyFilter(saved)}
+                  className="font-medium hover:underline"
+                >
+                  {saved.label}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => removeSavedFilter(saved.id)}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        </section>
+
+        {/* Route Cards — Matches `FlightList` in `Live aircraft scheduling` 1:1 */}
+        {loading ? (
+          <div
+            role="status"
+            className="flex items-center justify-center gap-2 py-16 text-muted-foreground"
+          >
+            <Loader2 className="h-5 w-5 animate-spin" />
+            Loading routes…
+          </div>
+        ) : error ? (
+          <div
+            role="alert"
+            className="rounded-md bg-destructive/10 p-3 text-sm text-destructive"
+          >
+            {error}
+          </div>
+        ) : paginatedRoutes.length === 0 ? (
+          <div className="rounded-[6px] bg-[var(--v2-background-bg-layer-01,#fafafa)] px-6 py-10 text-center">
+            <Compass className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
+            <p className="text-[13px] font-medium">No routes to show</p>
+            <p className="mt-1 text-[12px] text-muted-foreground">
+              Try another filter or clear the search criteria.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            {paginatedRoutes.map((route) => {
+              const unlockedForRoute = eligibleAircraft(route);
+              const canFly =
+                unlockedForRoute.length > 0 && !loadingEligibility;
+              const primaryAc = unlockedForRoute[0] || route.aircraft[0];
+              const extraCount = Math.max(0, route.aircraft.length - 1);
+
+              return (
+                <Card key={route.id}>
+                  <div className="grid w-full items-center gap-4 rounded-[6px] bg-[var(--v2-background-bg-layer-01,#fafafa)] px-4 py-3.5 transition-colors hover:bg-[var(--v2-background-bg-layer-02,#f2f2f2)] md:grid-cols-[1fr_1.3fr_1fr]">
+                    <div>
+                      <div className="mb-2 flex flex-wrap items-center gap-2">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={
+                            getAirlineLogoForFlight(
+                              route.fltnum,
+                              primaryAc?.liveryname,
+                            ).logo
+                          }
+                          alt=""
+                          className="h-4 w-auto max-w-[54px] shrink-0 object-contain"
+                        />
+                        <span className="font-semibold">{route.fltnum}</span>
+                        <Badge variant={canFly ? "default" : "secondary"}>
+                          {canFly ? "Eligible" : "Locked"}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {primaryAc
+                          ? `${primaryAc.name}${primaryAc.liveryname ? ` · ${primaryAc.liveryname}` : ""}`
+                          : "No aircraft assigned"}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {extraCount > 0
+                          ? `+${extraCount} additional aircraft on route`
+                          : route.notes || "Direct scheduled sector"}
+                      </p>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center gap-3 text-xl font-semibold tracking-tight">
+                        <span>{route.dep}</span>
+                        <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                        <span>{route.arr}</span>
+                      </div>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Scheduled duration {route.duration}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {unlockedForRoute.length}/{route.aircraft.length}{" "}
+                        aircraft unlocked for your rank
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col items-start justify-between gap-2 md:items-end">
+                      <p className="text-xs text-muted-foreground">
+                        {route.notes || "Standard dispatch"}
+                      </p>
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" asChild>
+                          <Link href={`/crew/route/${route.id}`}>Details</Link>
+                        </Button>
+                        {canFly ? (
+                          <Button size="sm" asChild>
+                            <Link href={filePirepHref(route)}>
+                              <PlaneTakeoff className="h-3.5 w-3.5" />
+                              File PIREP
+                            </Link>
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            disabled
+                            title="You do not meet an aircraft requirement for this route"
+                          >
+                            <PlaneTakeoff className="h-3.5 w-3.5" />
+                            File PIREP
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
         )}
 
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead
-                    className="cursor-pointer hover:bg-muted"
-                    onClick={() => requestSort("fltnum")}
-                  >
-                    Flight
-                  </TableHead>
-                  <TableHead
-                    className="cursor-pointer hover:bg-muted"
-                    onClick={() => requestSort("dep")}
-                  >
-                    Route
-                  </TableHead>
-                  <TableHead
-                    className="cursor-pointer hover:bg-muted"
-                    onClick={() => requestSort("duration")}
-                  >
-                    Duration
-                  </TableHead>
-                  <TableHead
-                    className="cursor-pointer hover:bg-muted"
-                    onClick={() => requestSort("aircraft")}
-                  >
-                    Aircraft
-                  </TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center">
-                      <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground">
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                        Loading routes...
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : error ? (
-                  <TableRow>
-                    <TableCell
-                      colSpan={5}
-                      className="py-6 text-center text-red-700"
-                    >
-                      {error}
-                    </TableCell>
-                  </TableRow>
-                ) : paginatedRoutes.length === 0 ? (
-                  <TableRow>
-                    <TableCell
-                      colSpan={5}
-                      className="py-6 text-center text-muted-foreground"
-                    >
-                      No routes found matching your criteria.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  paginatedRoutes.map((route) => (
-                    <TableRow key={route.id}>
-                      <TableCell className="font-medium">
-                        {route.fltnum}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          <span>{route.dep}</span>
-                          <ArrowRight className="h-3 w-3" />
-                          <span>{route.arr}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>{route.duration}</TableCell>
-                      <TableCell className="max-w-[360px]">
-                        <div className="flex flex-wrap gap-1">
-                          {route.aircraft.length > 0 ? (
-                            route.aircraft.map((aircraft) => (
-                              <Badge
-                                key={aircraft.id}
-                                variant="outline"
-                                className={
-                                  filters.eligibleOnly || isAircraftEligible(aircraft)
-                                    ? ""
-                                    : "opacity-60"
-                                }
-                                title={
-                                  isAircraftEligible(aircraft)
-                                    ? undefined
-                                    : "Rank or award requirement not met"
-                                }
-                              >
-                                {aircraft.name}
-                                {aircraft.liveryname
-                                  ? ` ${aircraft.liveryname}`
-                                  : ""}
-                              </Badge>
-                            ))
-                          ) : (
-                            <span className="text-sm text-muted-foreground">
-                              No eligible aircraft
-                            </span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button variant="outline" size="sm" asChild>
-                            <Link href={`/crew/route/${route.id}`}>View</Link>
-                          </Button>
-                          {eligibleAircraft(route).length > 0 && !loadingEligibility ? (
-                            <Button size="sm" asChild>
-                              <Link href={filePirepHref(route)}>
-                                <PlaneTakeoff className="mr-2 h-4 w-4" />
-                                File
-                              </Link>
-                            </Button>
-                          ) : (
-                            <Button
-                              size="sm"
-                              disabled
-                              title="You do not meet an aircraft requirement for this route"
-                            >
-                              <PlaneTakeoff className="mr-2 h-4 w-4" />
-                              File
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-
-        <div className="flex justify-center">
-          {totalPages > 1 && (
+        {totalPages > 1 && (
+          <div className="flex justify-center pt-2">
             <Pagination>
               <PaginationContent>
                 <PaginationItem>
@@ -773,8 +734,8 @@ export default function FindRoutes() {
                 </PaginationItem>
               </PaginationContent>
             </Pagination>
-          )}
-        </div>
+          </div>
+        )}
       </main>
     </CrewHeader>
   );

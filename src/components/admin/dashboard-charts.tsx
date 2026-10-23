@@ -162,15 +162,17 @@ export function TrendChart({
   data,
   dataKey,
   color = "#0052a5",
+  className = "h-[260px]",
 }: {
   data: TrendPoint[];
   dataKey: "flights" | "hours" | "pilots";
   color?: string;
+  className?: string;
 }) {
   if (!data.length) return <EmptyChart label="No activity in this range" />;
 
   return (
-    <div className="h-[260px]">
+    <div className={className}>
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} />
