@@ -203,8 +203,6 @@ export default function UserDashboard() {
 
   const [tab, setTab] = useState("overview");
   const [query, setQuery] = useState("");
-  const [aircraftFilter, setAircraftFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
 
   async function fetchDashboard(isRefresh = false) {
     if (!user?.id) return;
@@ -243,31 +241,11 @@ export default function UserDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
-  const aircraftOptions = useMemo(() => {
-    if (!dashboard) return [];
-    return Array.from(
-      new Set(
-        dashboard.recentPireps
-          .map((item) => item.aircraft?.name)
-          .filter((name): name is string => Boolean(name)),
-      ),
-    );
-  }, [dashboard]);
-
   const visibleFlights = useMemo(() => {
     if (!dashboard) return [];
     const search = query.trim().toLowerCase();
 
     return dashboard.recentPireps.filter((flight) => {
-      if (
-        aircraftFilter !== "all" &&
-        flight.aircraft?.name !== aircraftFilter
-      ) {
-        return false;
-      }
-      if (statusFilter !== "all" && String(flight.status) !== statusFilter) {
-        return false;
-      }
       if (!search) return true;
       return [
         flight.flightnum,
@@ -277,7 +255,7 @@ export default function UserDashboard() {
         flight.aircraft?.liveryname,
       ].some((val) => val?.toLowerCase().includes(search));
     });
-  }, [dashboard, query, aircraftFilter, statusFilter]);
+  }, [dashboard, query]);
 
   const chartMetrics = useMemo(() => {
     if (!dashboard) return null;
@@ -297,11 +275,13 @@ export default function UserDashboard() {
       pilots: 1,
     }));
 
+    // Aircraft / airport bars are based on the latest 10 sectors only — not career totals.
+    const latestSectors = dashboard.recentPireps.slice(0, 10);
     const depCounts = new Map<string, number>();
     const arrCounts = new Map<string, number>();
     const aircraftCounts = new Map<string, number>();
 
-    for (const flight of dashboard.recentPireps) {
+    for (const flight of latestSectors) {
       depCounts.set(flight.departure, (depCounts.get(flight.departure) || 0) + 1);
       arrCounts.set(flight.arrival, (arrCounts.get(flight.arrival) || 0) + 1);
       const acName = flight.aircraft?.name || "Unknown";
@@ -317,6 +297,7 @@ export default function UserDashboard() {
     return {
       statusData,
       trendData,
+      latestSectorCount: latestSectors.length,
       topDepartures: toCountPoints(depCounts),
       topArrivals: toCountPoints(arrCounts),
       topAircraft: toCountPoints(aircraftCounts),
@@ -353,10 +334,9 @@ export default function UserDashboard() {
               <div>
                 <h1 className="text-2xl font-bold">{user.name}</h1>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {user.callsign} · {dashboard.rank.current.name} ·{" "}
                   {dashboard.rank.next
-                    ? `${dashboard.rank.next.remainingFormatted} remaining to ${dashboard.rank.next.name}`
-                    : "Top rank achieved"}
+                    ? `${user.callsign} · ${dashboard.rank.current.name} · ${dashboard.rank.next.remainingFormatted} remaining to ${dashboard.rank.next.name}`
+                    : `${user.callsign} · ${dashboard.rank.current.name} · Top rank achieved`}
                 </p>
               </div>
 
@@ -386,12 +366,9 @@ export default function UserDashboard() {
                 className="flex flex-col gap-2 rounded-md bg-[var(--v2-state-bg-danger,#fceceb)] px-4 py-2.5 text-sm text-[var(--v2-state-fg-danger,#b82d35)] sm:flex-row sm:items-center sm:justify-between"
               >
                 <span>
-                  {dashboard.statistics.recentRejectedPireps} of your latest{" "}
-                  {dashboard.statistics.recentPirepWarningLimit} PIREPs{" "}
                   {dashboard.statistics.recentRejectedPireps === 1
-                    ? "was"
-                    : "were"}{" "}
-                  rejected.
+                    ? `${dashboard.statistics.recentRejectedPireps} of your latest ${dashboard.statistics.recentPirepWarningLimit} PIREPs was rejected.`
+                    : `${dashboard.statistics.recentRejectedPireps} of your latest ${dashboard.statistics.recentPirepWarningLimit} PIREPs were rejected.`}
                 </span>
                 <Button asChild variant="secondary">
                   <Link href="/crew/view-pireps">Review PIREPs</Link>
@@ -445,7 +422,7 @@ export default function UserDashboard() {
                           Recent Flight Time
                         </h2>
                         <span className="text-xs text-muted-foreground">
-                          Latest {chartMetrics.trendData.length} sectors
+                          {`Latest ${chartMetrics.trendData.length} sectors`}
                         </span>
                       </div>
                       <TrendChart
@@ -460,12 +437,9 @@ export default function UserDashboard() {
                         <h2 className="text-sm font-medium">
                           Most Flown Aircraft
                         </h2>
-                        <Link
-                          href="/crew/view-pireps"
-                          className="text-xs text-muted-foreground hover:text-foreground"
-                        >
-                          All PIREPs →
-                        </Link>
+                        <span className="text-xs text-muted-foreground">
+                          {`Latest ${chartMetrics.latestSectorCount} sectors`}
+                        </span>
                       </div>
                       <BarList data={chartMetrics.topAircraft} />
                     </div>
@@ -474,40 +448,12 @@ export default function UserDashboard() {
 
                 {/* Part B: Recent Flights List (Live aircraft scheduling style) */}
                 <section className="space-y-3">
-                  <div className="grid gap-3 sm:grid-cols-[1fr_auto_auto]">
-                    <Input
-                      aria-label="Search recent flights"
-                      placeholder="Search route, flight number, or aircraft"
-                      value={query}
-                      onChange={(event) => setQuery(event.target.value)}
-                    />
-                    <select
-                      aria-label="Filter aircraft"
-                      className="h-8 rounded-[6px] border-0 bg-[var(--v2-background-bg-layer-02,#f2f2f2)]/75 px-2.5 text-[13px] outline-none"
-                      value={aircraftFilter}
-                      onChange={(event) =>
-                        setAircraftFilter(event.target.value)
-                      }
-                    >
-                      <option value="all">All aircraft</option>
-                      {aircraftOptions.map((name) => (
-                        <option key={name} value={name}>
-                          {name}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      aria-label="Filter status"
-                      className="h-8 rounded-[6px] border-0 bg-[var(--v2-background-bg-layer-02,#f2f2f2)]/75 px-2.5 text-[13px] outline-none"
-                      value={statusFilter}
-                      onChange={(event) => setStatusFilter(event.target.value)}
-                    >
-                      <option value="all">All statuses</option>
-                      <option value="1">Approved</option>
-                      <option value="0">Awaiting approval</option>
-                      <option value="2">Rejected</option>
-                    </select>
-                  </div>
+                  <Input
+                    aria-label="Search recent flights"
+                    placeholder="Search route, flight number, or aircraft"
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                  />
 
                   {visibleFlights.length === 0 ? (
                     <div className="rounded-[6px] bg-[var(--v2-background-bg-layer-01,#fafafa)] px-6 py-10 text-center">
@@ -516,7 +462,7 @@ export default function UserDashboard() {
                         No flights to show
                       </p>
                       <p className="mt-1 text-[12px] text-muted-foreground">
-                        Try another filter, or file a new PIREP.
+                        Try another search, or file a new PIREP.
                       </p>
                     </div>
                   ) : (

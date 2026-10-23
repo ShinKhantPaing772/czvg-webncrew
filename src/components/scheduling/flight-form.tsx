@@ -101,7 +101,7 @@ export function FlightForm({ data, flight, aircraftId, admin, onClose, onSave }:
         {error && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
         <div className="space-y-2">
           <Label htmlFor="flight-aircraft">Aircraft</Label>
-          <select id="flight-aircraft" value={form.live_aircraft_id} onChange={(event) => setForm({ ...form, live_aircraft_id: event.target.value, departure: "", ...(!flight && withTimes ? suggestedTimes(data, Number(event.target.value)) : {}) })} required disabled={saving || Boolean(flight)} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
+          <select id="flight-aircraft" value={form.live_aircraft_id} onChange={(event) => setForm({ ...form, live_aircraft_id: event.target.value, departure: "", ...(!flight && withTimes ? suggestedTimes(data, Number(event.target.value)) : {}) })} required disabled={saving || Boolean(flight)} className="h-10 w-full rounded-md border-0 bg-[#eef4fb] px-3 text-sm">
             <option value="">Select an aircraft</option>
             {data.aircraft.filter((item) => item.active || item.id === flight?.live_aircraft_id).map((item) => <option key={item.id} value={item.id} disabled={!item.active}>{item.registration} · {item.name}{!item.active ? " (inactive)" : ""}</option>)}
           </select>
@@ -114,7 +114,7 @@ export function FlightForm({ data, flight, aircraftId, admin, onClose, onSave }:
           <Label htmlFor="flight-type">Flight type</Label>
           <select id="flight-type" value={form.flight_type} onChange={(event) => {
             if (isFlightType(event.target.value)) setForm({ ...form, flight_type: event.target.value });
-          }} required disabled={saving} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
+          }} required disabled={saving} className="h-10 w-full rounded-md border-0 bg-[#eef4fb] px-3 text-sm">
             {FLIGHT_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
           </select>
         </div>

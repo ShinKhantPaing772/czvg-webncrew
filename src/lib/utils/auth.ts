@@ -16,9 +16,18 @@ export function setToken(token: string): void {
  * Get authentication token from localStorage
  */
 export function getToken(): string | null {
-  if (typeof window !== "undefined") {
-    return localStorage.getItem(TOKEN_KEY);
+  if (typeof window === "undefined") return null;
+
+  const stored = localStorage.getItem(TOKEN_KEY);
+  if (stored) return stored;
+
+  // Local preview mode: auto-issue a fixture token so crew pages load without DB login.
+  if (process.env.NEXT_PUBLIC_CREW_PREVIEW === "1") {
+    const previewToken = "preview-token";
+    localStorage.setItem(TOKEN_KEY, previewToken);
+    return previewToken;
   }
+
   return null;
 }
 
