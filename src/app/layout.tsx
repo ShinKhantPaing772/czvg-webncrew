@@ -1,6 +1,6 @@
 import type React from "react";
 import "@/app/globals.css";
-import { PreviewBanner } from "@/components/preview-banner";
+import "react-day-picker/src/style.css";
 import { ThemeProvider } from "@/components/theme-provider";
 
 export const metadata = {
@@ -21,10 +21,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body suppressHydrationWarning>
-        <ThemeProvider>
-          <PreviewBanner />
-          {children}
-        </ThemeProvider>
+        <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   );

@@ -4,7 +4,6 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "dev:preview": "CREW_PREVIEW=1 NEXT_PUBLIC_CREW_PREVIEW=1 next dev",
     "build": "next build",
     "test": "vitest run",
     "start": "next start",
