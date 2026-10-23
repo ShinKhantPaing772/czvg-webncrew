@@ -45,8 +45,7 @@ export function Footer() {
             </Link>
             <p className="mt-5 max-w-xl text-sm leading-6 text-slate-300">
               A China-based virtual airline group for Infinite Flight pilots,
-              operating a broad network of hubs, focus cities, and partner
-              routes.
+              operating a broad network of hubs, focus cities, and partner routes.
             </p>
             <div className="mt-5 flex items-center gap-3">
               <a

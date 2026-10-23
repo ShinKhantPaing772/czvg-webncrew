@@ -471,7 +471,7 @@ export default function FindRoutes() {
             />
             <select
               aria-label="Filter aircraft"
-              className="h-8 rounded-[6px] border-0 bg-[var(--v2-background-bg-layer-02,#f2f2f2)]/75 px-2.5 text-[13px] outline-none"
+              className="h-8 rounded-[6px] border-0 bg-[#eef4fb] px-2.5 text-[13px] outline-none"
               value={filters.aircraftFilter}
               onChange={(event) =>
                 updateFilters({ aircraftFilter: event.target.value })
@@ -492,7 +492,7 @@ export default function FindRoutes() {
             </select>
             <select
               aria-label="Filter duration"
-              className="h-8 rounded-[6px] border-0 bg-[var(--v2-background-bg-layer-02,#f2f2f2)]/75 px-2.5 text-[13px] outline-none"
+              className="h-8 rounded-[6px] border-0 bg-[#eef4fb] px-2.5 text-[13px] outline-none"
               value={filters.durationRange || "all"}
               onChange={(event) =>
                 updateFilters({
@@ -634,23 +634,12 @@ export default function FindRoutes() {
                         <Button variant="outline" size="sm" asChild>
                           <Link href={`/crew/route/${route.id}`}>Details</Link>
                         </Button>
-                        {canFly ? (
-                          <Button size="sm" asChild>
-                            <Link href={filePirepHref(route)}>
-                              <PlaneTakeoff className="h-3.5 w-3.5" />
-                              File PIREP
-                            </Link>
-                          </Button>
-                        ) : (
-                          <Button
-                            size="sm"
-                            disabled
-                            title="You do not meet an aircraft requirement for this route"
-                          >
+                        <Button size="sm" asChild>
+                          <Link href={filePirepHref(route)}>
                             <PlaneTakeoff className="h-3.5 w-3.5" />
                             File PIREP
-                          </Button>
-                        )}
+                          </Link>
+                        </Button>
                       </div>
                     </div>
                   </div>

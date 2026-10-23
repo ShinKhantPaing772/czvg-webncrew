@@ -207,7 +207,7 @@ export default function ViewRoute() {
           )}
         </div>
 
-        <div className="grid grid-cols-3 gap-2 sm:gap-4">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-4">
           <SummaryCard
             icon={Clock}
             label="Scheduled duration"
@@ -225,7 +225,7 @@ export default function ViewRoute() {
           />
         </div>
 
-        <div className="grid gap-4 rounded-[6px] bg-[var(--v2-background-bg-layer-01,#fafafa)] px-4 py-3.5 md:grid-cols-[1fr_1.3fr_1fr]">
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-[6px] bg-[var(--v2-background-bg-layer-01,#fafafa)] px-4 py-3.5 md:gap-4">
           <div>
             <p className="text-xs text-muted-foreground">Departure airport</p>
             <p className="mt-0.5 font-mono text-xl font-semibold">
@@ -233,16 +233,14 @@ export default function ViewRoute() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3 text-sm font-medium">
-            <span className="font-mono text-base">{route.dep}</span>
-            <ArrowRight className="h-4 w-4 text-muted-foreground" />
-            <span className="font-mono text-base">{route.arr}</span>
-            <span className="text-xs font-normal text-muted-foreground">
+          <div className="flex flex-col items-center gap-0.5 text-muted-foreground">
+            <ArrowRight className="h-4 w-4" />
+            <span className="text-[11px] tabular-nums md:text-xs">
               ({route.duration})
             </span>
           </div>
 
-          <div className="md:text-right">
+          <div className="text-right">
             <p className="text-xs text-muted-foreground">Arrival airport</p>
             <p className="mt-0.5 font-mono text-xl font-semibold">
               {route.arr}
@@ -339,14 +337,16 @@ function SummaryCard({
   return (
     <Card>
       <CardContent className="flex items-center gap-3 p-3 sm:p-4">
-        <div className="rounded-md bg-[#eef4fb] p-2 text-[#0052a5]">
+        <div className="shrink-0 rounded-md bg-[#eef4fb] p-2 text-[#0052a5]">
           <Icon className="h-4 w-4" />
         </div>
-        <div>
-          <p className="font-mono text-xl font-semibold tabular-nums sm:text-2xl">
+        <div className="min-w-0 flex-1">
+          <p className="break-words font-mono text-xl font-semibold leading-tight tabular-nums sm:text-2xl">
             {value}
           </p>
-          <p className="text-xs text-muted-foreground">{label}</p>
+          <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
+            {label}
+          </p>
         </div>
       </CardContent>
     </Card>

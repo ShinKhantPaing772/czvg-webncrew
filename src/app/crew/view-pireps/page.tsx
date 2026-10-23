@@ -75,6 +75,12 @@ interface Pirep {
   Comments?: PirepComment[];
 }
 
+function formatMultiplierLabel(multi: string | number | null | undefined) {
+  const value = String(multi ?? "").trim();
+  if (!value || value.toLowerCase() === "none") return "None";
+  return `${value}x`;
+}
+
 interface PaginationData {
   total: number;
   totalPages: number;
@@ -335,7 +341,7 @@ export default function ViewPireps() {
           />
           <select
             aria-label="Filter status"
-            className="h-8 rounded-[6px] border-0 bg-[var(--v2-background-bg-layer-02,#f2f2f2)]/75 px-2.5 text-[13px] outline-none"
+            className="h-8 rounded-[6px] border-0 bg-[#eef4fb] px-2.5 text-[13px] outline-none"
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value)}
           >
@@ -346,7 +352,7 @@ export default function ViewPireps() {
           </select>
           <select
             aria-label="Items per page"
-            className="h-8 rounded-[6px] border-0 bg-[var(--v2-background-bg-layer-02,#f2f2f2)]/75 px-2.5 text-[13px] outline-none"
+            className="h-8 rounded-[6px] border-0 bg-[#eef4fb] px-2.5 text-[13px] outline-none"
             value={String(itemsPerPage)}
             onChange={(event) => {
               setItemsPerPage(Number(event.target.value));
@@ -435,7 +441,7 @@ export default function ViewPireps() {
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       Fuel {Number(pirep.fuelused || 0).toLocaleString()} kg ·
-                      Multiplier {pirep.multi}x
+                      Multiplier {formatMultiplierLabel(pirep.multi)}
                     </p>
                   </div>
 
@@ -516,7 +522,7 @@ export default function ViewPireps() {
                 <div>
                   <p className="text-xs text-muted-foreground">Multiplier</p>
                   <p className="mt-1 text-sm font-medium">
-                    {selectedPirep.multi}x
+                    {formatMultiplierLabel(selectedPirep.multi)}
                   </p>
                 </div>
               </div>
@@ -613,8 +619,7 @@ export default function ViewPireps() {
 
         <div className="flex items-center justify-between pt-2">
           <div className="text-xs text-muted-foreground tabular-nums">
-            Showing {currentPageStart}-{currentPageEnd} of {pagination.total}{" "}
-            PIREPs
+            {`Showing ${currentPageStart}-${currentPageEnd} of ${pagination.total} PIREPs`}
           </div>
 
           {totalPages > 1 && (

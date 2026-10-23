@@ -39,30 +39,8 @@ interface CrewHeaderProps {
 }
 
 const brandLogoSrc = "/brand/czvg-logo-horizontal.png";
+const brandMarkSrc = "/brand/czvg-logo-mark.png";
 
-/**
- * Official China Southern Airlines Tailfin + Kapok Emblem (extracted from `/public/airlines/china-southern.svg`)
- * Used when the sidebar is collapsed so the authentic emblem remains visible.
- */
-function ChinaSouthernTailfinMark({ className = "h-5 w-auto" }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 180 128.2"
-      aria-hidden="true"
-      className={className}
-    >
-      <polygon fill="#0093D0" points="0,128.1 128.2,128.1 179.6,0 128.2,0" />
-      <path
-        fill="#FFFFFF"
-        d="M119.5,49.3c-2-1-3.3-3-3.3-5.3c0-3.2,2.6-5.9,5.9-5.9c3.2,0,5.9,2.6,5.9,5.9c0,2.3-1.4,4.4-3.4,5.3V51c1.8,0.2,4,0.9,5.4,1.6c0.6-0.1,1.4-0.1,2.2-0.1c7.4,0,12.6,4.9,12.6,11.6c0,4.2-3.7,8-7.9,8c-4.2,0-8-4.1-7.2-8.3c0,0-0.4,1.4-0.4,3.2c0,1.1,0,21.2,0,21.2c-0.2,2.4-3.4,15.7-18.4,15.7S92.7,90.6,92.5,88.2c0,0,0-20.1,0-21.2c0-1.7-0.5-3.2-0.5-3.2c0.8,4-3.1,8.3-7.2,8.3c-4.2,0-7.9-3.8-7.9-8c0-6.7,5.2-11.6,12.6-11.6c0.8,0,1.6,0,2.2,0.1c1.3-0.7,3.6-1.5,5.4-1.6v-1.7c-2-1-3.3-3-3.3-5.3c0-3.2,2.6-5.9,5.9-5.9c3.3,0,5.9,2.6,5.9,5.9c0,2.3-1.4,4.4-3.4,5.3v2.2c0.5,0.2,1,0.3,1.5,0.6c0.9-2,2.7-3.5,4.8-4.2v-1.8c-2-0.9-3.4-3-3.4-5.3c0-3.2,2.6-5.9,5.9-5.9c3.2,0,5.9,2.6,5.9,5.9c0,2.3-1.4,4.4-3.3,5.3v1.8c2.1,0.7,3.9,2.2,4.8,4.2c0.5-0.2,1-0.4,1.5-0.6L119.5,49.3z"
-      />
-      <path
-        fill="#ED1B2F"
-        d="M142.3,64.2c0-5.5-3.7-9.9-11.4-9.9c-5.1,0-11.1,4.3-11.1,15.2c0,8.5,0,16.2,0,16.2c2.2-1.5,5.3-2.8,6.9-2.8c0-4.8,0-14.3,0-15.1c0-5.8,4.2-7.5,6.1-7.5c-1.1,1-1.8,2.2-1.8,3.9c0,3.1,2.5,5.6,5.6,5.6C139.8,69.8,142.2,67.5,142.3,64.2z M79,64.2c0-5.5,3.7-9.9,11.4-9.9c5.1,0,11.2,4.3,11.2,15.2c0,8.5,0,16.2,0,16.2c-2.2-1.5-5.3-2.8-6.9-2.8c0-4.8,0-14.3,0-15.1c0-5.8-4.2-7.5-6.1-7.5c1.1,1,1.8,2.2,1.8,3.9c0,3.1-2.6,5.6-5.6,5.6C81.5,69.8,79.1,67.5,79,64.2z M110.7,101.6c12.8,0,15.7-10.7,16.1-13.5c0,0,0-3,0-3.6c-4,1-7.5,3.1-9.9,6.3c-0.8-3.7-3.2-6.8-6.2-8.9c-3,2-5.3,5.2-6.2,8.9c-2.4-3.2-5.9-5.3-9.9-6.3c0,0.6,0,3.6,0,3.6C94.9,90.9,97.8,101.6,110.7,101.6z M111.6,44.9v4.5c2.2,0.3,4.1,1.8,4.8,3.6c-2.6,1.7-4.7,4.3-5.7,7.5c-1-3.2-3.1-5.8-5.7-7.5c0.8-1.8,2.6-3.3,4.8-3.6v-4.5c-1.8-0.4-3.2-2.1-3.2-4c0-2.3,1.9-4.1,4.1-4.1c2.3,0,4.1,1.8,4.1,4.1C114.8,42.8,113.4,44.5,111.6,44.9z M100.3,48.1v4.7c5.6,1.1,9.6,7,9.6,12.5c0,5.8,0,15.2,0,15.2c-2.6,1.5-5.2,4.6-6,7.1c-0.2-0.2-0.4-0.5-0.7-0.7c0,0,0-11.1,0-19.6c0-5.9-3.2-11.9-8.8-13.8c0,0,1.8-0.8,4.1-0.8V48c-1.8-0.4-3.2-2-3.2-4c0-2.3,1.8-4.1,4.1-4.1s4.1,1.8,4.1,4.1C103.5,46,102.1,47.6,100.3,48.1z M122.9,48.1v4.6c2.3,0,4.1,0.8,4.1,0.8c-5.7,2-8.8,8-8.8,13.8c0,8.5,0,19.6,0,19.6c-0.3,0.3-0.5,0.5-0.7,0.7c-0.8-2.6-3.4-5.7-6-7.1c0,0,0-9.4,0-15.2c0-5.5,4-11.4,9.6-12.5V48c-1.8-0.4-3.2-2-3.2-4c0-2.3,1.8-4.1,4.1-4.1s4.1,1.8,4.1,4.1C126.2,46,124.8,47.7,122.9,48.1z"
-      />
-    </svg>
-  );
-}
 // Persist sidebar state across client-side route transitions
 let persistedSidebarOpen = true;
 let persistedAdminExpanded: boolean | null = null;
@@ -275,7 +253,12 @@ export function CrewHeader({ children }: CrewHeaderProps) {
                 title="Expand sidebar"
                 className="mx-auto flex size-8 items-center justify-center rounded-[6px] hover:bg-[#0052a5]/[0.06]"
               >
-                <ChinaSouthernTailfinMark className="h-5 w-auto" />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={brandMarkSrc}
+                  alt=""
+                  className="size-6 object-contain"
+                />
               </button>
             )}
           </div>
@@ -462,7 +445,7 @@ export function CrewHeader({ children }: CrewHeaderProps) {
         data-slot="home-panel"
         className="m-1.5 md:m-2 flex min-h-[calc(100vh-16px)] min-w-0 flex-1 flex-col rounded-[10px] bg-[var(--v2-background-bg-base,#ffffff)] shadow-[var(--v2-elevation-raised)]"
       >
-        <div className="mx-auto w-full max-w-[980px] flex-1 px-6 py-8 md:px-10 md:py-10">
+        <div className="mx-auto w-full max-w-[1440px] flex-1 px-5 py-6 md:px-7 md:py-7">
           {children}
         </div>
       </div>

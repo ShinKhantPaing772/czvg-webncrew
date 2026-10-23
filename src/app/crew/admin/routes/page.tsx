@@ -528,8 +528,7 @@ export default function RoutesPage() {
           </Button>
         </div>
 
-        <div className="relative overflow-x-auto">
-          <Card>
+        <Card>
             <CardHeader className="p-4">
               <CardTitle>Flight Reports</CardTitle>
               <CardDescription>
@@ -645,7 +644,6 @@ export default function RoutesPage() {
               </Table>
             </CardContent>
           </Card>
-        </div>
 
         <div className="flex items-center justify-between mt-4">
           <Button
@@ -657,7 +655,7 @@ export default function RoutesPage() {
             Previous
           </Button>
           <span>
-            Page {currentPage} of {pageCount}
+            {`Page ${currentPage} of ${pageCount}`}
           </span>
           <Button
             onClick={() => setCurrentPage(currentPage + 1)}

@@ -427,7 +427,7 @@ export default function FilePirep() {
           </Button>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 sm:gap-4">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-4">
           <SummaryCard
             icon={PlaneIcon}
             label="Selected sector"
@@ -891,14 +891,16 @@ function SummaryCard({
   return (
     <Card>
       <CardContent className="flex items-center gap-3 p-3 sm:p-4">
-        <div className="rounded-md bg-[#eef4fb] p-2 text-[#0052a5]">
+        <div className="shrink-0 rounded-md bg-[#eef4fb] p-2 text-[#0052a5]">
           <Icon className="h-4 w-4" />
         </div>
-        <div className="min-w-0">
-          <p className="truncate font-mono text-lg font-semibold tabular-nums sm:text-xl">
+        <div className="min-w-0 flex-1">
+          <p className="break-words font-mono text-lg font-semibold leading-tight tabular-nums sm:text-xl">
             {value}
           </p>
-          <p className="truncate text-xs text-muted-foreground">{label}</p>
+          <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
+            {label}
+          </p>
         </div>
       </CardContent>
     </Card>

@@ -1307,8 +1307,7 @@ export default function Users() {
                 </CardContent>
                 <CardFooter className="flex items-center justify-between p-4">
                   <div className="text-sm text-muted-foreground">
-                    Showing {paginatedUsers.length} of {filteredUsers.length}{" "}
-                    users
+                    {`Showing ${paginatedUsers.length} of ${filteredUsers.length} users`}
                   </div>
 
                   {totalPages > 1 && (
