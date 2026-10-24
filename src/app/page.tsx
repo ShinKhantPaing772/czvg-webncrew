@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { FeaturedRouteRotator } from "@/components/featured-route-rotator";
-import { Icon } from "@iconify/react";
+import { HalloweenIcon, type HalloweenIconName } from "@/components/halloween-icon";
 
 const stats = [
   { value: "300+", label: "Destinations around the world" },
@@ -29,7 +29,7 @@ const highlights = [
     body: "Choose from domestic sectors, long-haul wide-body flights, cargo operations, and partner routes.",
     href: "/operations/routes",
     action: "Explore routes",
-    watermark: "game-icons:cobweb",
+    watermark: "cobweb" as HalloweenIconName,
     variant: "orange",
   },
   {
@@ -38,7 +38,7 @@ const highlights = [
     body: "Fly China Southern, Xiamen Air, Chongqing Airlines, Hebei Airlines, Jiangxi Air, and more.",
     href: "/operations/fleet",
     action: "View fleet",
-    watermark: "game-icons:bat",
+    watermark: "bat" as HalloweenIconName,
     variant: "purple",
   },
   {
@@ -47,7 +47,7 @@ const highlights = [
     body: "Join an Infinite Flight virtual airline group built around realistic schedules and shared events.",
     href: "/crew?type=signup",
     action: "Apply now",
-    watermark: "game-icons:cobweb",
+    watermark: "cobweb" as HalloweenIconName,
     variant: "orange",
   },
 ];
@@ -152,8 +152,8 @@ export default function Home() {
             aria-hidden="true"
             className="halloween-hero-bats pointer-events-none absolute right-4 top-8 select-none sm:right-16 sm:top-12 md:right-24 md:top-16"
           >
-            <Icon
-              icon="game-icons:moon-bats"
+            <HalloweenIcon
+              name="moon-bats"
               className="h-44 w-44 text-amber-500/20 drop-shadow-[0_0_24px_rgba(245,158,11,0.35)] sm:h-56 sm:w-56 md:h-72 md:w-72"
             />
           </div>
@@ -209,8 +209,8 @@ export default function Home() {
                     aria-hidden="true"
                     className="halloween-stat-cobweb pointer-events-none absolute right-2 top-2 select-none"
                   >
-                    <Icon
-                      icon="game-icons:cobweb"
+                    <HalloweenIcon
+                      name="cobweb"
                       className="h-8 w-8 text-orange-400 opacity-10 transition-opacity duration-300 group-hover:opacity-25"
                     />
                   </div>
@@ -258,8 +258,8 @@ export default function Home() {
                       aria-hidden="true"
                       className="halloween-card-watermark pointer-events-none absolute -top-1 -right-1 select-none"
                     >
-                      <Icon
-                        icon={item.watermark}
+                      <HalloweenIcon
+                        name={item.watermark}
                         className={`h-11 w-11 transition-all duration-300 ${
                           isPurple
                             ? "text-purple-400 opacity-[0.08] group-hover:scale-105 group-hover:opacity-[0.22]"

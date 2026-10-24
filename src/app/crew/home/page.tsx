@@ -32,7 +32,7 @@ import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSession } from "@/hooks/use-session";
 import { useTheme } from "@/components/theme-provider";
-import { Icon } from "@iconify/react";
+import { HalloweenIcon } from "@/components/halloween-icon";
 import { AirlineLogo } from "@/components/airline-logo";
 import { authFetch } from "@/lib/utils/api";
 
@@ -129,7 +129,7 @@ function SummaryCard({
             aria-hidden="true"
             className="pointer-events-none absolute -top-1 -right-1 h-10 w-10 text-orange-400 opacity-[0.08] transition-all duration-300 group-hover:scale-105 group-hover:text-orange-300 group-hover:opacity-[0.22]"
           >
-            <Icon icon="game-icons:cobweb" className="h-full w-full" />
+            <HalloweenIcon name="cobweb" className="h-full w-full" />
           </div>
         </>
       )}
@@ -382,7 +382,7 @@ export default function UserDashboard() {
                   aria-hidden="true"
                   className="pointer-events-none absolute -bottom-4 right-2 h-32 w-32 select-none text-amber-500/15 drop-shadow-[0_0_16px_rgba(245,158,11,0.25)] sm:-top-2 sm:right-6 sm:h-40 sm:w-40"
                 >
-                  <Icon icon="game-icons:moon-bats" className="h-full w-full" />
+                  <HalloweenIcon name="moon-bats" className="h-full w-full" />
                 </div>
               )}
 
@@ -390,8 +390,8 @@ export default function UserDashboard() {
                 <div className="flex flex-wrap items-center gap-2">
                   <h1 className="flex items-center gap-2 text-2xl font-bold">
                     {isHalloween && (
-                      <Icon
-                        icon="fluent-emoji-flat:jack-o-lantern"
+                      <HalloweenIcon
+                        name="jack-o-lantern"
                         className="h-6 w-6 shrink-0"
                       />
                     )}
