@@ -15,7 +15,7 @@ import { LanguageSwitcher, useI18n } from "@/lib/i18n";
 import { getCrewLandingPath, usesApplicantPortal } from "@/lib/pilot-status";
 import { logout } from "@/lib/utils/auth";
 import { HalloweenThemeToggle } from "@/components/halloween-theme-toggle";
-import { Icon } from "@iconify/react";
+import { HalloweenIcon } from "@/components/halloween-icon";
 
 const brandLogoSrc = "/brand/czvg-logo-horizontal.png";
 const brandLogoWhiteSrc = "/brand/czvg-logo-horizontal-white.png";
@@ -78,8 +78,8 @@ export function Header() {
             />
             <span className="halloween-logo-badge hidden items-center gap-1 rounded-full border border-orange-500/30 bg-orange-500/10 px-2 py-0.5 text-[11px] font-bold text-orange-400 shadow-[0_0_8px_rgba(249,115,22,0.25)] sm:inline-flex">
               CZVG
-              <Icon
-                icon="fluent-emoji-flat:jack-o-lantern"
+              <HalloweenIcon
+                name="jack-o-lantern"
                 className="h-3.5 w-3.5 shrink-0"
               />
             </span>
@@ -216,8 +216,8 @@ export function Header() {
             />
             <span className="halloween-logo-badge inline-flex items-center gap-1 rounded-full border border-orange-500/30 bg-orange-500/10 px-2 py-0.5 text-[11px] font-bold text-orange-400 shadow-[0_0_8px_rgba(249,115,22,0.25)]">
               CZVG
-              <Icon
-                icon="fluent-emoji-flat:jack-o-lantern"
+              <HalloweenIcon
+                name="jack-o-lantern"
                 className="h-3.5 w-3.5 shrink-0"
               />
             </span>
