@@ -17,7 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import Link from "next/link";
 import { useSession } from "@/hooks/use-session";
-import { getAirlineLogoForFlight } from "@/lib/group-airlines";
+import { AirlineLogo } from "@/components/airline-logo";
 import { formatFlightTime } from "@/lib/utils/time";
 import { authFetch } from "@/lib/utils/api";
 
@@ -167,15 +167,9 @@ export default function ViewRoute() {
             </Button>
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={
-                    getAirlineLogoForFlight(
-                      route.fltnum,
-                      route.aircraft[0]?.liveryname,
-                    ).logo
-                  }
-                  alt=""
+                <AirlineLogo
+                  flightnum={route.fltnum}
+                  liveryname={route.aircraft[0]?.liveryname}
                   className="h-5 w-auto max-w-[68px] shrink-0 object-contain"
                 />
                 <h1 className="font-mono text-2xl font-bold">{route.fltnum}</h1>

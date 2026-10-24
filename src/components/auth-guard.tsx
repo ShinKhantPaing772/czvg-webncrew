@@ -39,17 +39,32 @@ export function AuthGuard({ children }: AuthGuardProps) {
   const hasAdminAccess =
     permissions.includes("admin") || permissions.includes(requiredAdminPermission);
 
+  const lastVerifiedAt = useRef<number>(0);
+
   const checkSession = useCallback(async function verifySession(background = false): Promise<void> {
     // Another tab may have replaced or removed the token since our last render.
     const currentToken = getToken();
     if (pendingCheck.current?.token === currentToken) return;
 
+    // Once verified, never unmount an already verified page during navigation or focus.
+    // Only initial verification or token change should show the loading view.
+    const keepCurrentPage = Boolean(
+      verifiedToken.current && verifiedToken.current === currentToken
+    );
+
+    // If already verified recently with the same token and this is just route navigation,
+    // skip redundant network verify calls to keep client-side navigation instant.
+    if (
+      !background &&
+      keepCurrentPage &&
+      Date.now() - lastVerifiedAt.current < 60_000
+    ) {
+      return;
+    }
+
     pendingCheck.current?.controller.abort();
     pendingCheck.current = null;
 
-    // A focus check must not unmount a verified page and discard its form state.
-    // Initial checks, navigation and account changes still use the loading view.
-    const keepCurrentPage = background && verifiedToken.current === currentToken;
     if (!keepCurrentPage) {
       verifiedToken.current = null;
       setIsAuthenticated(null);
@@ -57,6 +72,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
 
     const invalidateSession = () => {
       verifiedToken.current = null;
+      lastVerifiedAt.current = 0;
       setPermissions([]);
       setCanAccessLiveScheduling(false);
       setUserStatus(null);
@@ -98,6 +114,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
       if (!isCurrentRequest()) return;
 
       verifiedToken.current = currentToken;
+      lastVerifiedAt.current = Date.now();
       setPermissions(
         user?.Permissions?.map((p: { name: string }) => p.name) || [],
       );

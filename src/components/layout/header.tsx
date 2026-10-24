@@ -14,8 +14,11 @@ import { useSession } from "@/hooks/use-session";
 import { LanguageSwitcher, useI18n } from "@/lib/i18n";
 import { getCrewLandingPath, usesApplicantPortal } from "@/lib/pilot-status";
 import { logout } from "@/lib/utils/auth";
+import { HalloweenThemeToggle } from "@/components/halloween-theme-toggle";
+import { Icon } from "@iconify/react";
 
 const brandLogoSrc = "/brand/czvg-logo-horizontal.png";
+const brandLogoWhiteSrc = "/brand/czvg-logo-horizontal-white.png";
 
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -59,12 +62,27 @@ export function Header() {
     <header className="sticky top-0 z-50 w-full border-b border-slate-200/80 bg-white/95 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between px-4 md:px-6">
         <div className="flex min-w-0 items-center gap-2">
-          <Link href="/" className="flex min-w-0 items-center gap-2">
+          <Link
+            href="/"
+            className="halloween-logo-container flex min-w-0 items-center gap-2 rounded-lg transition-all"
+          >
             <img
               src={brandLogoSrc}
               alt="China Southern Virtual Group Logo"
-              className="h-10 w-auto max-w-[190px] shrink-0 object-contain"
+              className="brand-logo-light h-10 w-auto max-w-[190px] shrink-0 object-contain"
             />
+            <img
+              src={brandLogoWhiteSrc}
+              alt="China Southern Virtual Group Logo"
+              className="brand-logo-dark h-10 w-auto max-w-[190px] shrink-0 object-contain"
+            />
+            <span className="halloween-logo-badge hidden items-center gap-1 rounded-full border border-orange-500/30 bg-orange-500/10 px-2 py-0.5 text-[11px] font-bold text-orange-400 shadow-[0_0_8px_rgba(249,115,22,0.25)] sm:inline-flex">
+              CZVG
+              <Icon
+                icon="fluent-emoji-flat:jack-o-lantern"
+                className="h-3.5 w-3.5 shrink-0"
+              />
+            </span>
           </Link>
         </div>
         <nav className="hidden items-center gap-1 md:flex">
@@ -119,6 +137,7 @@ export function Header() {
           )}
         </nav>
         <div className="flex shrink-0 items-center gap-2">
+          <HalloweenThemeToggle />
           <LanguageSwitcher />
           {user ? (
             <DropdownMenu>
@@ -181,12 +200,27 @@ export function Header() {
         } transition-transform duration-200 ease-in-out md:hidden`}
       >
         <div className="flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
+          <Link
+            href="/"
+            className="halloween-logo-container flex items-center gap-2 rounded-lg transition-all"
+          >
             <img
               src={brandLogoSrc}
               alt="China Southern Virtual Group Logo"
-              className="h-10 w-auto max-w-[220px] object-contain"
+              className="brand-logo-light h-10 w-auto max-w-[220px] object-contain"
             />
+            <img
+              src={brandLogoWhiteSrc}
+              alt="China Southern Virtual Group Logo"
+              className="brand-logo-dark h-10 w-auto max-w-[220px] object-contain"
+            />
+            <span className="halloween-logo-badge inline-flex items-center gap-1 rounded-full border border-orange-500/30 bg-orange-500/10 px-2 py-0.5 text-[11px] font-bold text-orange-400 shadow-[0_0_8px_rgba(249,115,22,0.25)]">
+              CZVG
+              <Icon
+                icon="fluent-emoji-flat:jack-o-lantern"
+                className="h-3.5 w-3.5 shrink-0"
+              />
+            </span>
           </Link>
           <Button
             variant="outline"

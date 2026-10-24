@@ -82,6 +82,9 @@
   --border: rgba(0, 58, 116, 0.1);
   --input: rgba(0, 58, 116, 0.1);
   --ring: #0052a5;
+  --trend-chart-stroke: #0052a5;
+  --trend-chart-area-start: rgba(0, 82, 165, 0.22);
+  --trend-chart-area-end: rgba(0, 82, 165, 0);
 
   --primary-50: #eaf3ff;
   --primary-100: #d3e8ff;
@@ -167,3 +170,513 @@ body {
     @apply inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Halloween Theme System (Shadcn Orange Dark Specification)
+   - Background: #0C0A09 (深邃暗黑)
+   - Foreground: #FAFAF9 (高对比白)
+   - Card / Panel: #1C1917 (暗岩灰)
+   - Primary: #EA580C (琥珀南瓜橙) / Hover: #F97316
+   - Secondary / Muted: #292524 (替换所有白底次级块)
+   - Border / Input: #292524 / #3F3F46
+   - Muted Foreground: #A8A29E
+   ═══════════════════════════════════════════════════════════════ */
+
+:root[data-theme="halloween"],
+.theme-halloween {
+  color-scheme: dark;
+
+  /* Standard Open-Source Tokens */
+  --background: #0c0a09;
+  --foreground: #fafaf9;
+  --card: #1c1917;
+  --card-foreground: #fafaf9;
+  --popover: #0c0a09;
+  --popover-foreground: #fafaf9;
+  --primary: #ea580c;
+  --primary-rgb: 234 88 12;
+  --primary-foreground: #fafaf9;
+  --secondary: #292524;
+  --secondary-foreground: #fafaf9;
+  --muted: #292524;
+  --background-muted: #292524;
+  --muted-foreground: #a8a29e;
+  --accent: #292524;
+  --accent-foreground: #fafaf9;
+  --border: #292524;
+  --input: #292524;
+  --ring: #ea580c;
+  --trend-chart-stroke: #ea580c;
+  --trend-chart-area-start: rgba(249, 115, 22, 0.35);
+  --trend-chart-area-end: rgba(249, 115, 22, 0);
+
+  /* CSN & OpenCode Layer Tokens */
+  --v2-background-bg-base: #1c1917;
+  --v2-background-bg-deep: #0c0a09;
+  --v2-background-bg-layer-01: #1c1917;
+  --v2-background-bg-layer-02: #292524;
+  --v2-background-bg-layer-03: #3f3f46;
+  --v2-background-bg-layer-04: #52525b;
+  --v2-background-bg-contrast: #ea580c;
+  --v2-background-bg-button-neutral: #292524;
+  --v2-background-bg-accent: #ea580c;
+
+  --v2-text-text-base: #fafaf9;
+  --v2-text-text-muted: #a8a29e;
+  --v2-text-text-faint: #78716c;
+  --v2-text-text-contrast: #ffffff;
+  --v2-text-text-accent: #f97316;
+
+  --v2-icon-icon-base: #ea580c;
+  --v2-icon-icon-muted: #a8a29e;
+  --v2-icon-icon-faint: #78716c;
+
+  --v2-overlay-simple-overlay-hover: rgba(234, 88, 12, 0.08);
+  --v2-overlay-simple-overlay-pressed: rgba(234, 88, 12, 0.16);
+
+  --v2-state-bg-success: rgba(34, 197, 94, 0.16);
+  --v2-state-fg-success: #4ade80;
+  --v2-state-bg-warning: rgba(245, 158, 11, 0.16);
+  --v2-state-fg-warning: #fbbf24;
+  --v2-state-bg-danger: rgba(239, 68, 68, 0.16);
+  --v2-state-fg-danger: #f87171;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+}
+
+/* ── Global Surface & Typography Clean-up ── */
+:root[data-theme="halloween"] body {
+  background-color: #0c0a09;
+  color: #fafaf9;
+}
+
+:root[data-theme="halloween"] header {
+  background-color: rgba(12, 10, 9, 0.9) !important;
+  border-bottom: 1px solid #292524 !important;
+  backdrop-filter: blur(12px);
+}
+
+:root[data-theme="halloween"] footer {
+  background-color: #080605 !important;
+  border-top: 1px solid #292524 !important;
+}
+
+/* Clear all stubborn white surfaces */
+:root[data-theme="halloween"] .bg-white,
+:root[data-theme="halloween"] .bg-\[\#ffffff\],
+:root[data-theme="halloween"] [data-slot="home-panel"] {
+  background-color: #1c1917 !important;
+}
+
+:root[data-theme="halloween"] .bg-\[var\(--v2-background-bg-layer-01\,\#fafafa\)\],
+:root[data-theme="halloween"] .bg-\[\#fafafa\],
+:root[data-theme="halloween"] .bg-\[\#f2f6fb\] {
+  background-color: #18181b !important;
+}
+
+:root[data-theme="halloween"] .hover\:bg-\[var\(--v2-background-bg-layer-02\,\#f2f2f2\)\]:hover,
+:root[data-theme="halloween"] .bg-\[\#f2f2f2\] {
+  background-color: #27272a !important;
+}
+
+:root[data-theme="halloween"] .site-section.bg-slate-50,
+:root[data-theme="halloween"] section.bg-slate-50 {
+  background-color: #12100e !important;
+}
+
+:root[data-theme="halloween"] section.bg-white {
+  background-color: #0c0a09 !important;
+}
+
+:root[data-theme="halloween"] .border-slate-200,
+:root[data-theme="halloween"] .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #292524 !important;
+}
+
+/* ── 1. Search Input Clean-up ── */
+:root[data-theme="halloween"] [data-slot="input"],
+:root[data-theme="halloween"] input:not([type="checkbox"]):not([type="radio"]) {
+  background-color: #18181b !important;
+  border: 1px solid #3f3f46 !important;
+  color: #fafaf9 !important;
+}
+
+:root[data-theme="halloween"] [data-slot="input"]::placeholder,
+:root[data-theme="halloween"] input::placeholder {
+  color: #a1a1aa !important;
+}
+
+:root[data-theme="halloween"] [data-slot="input"]:focus-visible,
+:root[data-theme="halloween"] input:focus-visible {
+  border-color: #ea580c !important;
+  box-shadow: 0 0 0 1px #ea580c !important;
+  background-color: #18181b !important;
+}
+
+/* ── 2. Tabs / Segment Controller Clean-up ── */
+:root[data-theme="halloween"] [data-slot="tabs-list"],
+:root[data-theme="halloween"] .bg-\[var\(--v2-background-bg-layer-02\,\#f2f2f2\)\] {
+  background-color: #18181b !important;
+  border: 1px solid #292524;
+}
+
+:root[data-theme="halloween"] [data-slot="tabs-trigger"] {
+  color: #a8a29e !important;
+}
+
+:root[data-theme="halloween"] [data-slot="tabs-trigger"]:hover {
+  color: #fafaf9 !important;
+}
+
+:root[data-theme="halloween"] [data-slot="tabs-trigger"][data-state="active"] {
+  background-color: #27272a !important;
+  color: #f97316 !important;
+  box-shadow: none !important;
+  border: 1px solid rgba(249, 115, 22, 0.25);
+}
+
+/* ── 3. Summary Card Icon Container Clean-up ── */
+:root[data-theme="halloween"] .bg-\[\#eef4fb\] {
+  background-color: rgba(249, 115, 22, 0.12) !important;
+}
+
+:root[data-theme="halloween"] .text-\[\#0052a5\] {
+  color: #f97316 !important;
+}
+
+/* ── 4. Buttons and Badges Clean-up ── */
+/* Primary "+ 申报飞行报告" Button */
+:root[data-theme="halloween"] .bg-primary,
+:root[data-theme="halloween"] button[data-variant="default"],
+:root[data-theme="halloween"] .bg-\[\#0052a5\] {
+  background-color: #ea580c !important;
+  color: #ffffff !important;
+}
+
+:root[data-theme="halloween"] .bg-primary:hover,
+:root[data-theme="halloween"] button[data-variant="default"]:hover,
+:root[data-theme="halloween"] .bg-\[\#0052a5\]:hover {
+  background-color: #f97316 !important;
+}
+
+/* Secondary & Refresh Buttons */
+:root[data-theme="halloween"] [data-slot="button"][data-variant="outline"],
+:root[data-theme="halloween"] button[variant="outline"],
+:root[data-theme="halloween"] .border-slate-200 button {
+  background-color: #27272a !important;
+  border-color: #3f3f46 !important;
+  color: #f4f4f5 !important;
+}
+
+:root[data-theme="halloween"] [data-slot="button"][data-variant="outline"]:hover,
+:root[data-theme="halloween"] button[variant="outline"]:hover {
+  background-color: #3f3f46 !important;
+  color: #ffffff !important;
+}
+
+:root[data-theme="halloween"] [data-slot="button"][data-variant="secondary"],
+:root[data-theme="halloween"] button[variant="secondary"],
+:root[data-theme="halloween"] .bg-secondary,
+:root[data-theme="halloween"] .bg-\[\#eef6ff\] {
+  background-color: #27272a !important;
+  color: #f4f4f5 !important;
+}
+
+/* Status Badges */
+:root[data-theme="halloween"] [data-slot="badge"][data-variant="default"],
+:root[data-theme="halloween"] .bg-\[\#e3effd\] {
+  background-color: rgba(34, 197, 94, 0.16) !important;
+  color: #4ade80 !important;
+}
+
+:root[data-theme="halloween"] [data-slot="badge"][data-variant="secondary"],
+:root[data-theme="halloween"] .bg-\[\#f1f5f9\] {
+  background-color: rgba(234, 88, 12, 0.16) !important;
+  color: #fb923c !important;
+}
+
+/* ── 5. Left Sidebar Navigation Clean-up ── */
+:root[data-theme="halloween"] .bg-\[\#0052a5\]\/\[0\.10\],
+:root[data-theme="halloween"] aside [data-active="true"] {
+  background-color: rgba(234, 88, 12, 0.15) !important;
+  color: #f97316 !important;
+}
+
+:root[data-theme="halloween"] .hover\:bg-\[\#0052a5\]\/\[0\.05\]:hover {
+  background-color: rgba(234, 88, 12, 0.08) !important;
+  color: #ea580c !important;
+}
+
+:root[data-theme="halloween"] .text-\[\#003a74\] {
+  color: #ea580c !important;
+}
+
+/* ── 6. Cards Hover Ambient Glow ── */
+:root[data-theme="halloween"] [data-slot="card"],
+:root[data-theme="halloween"] .site-card {
+  background-color: #1c1917 !important;
+  border: 1px solid #292524 !important;
+  border-radius: 8px;
+  color: #fafaf9 !important;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+:root[data-theme="halloween"] [data-slot="card"]:hover,
+:root[data-theme="halloween"] .site-card:hover {
+  border-color: rgba(249, 115, 22, 0.35) !important;
+  box-shadow: 0 4px 20px -2px rgba(249, 115, 22, 0.2) !important;
+}
+
+/* Dropdown & Popovers */
+:root[data-theme="halloween"] [data-slot="popover"],
+:root[data-theme="halloween"] [data-slot="dropdown-menu-content"] {
+  background-color: #1c1917 !important;
+  border: 1px solid #292524 !important;
+  color: #fafaf9 !important;
+}
+
+/* Text Overrides */
+:root[data-theme="halloween"] .text-slate-950,
+:root[data-theme="halloween"] .text-slate-900 {
+  color: #fafaf9 !important;
+}
+
+:root[data-theme="halloween"] .text-slate-600,
+:root[data-theme="halloween"] .text-slate-700 {
+  color: #a8a29e !important;
+}
+
+:root[data-theme="halloween"] .site-heading {
+  color: #fafaf9 !important;
+}
+
+:root[data-theme="halloween"] .site-copy {
+  color: #a8a29e !important;
+}
+
+:root[data-theme="halloween"] .site-eyebrow {
+  color: #ea580c !important;
+}
+
+:root[data-theme="halloween"] .site-badge {
+  background-color: rgba(139, 92, 246, 0.16) !important;
+  color: #c4b5fd !important;
+}
+
+/* ── 7. Charts & Progress Bar Upgrades ── */
+:root[data-theme="halloween"] .dark-theme-bar-track,
+:root[data-theme="halloween"] .bg-slate-100 {
+  background-color: #27272a !important;
+}
+
+:root[data-theme="halloween"] .dark-theme-bar-fill {
+  background: linear-gradient(90deg, #9333ea 0%, #ea580c 60%, #fb923c 100%) !important;
+  box-shadow: 0 0 10px rgba(234, 88, 12, 0.4) !important;
+}
+
+:root[data-theme="halloween"] .dark-theme-trend-line path.recharts-curve {
+  filter: drop-shadow(0 0 6px rgba(234, 88, 12, 0.5));
+}
+
+/* ── 8. Purple & Orange Dual Shimmer on Button Hover ── */
+:root[data-theme="halloween"] .halloween-shimmer-btn:hover,
+:root[data-theme="halloween"] button.bg-primary:hover,
+:root[data-theme="halloween"] a.bg-primary:hover,
+:root[data-theme="halloween"] [data-slot="button"][data-variant="default"]:hover {
+  box-shadow: 0 0 16px rgba(234, 88, 12, 0.45), 0 0 24px rgba(168, 85, 247, 0.35) !important;
+  transition: all 0.25s ease;
+}
+
+/* ── 9. High-Contrast Brand Logo Theme Adaptation ── */
+.brand-logo-dark {
+  display: none !important;
+}
+
+.brand-logo-light {
+  display: block !important;
+}
+
+:root[data-theme="halloween"] .brand-logo-light,
+:root.dark .brand-logo-light {
+  display: none !important;
+}
+
+:root[data-theme="halloween"] .brand-logo-dark,
+:root.dark .brand-logo-dark {
+  display: block !important;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.6));
+}
+
+:root[data-theme="halloween"] a:hover .brand-logo-dark {
+  filter: drop-shadow(0 0 10px rgba(249, 115, 22, 0.4));
+  transition: filter 0.25s ease;
+}
+
+:root[data-theme="halloween"] .brand-logo-mark {
+  filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.6));
+}
+
+/* ── 10. Sticky Navigation Offset Below Preview Banner ── */
+body:has(#preview-banner) header.sticky {
+  top: 32px !important;
+}
+
+body:has(#preview-banner) aside.sticky {
+  top: 32px !important;
+  height: calc(100vh - 32px) !important;
+}
+
+/* ── 11. Header Logo Container in Halloween Theme ── */
+.halloween-logo-badge {
+  display: none !important;
+}
+
+:root[data-theme="halloween"] .halloween-logo-badge {
+  display: inline-flex !important;
+}
+
+:root[data-theme="halloween"] .halloween-logo-container {
+  background-color: rgba(28, 25, 23, 0.7);
+  border: 1px solid rgba(249, 115, 22, 0.25);
+  border-radius: 8px;
+  padding: 4px 10px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 0 14px rgba(249, 115, 22, 0.15);
+}
+
+:root[data-theme="halloween"] .halloween-logo-container:hover {
+  border-color: rgba(249, 115, 22, 0.45);
+  box-shadow: 0 0 20px rgba(249, 115, 22, 0.3);
+}
+
+/* ── 12. Homepage Hero Section Halloween Overhaul ── */
+.hero-overlay-halloween,
+.halloween-hero-bats {
+  display: none !important;
+}
+
+:root[data-theme="halloween"] .hero-overlay-standard {
+  display: none !important;
+}
+
+:root[data-theme="halloween"] .hero-overlay-halloween {
+  display: block !important;
+  background: linear-gradient(135deg, rgba(15, 10, 28, 0.88) 0%, rgba(46, 16, 101, 0.55) 45%, rgba(234, 88, 12, 0.25) 100%) !important;
+}
+
+:root[data-theme="halloween"] .halloween-hero-bats {
+  display: block !important;
+}
+
+:root[data-theme="halloween"] .hero-cert-badge {
+  background-color: rgba(46, 16, 101, 0.5) !important;
+  border: 1px solid rgba(249, 115, 22, 0.4) !important;
+  box-shadow: 0 0 16px rgba(168, 85, 247, 0.25) !important;
+  color: #f5f3ff !important;
+}
+
+:root[data-theme="halloween"] .hero-cert-badge svg {
+  color: #fb923c !important;
+}
+
+:root[data-theme="halloween"] .hero-primary-btn {
+  background: linear-gradient(135deg, #EA580C 0%, #F97316 100%) !important;
+  color: #FFFFFF !important;
+  font-weight: 700 !important;
+  box-shadow: 0 0 25px rgba(249, 115, 22, 0.5) !important;
+  border: 1px solid rgba(251, 146, 60, 0.3) !important;
+  transition: all 0.25s ease !important;
+}
+
+:root[data-theme="halloween"] .hero-primary-btn:hover {
+  background: linear-gradient(135deg, #F97316 0%, #FB923C 100%) !important;
+  box-shadow: 0 0 32px rgba(249, 115, 22, 0.7), 0 0 20px rgba(168, 85, 247, 0.4) !important;
+  transform: translateY(-1px);
+}
+
+:root[data-theme="halloween"] .hero-secondary-btn {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  color: #ffffff !important;
+  backdrop-filter: blur(12px) !important;
+}
+
+:root[data-theme="halloween"] .hero-secondary-btn:hover {
+  border-color: rgba(249, 115, 22, 0.5) !important;
+  background-color: rgba(249, 115, 22, 0.12) !important;
+  box-shadow: 0 0 16px rgba(249, 115, 22, 0.25) !important;
+}
+
+/* ── 13. Homepage Stats Section Streamer Text & Cobwebs ── */
+.halloween-stat-cobweb {
+  display: none !important;
+}
+
+:root[data-theme="halloween"] .halloween-stat-cobweb {
+  display: block !important;
+}
+
+:root[data-theme="halloween"] .stats-section {
+  background-color: #12100e !important;
+  border-color: rgba(249, 115, 22, 0.15) !important;
+}
+
+:root[data-theme="halloween"] .stats-section .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(249, 115, 22, 0.15) !important;
+}
+
+:root[data-theme="halloween"] .stat-number {
+  background: linear-gradient(135deg, #FBBF24 0%, #F97316 50%, #C084FC 100%) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  color: transparent !important;
+  filter: drop-shadow(0 0 12px rgba(249, 115, 22, 0.35));
+}
+
+/* ── 14. Operations Feature Cards Rhythm & Watermarks ── */
+.halloween-card-topline,
+.halloween-card-watermark {
+  display: none !important;
+}
+
+:root[data-theme="halloween"] .halloween-card-topline {
+  display: block !important;
+  background: linear-gradient(90deg, transparent, rgba(249, 115, 22, 0.4), rgba(168, 85, 247, 0.4), transparent);
+}
+
+:root[data-theme="halloween"] .halloween-card-watermark {
+  display: block !important;
+}
+
+:root[data-theme="halloween"] .highlight-orange:hover {
+  border-color: rgba(249, 115, 22, 0.45) !important;
+  box-shadow: 0 4px 24px -2px rgba(249, 115, 22, 0.3) !important;
+}
+
+:root[data-theme="halloween"] .highlight-purple:hover {
+  border-color: rgba(168, 85, 247, 0.45) !important;
+  box-shadow: 0 4px 24px -2px rgba(168, 85, 247, 0.3) !important;
+}
+
+:root[data-theme="halloween"] .highlight-icon-orange {
+  background-color: rgba(249, 115, 22, 0.15) !important;
+  color: #f97316 !important;
+  box-shadow: 0 0 12px rgba(249, 115, 22, 0.25) !important;
+  border: 1px solid rgba(249, 115, 22, 0.3) !important;
+}
+
+:root[data-theme="halloween"] .highlight-icon-purple {
+  background-color: rgba(168, 85, 247, 0.15) !important;
+  color: #c084fc !important;
+  box-shadow: 0 0 12px rgba(168, 85, 247, 0.25) !important;
+  border: 1px solid rgba(168, 85, 247, 0.3) !important;
+}
+
+:root[data-theme="halloween"] .text-slate-800 {
+  color: #fafaf9 !important;
+}
+
+
+
+
+

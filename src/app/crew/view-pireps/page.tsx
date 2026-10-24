@@ -37,7 +37,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useSession } from "@/hooks/use-session";
-import { getAirlineLogoForFlight } from "@/lib/group-airlines";
+import { AirlineLogo } from "@/components/airline-logo";
 import {
   MAX_PIREP_COMMENTS,
   PIREP_COMMENT_LIMIT_MESSAGE,
@@ -405,15 +405,9 @@ export default function ViewPireps() {
                 >
                   <div>
                     <div className="mb-2 flex flex-wrap items-center gap-2">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={
-                          getAirlineLogoForFlight(
-                            pirep.flightnum,
-                            pirep.Aircraft?.liveryname,
-                          ).logo
-                        }
-                        alt=""
+                      <AirlineLogo
+                        flightnum={pirep.flightnum}
+                        liveryname={pirep.Aircraft?.liveryname}
                         className="h-4 w-auto max-w-[54px] shrink-0 object-contain"
                       />
                       <span className="font-semibold">{pirep.flightnum}</span>
