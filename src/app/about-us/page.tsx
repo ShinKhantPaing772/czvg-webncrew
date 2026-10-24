@@ -123,7 +123,14 @@ export default function AboutPage() {
                         alt={`${airline.name} logo`}
                         width={180}
                         height={90}
-                        className="h-20 w-full object-contain"
+                        className="brand-logo-light h-20 w-full object-contain"
+                      />
+                      <Image
+                        src={airline.logoDark || airline.logo}
+                        alt={`${airline.name} logo`}
+                        width={180}
+                        height={90}
+                        className="brand-logo-dark h-20 w-full object-contain"
                       />
                     </div>
                     <div>

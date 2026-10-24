@@ -310,6 +310,22 @@ describe("AuthGuard session revalidation", () => {
     expect(session.router.push.mock.calls.every(([path]) => path === "/crew")).toBe(true);
   });
 
+  it("preserves verified page content without loading flash during internal route navigation", async () => {
+    const field = await verifiedDraft();
+    expect(session.mounted).toHaveBeenCalledTimes(1);
+
+    // Simulate route navigation to another crew page
+    session.pathname = "/crew/find-routes";
+    await act(async () => {
+      root!.render(<AuthGuard><DraftForm /></AuthGuard>);
+    });
+
+    // Content must stay rendered and never drop to Loading...
+    expectDraftPreserved(field);
+    expect(session.unmounted).not.toHaveBeenCalled();
+    expect(container.textContent).not.toContain("Loading...");
+  });
+
   it("aborts pending verification on unmount and ignores its eventual response", async () => {
     await renderGuard();
     await act(async () => { root!.unmount(); root = null; });

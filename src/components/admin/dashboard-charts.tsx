@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { ElementType, ReactNode } from "react";
 import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -128,9 +130,9 @@ export function BarList({ data }: { data: CountPoint[] }) {
               {compactNumber(item.value)}
             </span>
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+          <div className="h-2 overflow-hidden rounded-full bg-slate-100 dark-theme-bar-track">
             <div
-              className="h-full rounded-full bg-primary"
+              className="h-full rounded-full bg-primary dark-theme-bar-fill transition-all"
               style={{ width: `${Math.max(5, (item.value / max) * 100)}%` }}
             />
           </div>
@@ -161,7 +163,7 @@ export function SimpleBarChart({ data }: { data: CountPoint[] }) {
 export function TrendChart({
   data,
   dataKey,
-  color = "#0052a5",
+  color,
   className = "h-[260px]",
 }: {
   data: TrendPoint[];
@@ -171,10 +173,26 @@ export function TrendChart({
 }) {
   if (!data.length) return <EmptyChart label="No activity in this range" />;
 
+  const strokeColor = color || "var(--trend-chart-stroke, #0052a5)";
+
   return (
     <div className={className}>
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data}>
+        <AreaChart data={data}>
+          <defs>
+            <linearGradient id="trendAreaGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop
+                offset="5%"
+                stopColor="var(--trend-chart-area-start, rgba(0, 82, 165, 0.25))"
+                stopOpacity={0.8}
+              />
+              <stop
+                offset="95%"
+                stopColor="var(--trend-chart-area-end, rgba(0, 82, 165, 0))"
+                stopOpacity={0}
+              />
+            </linearGradient>
+          </defs>
           <CartesianGrid strokeDasharray="3 3" vertical={false} />
           <XAxis dataKey="label" minTickGap={28} tick={{ fontSize: 12 }} />
           <YAxis
@@ -193,14 +211,17 @@ export function TrendChart({
                 : [value, dataKey]
             }
           />
-          <Line
+          <Area
             type="monotone"
             dataKey={dataKey}
-            stroke={color}
+            stroke={strokeColor}
             strokeWidth={2}
+            fill="url(#trendAreaGradient)"
+            fillOpacity={1}
             dot={false}
+            className="dark-theme-trend-line"
           />
-        </LineChart>
+        </AreaChart>
       </ResponsiveContainer>
     </div>
   );

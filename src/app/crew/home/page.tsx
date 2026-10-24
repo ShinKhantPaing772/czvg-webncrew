@@ -31,7 +31,9 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSession } from "@/hooks/use-session";
-import { getAirlineLogoForFlight } from "@/lib/group-airlines";
+import { useTheme } from "@/components/theme-provider";
+import { Icon } from "@iconify/react";
+import { AirlineLogo } from "@/components/airline-logo";
 import { authFetch } from "@/lib/utils/api";
 
 type RecentPirep = {
@@ -96,15 +98,52 @@ function SummaryCard({
   icon,
   label,
   value,
+  variantIndex = 0,
 }: {
   icon: ReactNode;
   label: string;
   value: string | number;
+  variantIndex?: number;
 }) {
+  const { isHalloween } = useTheme();
+
   return (
-    <Card>
-      <CardContent className="flex items-center gap-3 p-3 sm:p-4">
-        <span className="hidden rounded-md bg-[#eef4fb] p-2 text-[#0052a5] sm:block">
+    <Card
+      className={`group relative overflow-hidden transition-all ${
+        isHalloween ? "border-[#292524] bg-[#1c1917]" : ""
+      }`}
+    >
+      {isHalloween && (
+        <>
+          {/* Top 1px highlight gradient line */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 top-0 h-[1px]"
+            style={{
+              background:
+                "linear-gradient(90deg, transparent, rgba(249,115,22,0.4), rgba(168,85,247,0.4), transparent)",
+            }}
+          />
+          {/* Top-right cobweb watermark */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -top-1 -right-1 h-10 w-10 text-orange-400 opacity-[0.08] transition-all duration-300 group-hover:scale-105 group-hover:text-orange-300 group-hover:opacity-[0.22]"
+          >
+            <Icon icon="game-icons:cobweb" className="h-full w-full" />
+          </div>
+        </>
+      )}
+
+      <CardContent className="relative z-10 flex items-center gap-3 p-3 sm:p-4">
+        <span
+          className={
+            isHalloween
+              ? variantIndex % 2 === 0
+                ? "hidden rounded-md bg-orange-500/15 p-2 text-orange-400 ring-1 ring-orange-500/30 shadow-[0_0_12px_rgba(249,115,22,0.18)] sm:block"
+                : "hidden rounded-md bg-purple-500/15 p-2 text-purple-400 ring-1 ring-purple-500/30 shadow-[0_0_12px_rgba(168,85,247,0.18)] sm:block"
+              : "hidden rounded-md bg-[#eef4fb] p-2 text-[#0052a5] sm:block"
+          }
+        >
           {icon}
         </span>
         <div>
@@ -196,6 +235,7 @@ function AwardArtwork({ award }: { award: ReceivedAward }) {
 
 export default function UserDashboard() {
   const { user, loading: sessionLoading } = useSession();
+  const { isHalloween } = useTheme();
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -329,10 +369,40 @@ export default function UserDashboard() {
 
         {!sessionLoading && !loading && user && dashboard && (
           <>
-            {/* Top Header */}
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h1 className="text-2xl font-bold">{user.name}</h1>
+            {/* Top Header / Festive Banner */}
+            <div
+              className={
+                isHalloween
+                  ? "relative flex flex-col gap-4 overflow-hidden rounded-xl border border-orange-500/20 bg-gradient-to-br from-purple-950/30 via-orange-950/15 to-[#1c1917]/90 p-5 shadow-[0_4px_24px_-4px_rgba(147,51,234,0.15)] transition-all sm:flex-row sm:items-center sm:justify-between sm:p-6"
+                  : "flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+              }
+            >
+              {isHalloween && (
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute -bottom-4 right-2 h-32 w-32 select-none text-amber-500/15 drop-shadow-[0_0_16px_rgba(245,158,11,0.25)] sm:-top-2 sm:right-6 sm:h-40 sm:w-40"
+                >
+                  <Icon icon="game-icons:moon-bats" className="h-full w-full" />
+                </div>
+              )}
+
+              <div className="relative z-10">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="flex items-center gap-2 text-2xl font-bold">
+                    {isHalloween && (
+                      <Icon
+                        icon="fluent-emoji-flat:jack-o-lantern"
+                        className="h-6 w-6 shrink-0"
+                      />
+                    )}
+                    <span>{user.name}</span>
+                  </h1>
+                  {isHalloween && (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-purple-500/30 bg-gradient-to-r from-purple-900/70 to-purple-800/50 px-2.5 py-0.5 text-xs font-medium text-purple-200 shadow-[0_0_10px_rgba(168,85,247,0.2)]">
+                      🎃 万圣夜幽灵机组
+                    </span>
+                  )}
+                </div>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {dashboard.rank.next
                     ? `${user.callsign} · ${dashboard.rank.current.name} · ${dashboard.rank.next.remainingFormatted} remaining to ${dashboard.rank.next.name}`
@@ -340,18 +410,19 @@ export default function UserDashboard() {
                 </p>
               </div>
 
-              <div className="flex gap-2">
+              <div className="relative z-10 flex gap-2">
                 <Button
                   variant="outline"
                   onClick={() => void fetchDashboard(true)}
                   disabled={refreshing}
                   aria-label="Refresh dashboard"
+                  className={isHalloween ? "hover:border-orange-500/40" : ""}
                 >
                   <RefreshCw
                     className={"h-4 w-4 " + (refreshing ? "animate-spin" : "")}
                   />
                 </Button>
-                <Button asChild>
+                <Button asChild className={isHalloween ? "halloween-shimmer-btn" : ""}>
                   <Link href="/crew/file-pirep">
                     <Plus className="mr-1 h-4 w-4" />
                     File PIREP
@@ -382,16 +453,19 @@ export default function UserDashboard() {
                 icon={<Clock className="h-4 w-4" />}
                 label="Total flight time"
                 value={dashboard.statistics.totalFlightTime}
+                variantIndex={0}
               />
               <SummaryCard
                 icon={<CheckCircle2 className="h-4 w-4" />}
                 label="Approved PIREPs"
                 value={dashboard.statistics.approvedPireps}
+                variantIndex={1}
               />
               <SummaryCard
                 icon={<CalendarClock className="h-4 w-4" />}
                 label="Pending PIREPs"
                 value={dashboard.statistics.pendingPireps}
+                variantIndex={2}
               />
               <SummaryCard
                 icon={<Award className="h-4 w-4" />}
@@ -401,6 +475,7 @@ export default function UserDashboard() {
                     : "Pilot rank"
                 }
                 value={dashboard.rank.current.name}
+                variantIndex={3}
               />
             </div>
 
@@ -475,15 +550,9 @@ export default function UserDashboard() {
                           >
                             <div>
                               <div className="mb-2 flex flex-wrap items-center gap-2">
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img
-                                  src={
-                                    getAirlineLogoForFlight(
-                                      flight.flightnum,
-                                      flight.aircraft?.liveryname,
-                                    ).logo
-                                  }
-                                  alt=""
+                                <AirlineLogo
+                                  flightnum={flight.flightnum}
+                                  liveryname={flight.aircraft?.liveryname}
                                   className="h-4 w-auto max-w-[54px] shrink-0 object-contain"
                                 />
                                 <span className="font-semibold">

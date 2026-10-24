@@ -30,7 +30,7 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { useSession } from "@/hooks/use-session";
-import { getAirlineLogoForFlight } from "@/lib/group-airlines";
+import { AirlineLogo } from "@/components/airline-logo";
 import { authFetch } from "@/lib/utils/api";
 import { formatFlightTime } from "@/lib/utils/time";
 
@@ -583,15 +583,9 @@ export default function FindRoutes() {
                   <div className="grid w-full items-center gap-4 rounded-[6px] bg-[var(--v2-background-bg-layer-01,#fafafa)] px-4 py-3.5 transition-colors hover:bg-[var(--v2-background-bg-layer-02,#f2f2f2)] md:grid-cols-[1fr_1.3fr_1fr]">
                     <div>
                       <div className="mb-2 flex flex-wrap items-center gap-2">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={
-                            getAirlineLogoForFlight(
-                              route.fltnum,
-                              primaryAc?.liveryname,
-                            ).logo
-                          }
-                          alt=""
+                        <AirlineLogo
+                          flightnum={route.fltnum}
+                          liveryname={primaryAc?.liveryname}
                           className="h-4 w-auto max-w-[54px] shrink-0 object-contain"
                         />
                         <span className="font-semibold">{route.fltnum}</span>

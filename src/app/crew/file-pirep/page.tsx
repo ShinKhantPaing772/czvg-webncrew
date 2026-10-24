@@ -54,7 +54,7 @@ import {
 import { CrewHeader } from "@/components/crew-header";
 import { useRouter, useSearchParams } from "next/navigation";
 import { authFetch } from "@/lib/utils/api";
-import { getAirlineLogoForFlight } from "@/lib/group-airlines";
+import { AirlineLogo } from "@/components/airline-logo";
 import { useSession } from "@/hooks/use-session";
 
 interface aircraft {
@@ -452,15 +452,9 @@ export default function FilePirep() {
         <div className="grid gap-4 rounded-[6px] bg-[var(--v2-background-bg-layer-01,#fafafa)] px-4 py-3.5 md:grid-cols-[1fr_1.3fr_1fr]">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={
-                  getAirlineLogoForFlight(
-                    watchedValues.flightnum,
-                    selectedAircraft?.liveryname,
-                  ).logo
-                }
-                alt=""
+              <AirlineLogo
+                flightnum={watchedValues.flightnum}
+                liveryname={selectedAircraft?.liveryname}
                 className="h-4 w-auto max-w-[54px] shrink-0 object-contain"
               />
               <span className="font-mono text-lg font-semibold">

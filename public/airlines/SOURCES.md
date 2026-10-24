@@ -31,7 +31,9 @@ served directly as WebP.
 | Local asset | Image source | Brand reference |
 | --- | --- | --- |
 | `china-southern.svg` | [Existing China Southern logo](https://upload.wikimedia.org/wikipedia/en/b/b4/China_Southern_Airlines_logo.svg) | [Official visual identity](https://www.csairgroup.cn/cn/gywm3/qywh92/viyy47/index.html) |
+| `china-southern-white.svg` | Derived white-wordmark vector variant for dark/Halloween themes | [Official visual identity](https://www.csairgroup.cn/cn/gywm3/qywh92/viyy47/index.html) |
 | `xiamenair.svg` | [Official homepage logo](https://www.xiamenair.com/i18n-ow-_nuxt/img/logo%403x.7a49c02.svg) | [XiamenAir](https://www.xiamenair.com/en-us/) |
+| `xiamenair-white.svg` | Derived white-wordmark vector variant for dark/Halloween themes | [XiamenAir](https://www.xiamenair.com/en-us/) |
 | `chongqing.webp` | [Existing Chongqing logo](https://upload.wikimedia.org/wikipedia/commons/0/0f/Chongqing_Airlines_logo.png) | [Chongqing Airlines](https://www.chongqingairlines.cn/) |
 | `hebei.webp` | [Existing Hebei logo](https://upload.wikimedia.org/wikipedia/en/0/0b/HebeiAirLogo.png) | [Hebei Airlines](https://www.hbhk.com.cn/) |
 | `jiangxi.webp` | [Existing Jiangxi logo](https://upload.wikimedia.org/wikipedia/en/4/4a/Jiangxi_Air_logo.svg) | [Jiangxi Air](https://www.airjiangxi.com/) |
