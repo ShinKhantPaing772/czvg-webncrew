@@ -268,6 +268,18 @@ body {
   background-color: #1c1917 !important;
 }
 
+:root[data-theme="halloween"] .bg-slate-50,
+:root[data-theme="halloween"] .bg-slate-100 {
+  background-color: #18181b !important;
+  border-color: #27272a !important;
+}
+
+:root.dark .bg-slate-50,
+.dark .bg-slate-50 {
+  background-color: #18181b !important;
+  border-color: #27272a !important;
+}
+
 :root[data-theme="halloween"] .bg-\[var\(--v2-background-bg-layer-01\,\#fafafa\)\],
 :root[data-theme="halloween"] .bg-\[\#fafafa\],
 :root[data-theme="halloween"] .bg-\[\#f2f6fb\] {
@@ -465,8 +477,10 @@ body {
 
 /* ── 7. Charts & Progress Bar Upgrades ── */
 :root[data-theme="halloween"] .dark-theme-bar-track,
+:root[data-theme="halloween"] .bg-slate-50,
 :root[data-theme="halloween"] .bg-slate-100 {
   background-color: #27272a !important;
+  border-color: #3f3f46 !important;
 }
 
 :root[data-theme="halloween"] .dark-theme-bar-fill {
