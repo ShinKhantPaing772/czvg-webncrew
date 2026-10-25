@@ -2,199 +2,20 @@ import { NextResponse } from "next/server";
 import sequelize from "@/lib/database";
 import { models } from "@/lib/models";
 import { requirePermission } from "@/lib/server-auth";
+import { Op } from "sequelize";
+import {
+  convertDurationToSeconds,
+  parseCSV,
+  validateRouteRow,
+  type ValidatedRouteRow,
+  type InvalidRouteRow,
+  type RouteToImport,
+  type CreatedRouteSummary,
+} from "@/lib/routes/bulk-import-utils";
+
 // Mark this route as dynamic to prevent static optimization
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-type ParsedCsvRow = Record<string, string>;
-
-type ValidatedRouteRow = {
-  fltnum: string;
-  dep: string;
-  arr: string;
-  duration: string;
-  notes: string;
-  aircraftNames: string[];
-};
-
-type RouteToImport = ValidatedRouteRow & {
-  durationInSeconds: number;
-  aircraftIds: number[];
-};
-
-type CreatedRouteSummary = {
-  id: number;
-  fltnum: string;
-  dep: string;
-  arr: string;
-};
-
-// Helper function to convert duration format
-function convertDurationToSeconds(duration: string | number): number {
-  if (typeof duration === "number") return duration;
-  if (typeof duration === "string" && duration.includes(":")) {
-    const [hours, minutes] = duration.split(":").map(Number);
-    if (
-      Number.isInteger(hours) &&
-      Number.isInteger(minutes) &&
-      hours >= 0 &&
-      minutes >= 0 &&
-      minutes < 60
-    ) {
-      return hours * 60 * 60 + minutes * 60;
-    }
-  }
-
-  const seconds = Number(duration);
-  return Number.isFinite(seconds) && seconds > 0 ? seconds : NaN;
-}
-
-// Helper function to parse CSV
-async function parseCSV(text: string): Promise<ParsedCsvRow[]> {
-  const rows: string[][] = [];
-  let currentField = "";
-  let currentRow: string[] = [];
-  let inQuotes = false;
-
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i];
-    const nextChar = text[i + 1];
-
-    if (char === '"' && inQuotes && nextChar === '"') {
-      currentField += '"';
-      i += 1;
-      continue;
-    }
-
-    if (char === '"') {
-      inQuotes = !inQuotes;
-      continue;
-    }
-
-    if (char === "," && !inQuotes) {
-      currentRow.push(currentField.trim());
-      currentField = "";
-      continue;
-    }
-
-    if ((char === "\n" || char === "\r") && !inQuotes) {
-      if (char === "\r" && nextChar === "\n") i += 1;
-      currentRow.push(currentField.trim());
-      if (currentRow.some((value) => value)) rows.push(currentRow);
-      currentRow = [];
-      currentField = "";
-      continue;
-    }
-
-    currentField += char;
-  }
-
-  currentRow.push(currentField.trim());
-  if (currentRow.some((value) => value)) rows.push(currentRow);
-
-  if (inQuotes) {
-    throw new Error("CSV contains an unterminated quoted field");
-  }
-
-  if (rows.length < 2) {
-    throw new Error("CSV must have at least a header row and one data row");
-  }
-
-  const headers = rows[0].map((h) => h.trim().toLowerCase());
-  const parsedRows: ParsedCsvRow[] = [];
-
-  for (let i = 1; i < rows.length; i++) {
-    const values = rows[i];
-    if (values.length !== headers.length) {
-      throw new Error(
-        `Row ${i + 1} has ${values.length} columns but expected ${headers.length}`,
-      );
-    }
-
-    const row: ParsedCsvRow = {};
-    headers.forEach((header, index) => {
-      row[header] = values[index];
-    });
-    parsedRows.push(row);
-  }
-
-  return parsedRows;
-}
-
-// Validate route row and extract aircraft names
-function validateRouteRow(
-  row: ParsedCsvRow,
-  rowNumber: number,
-): ValidatedRouteRow {
-  const errors: string[] = [];
-
-  const fltnum = row.fltnum || row["flight number"];
-  if (!fltnum || !fltnum.toString().trim()) {
-    errors.push("flight number (fltnum) is required");
-  }
-
-  const dep = (row.dep || row.departure)?.toString().trim().toUpperCase();
-  if (!dep || !dep.toString().trim()) {
-    errors.push("departure airport (dep) is required");
-  } else if (dep.length !== 4 || !/^[A-Z]{4}$/.test(dep)) {
-    errors.push("departure must be a 4-letter ICAO code");
-  }
-
-  const arr = (row.arr || row.arrival)?.toString().trim().toUpperCase();
-  if (!arr || !arr.toString().trim()) {
-    errors.push("arrival airport (arr) is required");
-  } else if (arr.length !== 4 || !/^[A-Z]{4}$/.test(arr)) {
-    errors.push("arrival must be a 4-letter ICAO code");
-  }
-
-  const duration = row.duration;
-  if (!duration || !duration.toString().trim()) {
-    errors.push("duration is required");
-  } else if (!duration.toString().includes(":")) {
-    errors.push("duration must be in HH:MM format");
-  } else if (!Number.isFinite(convertDurationToSeconds(duration))) {
-    errors.push("duration must be a valid HH:MM value");
-  }
-
-  if (errors.length > 0) {
-    throw new Error(`Row ${rowNumber}: ${errors.join(", ")}`);
-  }
-
-  // Preview rows already contain a normalized aircraftNames array. Preserve it
-  // during the import pass; raw CSV rows still use the aircraft column.
-  const normalizedAircraftNames = (row as unknown as { aircraftNames?: unknown })
-    .aircraftNames;
-  const aircraftNames: string[] = [];
-
-  if (Array.isArray(normalizedAircraftNames)) {
-    for (const name of normalizedAircraftNames) {
-      if (typeof name === "string" && name.trim()) {
-        aircraftNames.push(name.trim());
-      }
-    }
-  } else {
-    const aircraftStr = (row.aircraft || "").toString().trim();
-
-    // Split by semicolon or pipe
-    if (aircraftStr) {
-      const names = aircraftStr.split(/[;|]/).map((name: string) => name.trim());
-      for (const name of names) {
-        if (name) {
-          aircraftNames.push(name);
-        }
-      }
-    }
-  }
-
-  return {
-    fltnum: fltnum.toString().trim(),
-    dep,
-    arr,
-    duration: duration.toString().trim(),
-    notes: (row.notes || "").toString().trim(),
-    aircraftNames,
-  };
-}
 
 export async function POST(request: Request) {
   try {
@@ -208,43 +29,40 @@ export async function POST(request: Request) {
     if (mode === "preview") {
       const { csvContent } = body;
 
-      // Parse CSV
-      const rows = await parseCSV(csvContent);
+      if (!csvContent || typeof csvContent !== "string" || !csvContent.trim()) {
+        return NextResponse.json(
+          { success: false, message: "CSV content is empty" },
+          { status: 400 },
+        );
+      }
 
-      if (rows.length === 0) {
+      // Parse CSV
+      const { rows, malformedRows } = parseCSV(csvContent);
+
+      if (rows.length === 0 && malformedRows.length === 0) {
         return NextResponse.json(
           { success: false, message: "No data rows found in CSV" },
           { status: 400 },
         );
       }
 
-      // Validate and collect aircraft names
-      const validatedRoutes: ValidatedRouteRow[] = [];
-      const errors: string[] = [];
+      // Validate rows
+      const validRoutes: ValidatedRouteRow[] = [];
+      const invalidRoutes: InvalidRouteRow[] = [...malformedRows];
       const uniqueAircraftNames = new Set<string>();
 
       for (let i = 0; i < rows.length; i++) {
-        try {
-          const validatedRoute = validateRouteRow(rows[i], i + 2);
-          validatedRoutes.push(validatedRoute);
-          validatedRoute.aircraftNames.forEach((name: string) => {
-            uniqueAircraftNames.add(name);
-          });
-        } catch (error) {
-          errors.push((error as Error).message);
+        const result = validateRouteRow(rows[i], i + 2);
+        if (result.ok) {
+          validRoutes.push(result.route);
+          result.route.aircraftNames.forEach((name) => uniqueAircraftNames.add(name));
+        } else {
+          invalidRoutes.push(result.error);
         }
       }
 
-      if (errors.length > 0) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: "Validation errors found",
-            errors,
-          },
-          { status: 400 },
-        );
-      }
+      // Query current routes count to inform user in case of overwrite
+      const totalExistingRoutes = await models.Route.count();
 
       // Get available aircraft from database
       const availableAircraft = await models.Aircraft.findAll({
@@ -252,26 +70,60 @@ export async function POST(request: Request) {
         order: [["name", "ASC"]],
       });
 
+      if (validRoutes.length === 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "No valid route rows found in CSV",
+            preview: [],
+            invalidRoutes,
+            totalRows: rows.length + malformedRows.length,
+            validCount: 0,
+            invalidCount: invalidRoutes.length,
+            aircraftNames: [],
+            availableAircraft: availableAircraft.map((ac: any) => ({
+              id: ac.id,
+              name: ac.name,
+              liveryname: ac.liveryname,
+            })),
+            totalExistingRoutes,
+          },
+          { status: 400 },
+        );
+      }
+
       return NextResponse.json({
         success: true,
         message: "CSV parsed successfully",
-        preview: validatedRoutes,
+        preview: validRoutes,
+        invalidRoutes,
+        totalRows: validRoutes.length + invalidRoutes.length,
+        validCount: validRoutes.length,
+        invalidCount: invalidRoutes.length,
         aircraftNames: Array.from(uniqueAircraftNames),
         availableAircraft: availableAircraft.map((ac: any) => ({
           id: ac.id,
           name: ac.name,
           liveryname: ac.liveryname,
         })),
+        totalExistingRoutes,
       });
     }
 
-    // Mode 2: Import with aircraft mappings
+    // Mode 2: Import with aircraft mappings and mode (append | overwrite)
     if (mode === "import") {
-      const { routes, mappings } = body;
+      const { routes, mappings, importType = "append" } = body;
 
-      if (!routes || !Array.isArray(routes)) {
+      if (!routes || !Array.isArray(routes) || routes.length === 0) {
         return NextResponse.json(
-          { success: false, message: "Invalid routes data" },
+          { success: false, message: "Invalid or empty routes data" },
+          { status: 400 },
+        );
+      }
+
+      if (importType !== "append" && importType !== "overwrite") {
+        return NextResponse.json(
+          { success: false, message: "Invalid importType. Must be 'append' or 'overwrite'" },
           { status: 400 },
         );
       }
@@ -280,40 +132,43 @@ export async function POST(request: Request) {
       const validatedRoutes: RouteToImport[] = [];
 
       for (let i = 0; i < routes.length; i++) {
-        try {
-          const routeData = routes[i];
-          const validatedRoute = validateRouteRow(routeData, i + 1);
-          const durationInSeconds = convertDurationToSeconds(
-            validatedRoute.duration,
-          );
-          if (!Number.isFinite(durationInSeconds)) {
-            throw new Error("Duration must be a valid HH:MM value");
-          }
+        const routeData = routes[i];
+        const result = validateRouteRow(routeData, i + 1);
 
-          const aircraftIds: number[] = [];
-          for (const aircraftName of validatedRoute.aircraftNames) {
-            const mapping = mappings?.[aircraftName];
-            if (mapping === undefined || mapping === null || mapping === "") {
-              continue;
-            }
-
-            const mappedId = Number(mapping);
-            if (!Number.isInteger(mappedId) || mappedId <= 0) {
-              throw new Error(`Invalid aircraft mapping for "${aircraftName}"`);
-            }
-            aircraftIds.push(mappedId);
-          }
-
-          validatedRoutes.push({
-            ...validatedRoute,
-            durationInSeconds,
-            aircraftIds,
-          });
-        } catch (error) {
+        if (!result.ok) {
           creationErrors.push(
-            `Route ${i + 1}: ${(error as Error).message || "Unknown error"}`,
+            `Route ${i + 1}: ${result.error.errors.join(", ")}`,
           );
+          continue;
         }
+
+        const validatedRoute = result.route;
+        const durationInSeconds = convertDurationToSeconds(validatedRoute.duration);
+        if (!Number.isFinite(durationInSeconds)) {
+          creationErrors.push(`Route ${i + 1}: Duration must be a valid HH:MM value`);
+          continue;
+        }
+
+        const aircraftIds: number[] = [];
+        for (const aircraftName of validatedRoute.aircraftNames) {
+          const mapping = mappings?.[aircraftName];
+          if (mapping === undefined || mapping === null || mapping === "" || mapping === "none") {
+            continue;
+          }
+
+          const mappedId = Number(mapping);
+          if (!Number.isInteger(mappedId) || mappedId <= 0) {
+            creationErrors.push(`Route ${i + 1}: Invalid aircraft mapping for "${aircraftName}"`);
+            continue;
+          }
+          aircraftIds.push(mappedId);
+        }
+
+        validatedRoutes.push({
+          ...validatedRoute,
+          durationInSeconds,
+          aircraftIds,
+        });
       }
 
       if (creationErrors.length > 0) {
@@ -328,7 +183,22 @@ export async function POST(request: Request) {
         );
       }
 
-      const createdRoutes = await sequelize.transaction(async (transaction) => {
+      const result = await sequelize.transaction(async (transaction) => {
+        let clearedCount = 0;
+
+        // If overwrite mode, purge all existing route aircraft associations and routes
+        if (importType === "overwrite") {
+          clearedCount = await models.Route.count({ transaction });
+          await models.RouteAircraft.destroy({
+            where: { id: { [Op.gt]: 0 } },
+            transaction,
+          });
+          await models.Route.destroy({
+            where: { id: { [Op.gt]: 0 } },
+            transaction,
+          });
+        }
+
         const created: CreatedRouteSummary[] = [];
 
         for (const routeData of validatedRoutes) {
@@ -361,16 +231,21 @@ export async function POST(request: Request) {
           });
         }
 
-        return created;
+        return { created, clearedCount };
       });
 
       return NextResponse.json(
         {
           success: true,
-          message: `Successfully imported ${createdRoutes.length} routes`,
-          createdCount: createdRoutes.length,
+          message:
+            importType === "overwrite"
+              ? `Successfully cleared ${result.clearedCount} existing routes and imported ${result.created.length} new routes`
+              : `Successfully imported ${result.created.length} routes`,
+          createdCount: result.created.length,
+          clearedCount: result.clearedCount,
+          importType,
           errorCount: 0,
-          createdRoutes,
+          createdRoutes: result.created,
         },
         { status: 200 },
       );

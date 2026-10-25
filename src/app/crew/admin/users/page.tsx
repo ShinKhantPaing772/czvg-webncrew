@@ -749,7 +749,7 @@ export default function Users() {
                                     </span>
                                   </Button>
                                 </DialogTrigger>
-                                <DialogContent className="max-h-[90vh] w-[calc(100vw-2rem)] overflow-y-auto bg-white sm:max-w-[calc(100vw-2rem)] lg:max-w-6xl xl:max-w-7xl">
+                                <DialogContent className="max-h-[90vh] w-[calc(100vw-2rem)] overflow-y-auto bg-white dark:bg-zinc-950 sm:max-w-[calc(100vw-2rem)] lg:max-w-6xl xl:max-w-7xl">
                                   <DialogHeader>
                                     <DialogTitle className="flex items-center gap-2">
                                       {getStatusIcon("" + user.status)}
@@ -970,11 +970,11 @@ export default function Users() {
                                           </CardHeader>
                                           <CardContent className="space-y-4 pt-0">
                                             {user.notes && (
-                                              <div className="rounded-md border bg-slate-50 p-3">
+                                              <div className="rounded-md border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/60 p-3">
                                                 <p className="mb-2 text-xs font-medium text-muted-foreground">
                                                   Saved Notes
                                                 </p>
-                                                <p className="text-sm">
+                                                <p className="text-sm text-slate-900 dark:text-slate-100">
                                                   {user.notes}
                                                 </p>
                                               </div>
@@ -1079,11 +1079,11 @@ export default function Users() {
                                           </div>
 
                                           <div className="grid grid-cols-1 gap-3">
-                                            <div className="rounded-md border bg-slate-50 p-3">
+                                            <div className="rounded-md border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/60 p-3">
                                               <p className="text-xs font-medium text-muted-foreground">
                                                 Exam Status
                                               </p>
-                                              <p className="mt-1 text-sm font-semibold">
+                                              <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
                                                 {(selectedUser || user)
                                                   .examScore !== null &&
                                                 (selectedUser || user)
@@ -1095,26 +1095,26 @@ export default function Users() {
                                                     : "Not recorded"}
                                               </p>
                                             </div>
-                                            <div className="rounded-md border bg-slate-50 p-3">
+                                            <div className="rounded-md border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/60 p-3">
                                               <p className="text-xs font-medium text-muted-foreground">
                                                 IF Grade
                                               </p>
-                                              <p className="mt-1 text-sm font-semibold">
+                                              <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
                                                 {(selectedUser || user)
                                                   .ifGrade ?? "Not available"}
                                               </p>
                                             </div>
-                                            <div className="rounded-md border bg-slate-50 p-3">
+                                            <div className="rounded-md border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/60 p-3">
                                               <p className="text-xs font-medium text-muted-foreground">
                                                 IF Violations
                                               </p>
-                                              <p className="mt-1 text-sm font-semibold">
+                                              <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
                                                 {(selectedUser || user)
                                                   .ifViolations ??
                                                 "Not available"}
                                               </p>
                                             </div>
-                                            <div className="rounded-md border bg-slate-50 p-3">
+                                            <div className="rounded-md border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/60 p-3">
                                               <p className="text-xs font-medium text-muted-foreground">
                                                 Flight Replay
                                               </p>
@@ -1126,12 +1126,12 @@ export default function Users() {
                                                       .flightReplayUrl as string
                                                   }
                                                   target="_blank"
-                                                  className="mt-1 inline-flex text-sm font-semibold text-blue-700 hover:underline"
+                                                  className="mt-1 inline-flex text-sm font-semibold text-blue-700 dark:text-orange-400 hover:underline"
                                                 >
                                                   Open replay
                                                 </Link>
                                               ) : (
-                                                <p className="mt-1 text-sm font-semibold">
+                                                <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
                                                   Not submitted
                                                 </p>
                                               )}
@@ -1167,9 +1167,9 @@ export default function Users() {
                                       </Card>
 
                                       {user.status === 0 && (
-                                        <div className="space-y-4 rounded-lg border bg-white p-4">
+                                        <div className="space-y-4 rounded-lg border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4">
                                           <div className="space-y-3">
-                                            <label className="flex items-start gap-3 rounded-md border bg-slate-50 p-3 text-sm">
+                                            <label className="flex items-start gap-3 rounded-md border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/60 p-3 text-sm text-slate-900 dark:text-slate-100 cursor-pointer">
                                               <Checkbox
                                                 checked={approveChecks.testPassed}
                                                 onCheckedChange={(checked) =>
@@ -1186,7 +1186,7 @@ export default function Users() {
                                                 another approved condition.
                                               </span>
                                             </label>
-                                            <label className="flex items-start gap-3 rounded-md border bg-slate-50 p-3 text-sm">
+                                            <label className="flex items-start gap-3 rounded-md border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/60 p-3 text-sm text-slate-900 dark:text-slate-100 cursor-pointer">
                                               <Checkbox
                                                 checked={
                                                   approveChecks.joinedDiscord
@@ -1217,7 +1217,7 @@ export default function Users() {
                                                   Reject Application
                                                 </Button>
                                               </AlertDialogTrigger>
-                                              <AlertDialogContent className="bg-white text-black">
+                                              <AlertDialogContent className="bg-white dark:bg-zinc-950 text-slate-900 dark:text-slate-100">
                                                 <AlertDialogHeader>
                                                   <AlertDialogTitle>
                                                     Are you sure?
@@ -1258,7 +1258,7 @@ export default function Users() {
                                                   Confirm Approve
                                                 </Button>
                                               </AlertDialogTrigger>
-                                              <AlertDialogContent className="bg-white text-black">
+                                              <AlertDialogContent className="bg-white dark:bg-zinc-950 text-slate-900 dark:text-slate-100">
                                                 <AlertDialogHeader>
                                                   <AlertDialogTitle>
                                                     Approve this applicant?
