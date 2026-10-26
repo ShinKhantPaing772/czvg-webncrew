@@ -83,6 +83,7 @@ function normalizeDurationSeconds(key: string, value: number) {
 
   if (
     lowerKey === "totaltime" ||
+    lowerKey === "flighttime" ||
     lowerKey.includes("minute") ||
     lowerKey.endsWith("mins")
   ) {
@@ -97,6 +98,7 @@ function normalizeDurationSeconds(key: string, value: number) {
 }
 
 function secondsToFlightTime(totalSeconds: number) {
+  if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) return "";
   const safeSeconds = Math.max(0, Math.floor(totalSeconds));
   const hours = Math.floor(safeSeconds / 3600);
   const minutes = Math.floor((safeSeconds % 3600) / 60);
@@ -111,13 +113,22 @@ export function parseInfiniteFlightDate(value: unknown) {
     return null;
   }
 
-  const normalizedValue =
-    typeof value === "string" &&
-    /^\d{4}-\d{2}-\d{2}[T ]/.test(value.trim()) &&
-    !/(?:z|[+-]\d{2}:?\d{2})$/i.test(value.trim())
-      ? `${value.trim()}Z`
-      : value;
-  const date = new Date(normalizedValue);
+  if (typeof value === "number") {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  // Standardize space separator to 'T' for reliable parsing across environments (e.g. WebKit)
+  const withT = trimmed.replace(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:)/, "$1T$2");
+  const iso =
+    /^\d{4}-\d{2}-\d{2}T/.test(withT) && !/(?:z|[+-]\d{2}:?\d{2})$/i.test(withT)
+      ? `${withT}Z`
+      : withT;
+
+  const date = new Date(iso);
 
   return Number.isNaN(date.getTime()) ? null : date;
 }
@@ -131,42 +142,59 @@ function dateToSeconds(value: unknown) {
 
 export function extractFlightTime(flight: UnknownRecord) {
   const durationKeys = [
+    "totalTime",
+    "totalFlightTime",
+    "totalTimeMinutes",
     "flightTime",
+    "flightTimeMinutes",
+    "duration",
+    "durationMinutes",
+    "durationSeconds",
     "flightTimeSeconds",
     "flightTimeMilliseconds",
     "flightTimeMs",
-    "flightTimeMinutes",
-    "flightTimeHours",
-    "totalFlightTime",
-    "duration",
-    "durationSeconds",
     "durationMilliseconds",
     "durationMs",
-    "durationMinutes",
+    "flightTimeHours",
     "durationHours",
-    "totalTime",
-    "totalTimeMinutes",
     "totalTimeHours",
   ];
 
   for (const key of durationKeys) {
-    const value = flight[key];
-    if (typeof value === "number" && Number.isFinite(value) && value > 0) {
-      return secondsToFlightTime(normalizeDurationSeconds(key, value));
+    const rawValue = flight[key];
+    const value = typeof rawValue === "number" ? rawValue : Number(rawValue);
+    if (Number.isFinite(value) && value > 0) {
+      const time = secondsToFlightTime(normalizeDurationSeconds(key, value));
+      if (time) return time;
     }
   }
 
-  const startedSeconds = [
-    "created",
-    "createdAt",
-    "startTime",
-    "startedAt",
-    "departureTime",
-  ]
-    .map((key) => dateToSeconds(flight[key]))
-    .find((value): value is number => value !== null);
+  const createdDate = parseInfiniteFlightDate(
+    flight.created ?? flight.createdAt ?? flight.startTime ?? flight.startedAt,
+  );
+  const lastReportDate = parseInfiniteFlightDate(
+    flight.lastReport ?? flight.lastReported ?? flight.updatedAt,
+  );
 
-  return startedSeconds ? secondsToFlightTime(startedSeconds) : "";
+  if (createdDate && lastReportDate) {
+    const diffSeconds =
+      (lastReportDate.getTime() - createdDate.getTime()) / 1000;
+    if (diffSeconds > 0) {
+      return secondsToFlightTime(diffSeconds);
+    }
+  }
+
+  if (createdDate) {
+    const elapsedSeconds = Math.max(
+      0,
+      (Date.now() - createdDate.getTime()) / 1000,
+    );
+    if (elapsedSeconds > 0) {
+      return secondsToFlightTime(elapsedSeconds);
+    }
+  }
+
+  return "";
 }
 
 export function extractAirportFromRecord(

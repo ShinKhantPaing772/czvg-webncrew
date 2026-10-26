@@ -94,22 +94,39 @@ export async function resolveInfiniteFlightUserId(pilot: UnknownRecord) {
   return userId;
 }
 
-export async function findCurrentFlight(ifUserId: string) {
-  const { data: sessionsData } = await getInfiniteFlightSessions();
+export async function findCurrentFlight(
+  ifUserId: string,
+  forceRefresh = false,
+) {
+  const { data: sessionsData } = await getInfiniteFlightSessions(forceRefresh);
   const sessions = getArray(sessionsData);
 
-  for (const session of sessions) {
-    const sessionId = getString(session, ["id", "sessionId"]);
-    if (!isInfiniteFlightId(sessionId)) continue;
+  const sessionIds = sessions
+    .map((session) => getString(session, ["id", "sessionId"]))
+    .filter(isInfiniteFlightId);
 
-    const { data: flightsData } = await getInfiniteFlightFlights(sessionId);
-    const flight = getArray(flightsData).find(
-      (item) =>
-        getString(item, ["userId", "pilotId", "id"]).toLowerCase() ===
-        ifUserId.toLowerCase(),
-    );
+  if (sessionIds.length === 0) return null;
 
-    if (flight) return { sessionId, flight };
+  const results = await Promise.allSettled(
+    sessionIds.map(async (sessionId) => {
+      const { data: flightsData } = await getInfiniteFlightFlights(
+        sessionId,
+        forceRefresh,
+      );
+      const flight = getArray(flightsData).find(
+        (item) =>
+          getString(item, ["userId", "pilotId", "id"]).toLowerCase() ===
+          ifUserId.toLowerCase(),
+      );
+
+      return flight ? { sessionId, flight } : null;
+    }),
+  );
+
+  for (const result of results) {
+    if (result.status === "fulfilled" && result.value) {
+      return result.value;
+    }
   }
 
   return null;
@@ -118,8 +135,9 @@ export async function findCurrentFlight(ifUserId: string) {
 export async function findInfiniteFlightInUserLogbook(
   ifUserId: string,
   flightId: string,
+  forceRefresh = false,
 ) {
-  const { data } = await getInfiniteFlightUserFlights(ifUserId);
+  const { data } = await getInfiniteFlightUserFlights(ifUserId, forceRefresh);
   const normalizedFlightId = normalizeInfiniteFlightId(flightId);
 
   return (
@@ -142,11 +160,9 @@ function flightActivityTimestamp(flight: UnknownRecord) {
   const created = parseInfiniteFlightDate(flight.created)?.getTime();
   if (!Number.isFinite(created)) return null;
 
-  const totalTime = flight.totalTime;
+  const totalTime = Number(flight.totalTime);
   const calculatedEnd =
-    typeof totalTime === "number" &&
-    Number.isFinite(totalTime) &&
-    totalTime > 0
+    Number.isFinite(totalTime) && totalTime > 0
       ? (created as number) + totalTime * 60 * 1000
       : (created as number);
   const latestLanding = getArray(flight.landingStats)
@@ -163,38 +179,38 @@ export function isRecentInfiniteFlight(
   flight: UnknownRecord,
   now = Date.now(),
 ) {
-  const activityTimestamp = flightActivityTimestamp(flight);
+  const created = parseInfiniteFlightDate(flight.created)?.getTime();
+  if (!Number.isFinite(created)) return false;
 
-  return (
-    activityTimestamp !== null &&
-    activityTimestamp <= now + 5 * 60 * 1000 &&
-    now - activityTimestamp <= RECENT_COMPLETED_FLIGHT_MAX_AGE_MS
-  );
+  const activityTimestamp =
+    flightActivityTimestamp(flight) ?? (created as number);
+
+  // Flight creation should not be in the future (allowing for 15 minutes clock skew)
+  if ((created as number) > now + 15 * 60 * 1000) {
+    return false;
+  }
+
+  // Activity should be within the recent window (24 hours)
+  return now - activityTimestamp <= RECENT_COMPLETED_FLIGHT_MAX_AGE_MS;
 }
 
-export async function findRecentCompletedInfiniteFlight(ifUserId: string) {
-  const { data } = await getInfiniteFlightUserFlights(ifUserId);
+export async function findRecentCompletedInfiniteFlight(
+  ifUserId: string,
+  forceRefresh = false,
+) {
+  const { data } = await getInfiniteFlightUserFlights(ifUserId, forceRefresh);
   const now = Date.now();
 
   const flights = getArray(data)
     .filter((flight) => {
       const flightId = getString(flight, ["id", "flightId"]);
       const userId = getString(flight, ["userId"]);
-      const totalTime = flight.totalTime;
-      const fuelUsedKg = flight.fuelUsedKg;
-      const landingCount = Number(flight.landingCount);
+      const totalTime = Number(flight.totalTime);
 
       return (
         isInfiniteFlightId(flightId) &&
         (!userId || userId.toLowerCase() === ifUserId.toLowerCase()) &&
-        typeof totalTime === "number" &&
-        Number.isFinite(totalTime) &&
-        totalTime > 0 &&
-        typeof fuelUsedKg === "number" &&
-        Number.isFinite(fuelUsedKg) &&
-        fuelUsedKg >= 0 &&
-        Number.isFinite(landingCount) &&
-        landingCount > 0 &&
+        (Number.isFinite(totalTime) ? totalTime > 0 : true) &&
         isRecentInfiniteFlight(flight, now)
       );
     })

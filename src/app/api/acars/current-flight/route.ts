@@ -29,19 +29,17 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 function hasOfficialFlightTime(flight: UnknownRecord) {
-  return (
-    typeof flight.totalTime === "number" &&
-    Number.isFinite(flight.totalTime) &&
-    flight.totalTime > 0
+  const totalTime = Number(
+    flight.totalTime ?? flight.flightTime ?? flight.totalFlightTime,
   );
+  return Number.isFinite(totalTime) && totalTime > 0;
 }
 
 function hasFinalizedFuel(flight: UnknownRecord) {
-  return (
-    typeof flight.fuelUsedKg === "number" &&
-    Number.isFinite(flight.fuelUsedKg) &&
-    flight.fuelUsedKg >= 0
+  const fuel = Number(
+    flight.fuelUsedKg ?? flight.fuelUsed ?? flight.fuelBurnedKg,
   );
+  return Number.isFinite(fuel) && fuel > 0;
 }
 
 export async function GET(request: NextRequest) {
@@ -51,6 +49,9 @@ export async function GET(request: NextRequest) {
   const pilotId = request.nextUrl.searchParams.get("pilotId");
   const requestedFlightId =
     request.nextUrl.searchParams.get("flightId")?.trim() ?? "";
+  const forceRefresh =
+    request.nextUrl.searchParams.get("forceRefresh") === "true" ||
+    request.nextUrl.searchParams.get("refresh") === "true";
 
   if (!pilotId) {
     return NextResponse.json(
@@ -92,7 +93,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const currentFlight = await findCurrentFlight(ifUserId);
+    const currentFlight = await findCurrentFlight(ifUserId, forceRefresh);
     let source: "active" | "recent" = "active";
     let sessionId = "";
     let flightId = "";
@@ -109,8 +110,9 @@ export async function GET(request: NextRequest) {
         getInfiniteFlightFlightPlan(
           sessionId,
           flightId,
+          forceRefresh,
         ),
-        getInfiniteFlightUserFlight(ifUserId, flightId),
+        getInfiniteFlightUserFlight(ifUserId, flightId, forceRefresh),
       ]);
 
       if (flightPlanResult.status === "fulfilled") {
@@ -131,10 +133,16 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      if (!getString(userFlight, ["id"])) {
+      if (!getString(userFlight, ["id"]) || !hasFinalizedFuel(userFlight)) {
         try {
-          userFlight =
-            (await findInfiniteFlightInUserLogbook(ifUserId, flightId)) ?? {};
+          const logbookFlight = await findInfiniteFlightInUserLogbook(
+            ifUserId,
+            flightId,
+            forceRefresh,
+          );
+          if (logbookFlight) {
+            userFlight = { ...userFlight, ...logbookFlight };
+          }
         } catch (error) {
           console.warn(
             "[ACARS] Unable to cross-check the current user flight:",
@@ -152,6 +160,7 @@ export async function GET(request: NextRequest) {
           const { data } = await getInfiniteFlightUserFlight(
             ifUserId,
             requestedFlightId,
+            forceRefresh,
           );
           requestedFlight = data.result;
         } catch (error) {
@@ -166,11 +175,14 @@ export async function GET(request: NextRequest) {
           !hasFinalizedFuel(requestedFlight)
         ) {
           try {
-            requestedFlight =
-              (await findInfiniteFlightInUserLogbook(
-                ifUserId,
-                requestedFlightId,
-              )) ?? requestedFlight;
+            const logbookFlight = await findInfiniteFlightInUserLogbook(
+              ifUserId,
+              requestedFlightId,
+              forceRefresh,
+            );
+            if (logbookFlight) {
+              requestedFlight = { ...requestedFlight, ...logbookFlight };
+            }
           } catch (error) {
             console.warn(
               "[ACARS] Completed-flight logbook lookup is not ready:",
@@ -190,7 +202,14 @@ export async function GET(request: NextRequest) {
           recentFlight = requestedFlight;
         }
       } else {
-        recentFlight = await findRecentCompletedInfiniteFlight(ifUserId);
+        recentFlight = await findRecentCompletedInfiniteFlight(
+          ifUserId,
+          forceRefresh,
+        );
+      }
+
+      if (!recentFlight && !forceRefresh) {
+        recentFlight = await findRecentCompletedInfiniteFlight(ifUserId, true);
       }
 
       if (!recentFlight) {
@@ -203,10 +222,34 @@ export async function GET(request: NextRequest) {
         );
       }
 
+      flightId = getString(recentFlight, ["id", "flightId"]);
+
+      // If summary logbook entry is missing fuel or official flight time, check exact flight endpoint
+      if (
+        flightId &&
+        (!hasOfficialFlightTime(recentFlight) ||
+          !hasFinalizedFuel(recentFlight))
+      ) {
+        try {
+          const { data: detailData } = await getInfiniteFlightUserFlight(
+            ifUserId,
+            flightId,
+            forceRefresh,
+          );
+          if (detailData?.result && typeof detailData.result === "object") {
+            recentFlight = { ...recentFlight, ...detailData.result };
+          }
+        } catch (error) {
+          console.warn(
+            "[ACARS] Unable to fetch exact completed-flight details:",
+            error,
+          );
+        }
+      }
+
       source = "recent";
       userFlight = recentFlight;
       flight = recentFlight;
-      flightId = getString(recentFlight, ["id", "flightId"]);
     }
 
     const aircraftId =
@@ -267,12 +310,15 @@ export async function GET(request: NextRequest) {
         "fuelBurned",
         "fuelBurnedKg",
       ]);
+    const numFuel = Number(rawFuelUsed);
     const fuelUsed =
-      Number.isFinite(Number(rawFuelUsed)) && Number(rawFuelUsed) > 0
-        ? rawFuelUsed
+      Number.isFinite(numFuel) && numFuel > 0
+        ? String(Math.round(numFuel))
         : "";
     const flightTimeEstimated = !hasOfficialFlightTime(userFlight);
-    const createdDate = parseInfiniteFlightDate(userFlight.created);
+    const flightCreatedDate =
+      parseInfiniteFlightDate(userFlight.created) ??
+      parseInfiniteFlightDate(flight.created);
 
     return NextResponse.json({
       acars: {
@@ -287,7 +333,7 @@ export async function GET(request: NextRequest) {
         arrival,
         flightTime:
           extractFlightTime(userFlight) || extractFlightTime(flight),
-        date: (createdDate ?? new Date()).toISOString().slice(0, 10),
+        date: (flightCreatedDate ?? new Date()).toISOString().slice(0, 10),
         aircraftId: aircraft ? String(aircraft.id) : "",
         fuelUsed,
         multi: "",
