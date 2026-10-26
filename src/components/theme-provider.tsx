@@ -73,7 +73,33 @@ export function ThemeProvider({
     } catch {
       // Storage unavailable or quota exceeded
     }
+
+    // Broadcast theme to child iframes (such as the embedded live radar map)
+    try {
+      document.querySelectorAll("iframe").forEach((frame) => {
+        frame.contentWindow?.postMessage({ type: "czvg:theme", theme }, "*");
+      });
+    } catch {
+      // Ignore cross-origin errors
+    }
   }, [theme, mounted]);
+
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === "czvg:ready") {
+        document.querySelectorAll("iframe").forEach((frame) => {
+          frame.contentWindow?.postMessage({ type: "czvg:theme", theme }, "*");
+        });
+      } else if (
+        event.data?.type === "czvg:theme" &&
+        (event.data.theme === "halloween" || event.data.theme === "light" || event.data.theme === "dark")
+      ) {
+        setThemeState(event.data.theme);
+      }
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [theme]);
 
   const toggleHalloween = () => {
     setThemeState((current) => (current === "halloween" ? "light" : "halloween"));
