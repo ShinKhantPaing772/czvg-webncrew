@@ -32,6 +32,7 @@ export type RequestOptions<T> = {
   method?: "GET" | "POST";
   body?: UnknownRecord;
   isValidResult: (value: unknown) => value is T;
+  forceRefresh?: boolean;
 };
 
 export class InfiniteFlightApiError extends Error {

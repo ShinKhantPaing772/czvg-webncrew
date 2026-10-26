@@ -261,6 +261,12 @@ export default function FilePirep() {
         throw new Error(responseData?.error || "Failed to submit PIREP");
       }
 
+      try {
+        window.sessionStorage.removeItem("acars:last-flight-id");
+      } catch {
+        // ignore storage error
+      }
+
       form.reset();
       router.push("/crew/view-pireps");
     } catch (error) {
@@ -297,30 +303,24 @@ export default function FilePirep() {
     setAcarsMissingFields([]);
 
     try {
-      const params = new URLSearchParams({ pilotId: String(user.id) });
-      const savedFlightId = window.sessionStorage.getItem(
-        "acars:last-flight-id",
-      );
-      if (savedFlightId) params.set("flightId", savedFlightId);
+      const explicitFlightId = searchParams.get("flightId")?.trim();
+      const params = new URLSearchParams({
+        pilotId: String(user.id),
+        refresh: "true",
+      });
+      if (explicitFlightId) params.set("flightId", explicitFlightId);
 
-      let response = await authFetch(`/api/acars/current-flight?${params}`);
-      let data: AcarsResponse = await response.json();
-
-      if (!response.ok && response.status === 404 && savedFlightId) {
-        window.sessionStorage.removeItem("acars:last-flight-id");
-        params.delete("flightId");
-        response = await authFetch(`/api/acars/current-flight?${params}`);
-        data = await response.json();
-      }
+      const response = await authFetch(`/api/acars/current-flight?${params}`);
+      const data: AcarsResponse = await response.json();
 
       if (!response.ok || !data.acars) {
         throw new Error(data.error || "Failed to fetch ACARS data");
       }
-      if (data.meta?.flightId) {
-        window.sessionStorage.setItem(
-          "acars:last-flight-id",
-          data.meta.flightId,
-        );
+
+      try {
+        window.sessionStorage.removeItem("acars:last-flight-id");
+      } catch {
+        // ignore storage error
       }
 
       const acarsValues = Object.fromEntries(

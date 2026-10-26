@@ -81,14 +81,16 @@ export async function requestInfiniteFlight<T>(
   }
 
   const request = (async (): Promise<InfiniteFlightResult<T>> => {
-    let cached: unknown | null;
-    try {
-      cached = await getCached<unknown>(options.cacheKey);
-    } catch {
-      throw new InfiniteFlightApiError(
-        "Infinite Flight database cache is unavailable",
-        503,
-      );
+    let cached: unknown | null = null;
+    if (!options.forceRefresh) {
+      try {
+        cached = await getCached<unknown>(options.cacheKey);
+      } catch {
+        throw new InfiniteFlightApiError(
+          "Infinite Flight database cache is unavailable",
+          503,
+        );
+      }
     }
 
     if (cached !== null) {
@@ -160,8 +162,12 @@ export async function requestInfiniteFlight<T>(
 
     const data = parseValidatedEnvelope<T>(payload, options.isValidResult);
     if (isCacheableApiResponse(data)) {
+      const ttl =
+        data.errorCode === 0
+          ? options.ttlSeconds
+          : Math.min(options.ttlSeconds, 10);
       try {
-        await setCached(options.cacheKey, data, options.ttlSeconds);
+        await setCached(options.cacheKey, data, ttl);
       } catch {
         throw new InfiniteFlightApiError(
           "Infinite Flight database cache is unavailable",

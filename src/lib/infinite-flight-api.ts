@@ -29,7 +29,7 @@ export type {
 export const INFINITE_FLIGHT_CACHE_TTL = {
   aircraft: 60 * 60,
   user: 5 * 60,
-  userFlight: 5 * 60,
+  userFlight: 15,
   sessions: 10 * 60,
   flights: 15,
   flightPlan: 15,
@@ -89,21 +89,26 @@ export function getInfiniteFlightUser(username: unknown) {
   });
 }
 
-export function getInfiniteFlightSessions() {
+export function getInfiniteFlightSessions(forceRefresh = false) {
   return requestInfiniteFlight<UnknownRecord[]>({
     path: "/sessions",
     cacheKey: "if-sessions",
     ttlSeconds: INFINITE_FLIGHT_CACHE_TTL.sessions,
+    forceRefresh,
     isValidResult: Array.isArray,
   });
 }
 
-export function getInfiniteFlightFlights(sessionId: unknown) {
+export function getInfiniteFlightFlights(
+  sessionId: unknown,
+  forceRefresh = false,
+) {
   const id = requireInfiniteFlightId(sessionId, "Session ID");
   return requestInfiniteFlight<UnknownRecord[]>({
     path: `/sessions/${encodeURIComponent(id)}/flights`,
     cacheKey: `if-session-flights-${id}`,
     ttlSeconds: INFINITE_FLIGHT_CACHE_TTL.flights,
+    forceRefresh,
     isValidResult: Array.isArray,
   });
 }
@@ -111,6 +116,7 @@ export function getInfiniteFlightFlights(sessionId: unknown) {
 export function getInfiniteFlightUserFlight(
   userId: unknown,
   flightId: unknown,
+  forceRefresh = false,
 ) {
   const normalizedUserId = requireInfiniteFlightId(userId, "User ID");
   const normalizedFlightId = requireInfiniteFlightId(flightId, "Flight ID");
@@ -119,18 +125,23 @@ export function getInfiniteFlightUserFlight(
     path: `/users/${encodeURIComponent(normalizedUserId)}/flights/${encodeURIComponent(normalizedFlightId)}`,
     cacheKey: `if-user-flight-${normalizedUserId}-${normalizedFlightId}`,
     ttlSeconds: INFINITE_FLIGHT_CACHE_TTL.userFlight,
+    forceRefresh,
     isValidResult: (result: unknown): result is UnknownRecord =>
       Boolean(result) && typeof result === "object" && !Array.isArray(result),
   });
 }
 
-export function getInfiniteFlightUserFlights(userId: unknown) {
+export function getInfiniteFlightUserFlights(
+  userId: unknown,
+  forceRefresh = false,
+) {
   const normalizedUserId = requireInfiniteFlightId(userId, "User ID");
 
   return requestInfiniteFlight<UnknownRecord>({
     path: `/users/${encodeURIComponent(normalizedUserId)}/flights?page=1`,
     cacheKey: `if-user-flights-${normalizedUserId}-page-1`,
     ttlSeconds: INFINITE_FLIGHT_CACHE_TTL.userFlight,
+    forceRefresh,
     isValidResult: (result: unknown): result is UnknownRecord => {
       if (!result || typeof result !== "object" || Array.isArray(result)) {
         return false;
@@ -144,6 +155,7 @@ export function getInfiniteFlightUserFlights(userId: unknown) {
 export function getInfiniteFlightFlightPlan(
   sessionId: unknown,
   flightId: unknown,
+  forceRefresh = false,
 ) {
   const normalizedSessionId = requireInfiniteFlightId(sessionId, "Session ID");
   const normalizedFlightId = requireInfiniteFlightId(flightId, "Flight ID");
@@ -152,6 +164,7 @@ export function getInfiniteFlightFlightPlan(
     path: `/sessions/${encodeURIComponent(normalizedSessionId)}/flights/${encodeURIComponent(normalizedFlightId)}/flightplan`,
     cacheKey: `if-flight-plan-${normalizedSessionId}-${normalizedFlightId}`,
     ttlSeconds: INFINITE_FLIGHT_CACHE_TTL.flightPlan,
+    forceRefresh,
     isValidResult: (result: unknown): result is UnknownRecord =>
       Boolean(result) && typeof result === "object" && !Array.isArray(result),
   });
