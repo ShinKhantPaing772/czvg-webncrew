@@ -9,6 +9,7 @@ import {
 } from "@/lib/pirep-comments";
 import { formatFlightTime } from "@/lib/utils/time";
 import { requirePermission } from "@/lib/server-auth";
+import { evaluateAndGrantAwards } from "@/lib/awards/evaluator";
 
 // Mark this route as dynamic to prevent static optimization
 export const dynamic = "force-dynamic";
@@ -339,6 +340,12 @@ export async function PUT(request: Request) {
     });
 
     const updatedPirep = await serializePirep(Number(id));
+
+    if (updates.status === 1 && updatedPirep?.pilot?.id) {
+      evaluateAndGrantAwards(Number(updatedPirep.pilot.id)).catch((evalErr) => {
+        console.error("[PIREP Approval] Milestone evaluation error:", evalErr);
+      });
+    }
 
     return NextResponse.json({
       success: true,

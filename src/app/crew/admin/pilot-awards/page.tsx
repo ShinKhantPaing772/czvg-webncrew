@@ -6,6 +6,7 @@ import {
   ImageOff,
   Loader2,
   Search,
+  Sparkles,
   Square,
   Trash2,
   Trophy,
@@ -55,6 +56,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
+import { useI18n } from "@/lib/i18n";
 import { authFetch } from "@/lib/utils/api";
 
 type Award = {
@@ -132,6 +134,7 @@ async function responseData(response: Response, fallback: string) {
 }
 
 export default function PilotAwardsPage() {
+  const { t, locale } = useI18n();
   const [pilots, setPilots] = useState<Pilot[]>([]);
   const [awards, setAwards] = useState<Award[]>([]);
 
@@ -164,45 +167,52 @@ export default function PilotAwardsPage() {
   const [loadingPilots, setLoadingPilots] = useState(true);
   const [loadingRecipients, setLoadingRecipients] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [backfilling, setBackfilling] = useState(false);
   const [revokingPilotId, setRevokingPilotId] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
-  const loadData = useCallback(async (search = "") => {
-    setLoadingPilots(true);
-    setError("");
+  const loadData = useCallback(
+    async (search = "") => {
+      setLoadingPilots(true);
+      setError("");
 
-    try {
-      const response = await authFetch(
-        `/api/admin/pilot-awards?query=${encodeURIComponent(search)}&limit=200`,
-      );
-      const data = await responseData(response, "Failed to load pilot awards");
-      const nextPilots = Array.isArray(data.pilots) ? data.pilots : [];
-      const nextAwards = Array.isArray(data.awards) ? data.awards : [];
+      try {
+        const response = await authFetch(
+          `/api/admin/pilot-awards?query=${encodeURIComponent(search)}&limit=200`,
+        );
+        const data = await responseData(
+          response,
+          t("Failed to load pilot awards", "加载飞行员勋章数据失败"),
+        );
+        const nextPilots = Array.isArray(data.pilots) ? data.pilots : [];
+        const nextAwards = Array.isArray(data.awards) ? data.awards : [];
 
-      setPilots(nextPilots);
-      setAwards(nextAwards);
+        setPilots(nextPilots);
+        setAwards(nextAwards);
 
-      setSelectedPilotId((current) =>
-        current && nextPilots.some((pilot: Pilot) => pilot.id === current)
-          ? current
-          : null,
-      );
-      setSelectedLookupAwardId((current) =>
-        current && nextAwards.some((award: Award) => award.id === current)
-          ? current
-          : null,
-      );
-    } catch (loadError) {
-      setError(
-        loadError instanceof Error
-          ? loadError.message
-          : "Failed to load pilot awards",
-      );
-    } finally {
-      setLoadingPilots(false);
-    }
-  }, []);
+        setSelectedPilotId((current) =>
+          current && nextPilots.some((pilot: Pilot) => pilot.id === current)
+            ? current
+            : null,
+        );
+        setSelectedLookupAwardId((current) =>
+          current && nextAwards.some((award: Award) => award.id === current)
+            ? current
+            : null,
+        );
+      } catch (loadError) {
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : t("Failed to load pilot awards", "加载飞行员勋章数据失败"),
+        );
+      } finally {
+        setLoadingPilots(false);
+      }
+    },
+    [t],
+  );
 
   useEffect(() => {
     void loadData();
@@ -228,7 +238,7 @@ export default function PilotAwardsPage() {
         );
         const data = await responseData(
           response,
-          "Failed to load award recipients",
+          t("Failed to load award recipients", "加载勋章获颁人员失败"),
         );
 
         setRecipients(
@@ -242,7 +252,7 @@ export default function PilotAwardsPage() {
         setError(
           loadError instanceof Error
             ? loadError.message
-            : "Failed to load award recipients",
+            : t("Failed to load award recipients", "加载勋章获颁人员失败"),
         );
       } finally {
         if (!controller.signal.aborted) {
@@ -253,7 +263,7 @@ export default function PilotAwardsPage() {
 
     void loadRecipients();
     return () => controller.abort();
-  }, [recipientRefreshKey, selectedLookupAwardId]);
+  }, [recipientRefreshKey, selectedLookupAwardId, t]);
 
   const selectedPilot = useMemo(
     () => pilots.find((pilot) => pilot.id === selectedPilotId) || null,
@@ -371,9 +381,16 @@ export default function PilotAwardsPage() {
           awardIds: selectedAwardIds,
         }),
       });
-      await responseData(response, "Failed to update pilot awards");
+      await responseData(
+        response,
+        t("Failed to update pilot awards", "更新飞行员勋章失败"),
+      );
 
-      setMessage(`Awards updated for ${selectedPilot.name}.`);
+      setMessage(
+        locale === "zh"
+          ? `${selectedPilot.name} 的勋章设置已更新。`
+          : `Awards updated for ${selectedPilot.name}.`,
+      );
       await loadData(pilotQuery);
       if (selectedLookupAwardId !== null) {
         setRecipientRefreshKey((current) => current + 1);
@@ -382,7 +399,7 @@ export default function PilotAwardsPage() {
       setError(
         saveError instanceof Error
           ? saveError.message
-          : "Failed to update pilot awards",
+          : t("Failed to update pilot awards", "更新飞行员勋章失败"),
       );
     } finally {
       setSaving(false);
@@ -406,10 +423,15 @@ export default function PilotAwardsPage() {
           awardIds: selectedBatchAwardIds,
         }),
       });
-      const data = await responseData(response, "Failed to grant awards");
+      const data = await responseData(
+        response,
+        t("Failed to batch grant awards", "批量授予勋章失败"),
+      );
 
       setMessage(
-        `Successfully granted awards to ${selectedBatchPilotIds.length} pilot(s) (${data.createdCount ?? 0} new assignment(s)).`,
+        locale === "zh"
+          ? `已成功向 ${selectedBatchPilotIds.length} 位飞行员授予勋章（新增 ${data.createdCount ?? 0} 条记录）。`
+          : `Successfully granted awards to ${selectedBatchPilotIds.length} pilot(s) (${data.createdCount ?? 0} new assignment(s)).`,
       );
       await loadData(pilotQuery);
       if (selectedLookupAwardId !== null) {
@@ -420,7 +442,7 @@ export default function PilotAwardsPage() {
       setError(
         saveError instanceof Error
           ? saveError.message
-          : "Failed to batch grant awards",
+          : t("Failed to batch grant awards", "批量授予勋章失败"),
       );
     } finally {
       setSaving(false);
@@ -444,10 +466,15 @@ export default function PilotAwardsPage() {
           awardId: selectedLookupAward.id,
         }),
       });
-      const data = await responseData(response, "Failed to grant award");
+      const data = await responseData(
+        response,
+        t("Failed to grant award", "授予勋章失败"),
+      );
 
       setMessage(
-        `Successfully granted "${selectedLookupAward.name}" to ${grantPilotIds.length} pilot(s) (${data.createdCount ?? 0} new assignment(s)).`,
+        locale === "zh"
+          ? `已成功向 ${grantPilotIds.length} 位飞行员授予「${selectedLookupAward.name}」（新增 ${data.createdCount ?? 0} 条记录）。`
+          : `Successfully granted "${selectedLookupAward.name}" to ${grantPilotIds.length} pilot(s) (${data.createdCount ?? 0} new assignment(s)).`,
       );
       setGrantDialogOpen(false);
       setGrantPilotIds([]);
@@ -457,7 +484,7 @@ export default function PilotAwardsPage() {
       setError(
         saveError instanceof Error
           ? saveError.message
-          : "Failed to grant award",
+          : t("Failed to grant award", "授予勋章失败"),
       );
     } finally {
       setSaving(false);
@@ -477,16 +504,23 @@ export default function PilotAwardsPage() {
         `/api/admin/pilot-awards?awardId=${selectedLookupAward.id}&pilotId=${pilotId}`,
         { method: "DELETE" },
       );
-      await responseData(response, "Failed to revoke award");
+      await responseData(
+        response,
+        t("Failed to revoke award", "撤销勋章失败"),
+      );
 
-      setMessage(`Revoked "${selectedLookupAward.name}" from ${pilotName}.`);
+      setMessage(
+        locale === "zh"
+          ? `已成功从 ${pilotName} 撤销「${selectedLookupAward.name}」。`
+          : `Revoked "${selectedLookupAward.name}" from ${pilotName}.`,
+      );
       setRecipientRefreshKey((current) => current + 1);
       await loadData(pilotQuery);
     } catch (revokeError) {
       setError(
         revokeError instanceof Error
           ? revokeError.message
-          : "Failed to revoke award",
+          : t("Failed to revoke award", "撤销勋章失败"),
       );
     } finally {
       setRevokingPilotId(null);
@@ -519,14 +553,96 @@ export default function PilotAwardsPage() {
     }
   }
 
+  const handleSyncAndBackfill = async () => {
+    setBackfilling(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await authFetch("/api/admin/pilot-awards/backfill", {
+        method: "POST",
+      });
+      const data = await responseData(
+        response,
+        t("Failed to sync and backfill awards", "同步与补发勋章失败"),
+      );
+      setMessage(
+        data.message ||
+          t(
+            "Successfully synced awards and completed backfill.",
+            "成功同步勋章库并完成全员历史成就补发。",
+          ),
+      );
+      await loadData(pilotQuery);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : t("Failed to sync and backfill awards", "同步与补发勋章失败"),
+      );
+    } finally {
+      setBackfilling(false);
+    }
+  };
+
   return (
     <CrewHeader>
       <main className="flex-1 space-y-4">
-        <div>
-          <h1 className="text-2xl font-bold">Pilot Awards</h1>
-          <p className="text-sm text-muted-foreground">
-            Grant awards to multiple pilots simultaneously, manage individual pilots, or review recipients by award.
-          </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">
+              {t("Pilot Awards", "飞行勋章管理")}
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              {t(
+                "Grant awards to multiple pilots simultaneously, manage individual pilots, or review recipients by award.",
+                "支持向多位飞行员批量授予勋章、管理个别飞行员荣誉，或按勋章浏览获颁人员。",
+              )}
+            </p>
+          </div>
+
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="outline"
+                className="gap-2 border-primary/30 hover:border-primary/60 hover:bg-primary/5 self-start sm:self-auto"
+                disabled={backfilling || loadingPilots}
+              >
+                {backfilling ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                ) : (
+                  <Sparkles className="h-4 w-4 text-primary" />
+                )}
+                <span>
+                  {backfilling
+                    ? t("Scanning & Syncing...", "正在同步与全员扫描...")
+                    : t("Sync Catalog & Backfill All", "一键同步勋章并全员补发")}
+                </span>
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  {t(
+                    "Sync Badge Catalog & Run Retroactive Backfill?",
+                    "同步勋章库并全员扫描补发？",
+                  )}
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  {t(
+                    "This will ensure all 102 master badges are synchronized to the database, then scan all registered pilots to automatically grant newly earned awards based on historical flight records. Existing awards will not be duplicated.",
+                    "系统将自动把全量 102 枚最新勋章标准同步入库，并自动扫描全部机长历史审核通过的飞行记录，为达成要求的飞行员一次性增发相应勋章（已有勋章不受影响）。",
+                  )}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>{t("Cancel", "取消")}</AlertDialogCancel>
+                <AlertDialogAction onClick={handleSyncAndBackfill}>
+                  {t("Start Backfill", "确认开始扫描补发")}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
 
         {error || message ? (
@@ -545,11 +661,11 @@ export default function PilotAwardsPage() {
           <TabsList className="grid w-full max-w-md grid-cols-2">
             <TabsTrigger value="assign">
               <UserRoundCheck className="mr-1.5 h-4 w-4" />
-              Assign by pilot
+              {t("Assign by pilot", "按飞行员授勋")}
             </TabsTrigger>
             <TabsTrigger value="recipients">
               <Trophy className="mr-1.5 h-4 w-4" />
-              Browse by award
+              {t("Browse by award", "按勋章浏览")}
             </TabsTrigger>
           </TabsList>
 
@@ -560,7 +676,9 @@ export default function PilotAwardsPage() {
                 <CardHeader className="space-y-3 pb-3">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base">
-                      {batchMode ? "Select pilots (Batch)" : "Select a pilot"}
+                      {batchMode
+                        ? t("Select pilots (Batch)", "选择获颁飞行员 (批量)")
+                        : t("Select a pilot", "选择获颁飞行员")}
                     </CardTitle>
                     <Button
                       variant={batchMode ? "default" : "outline"}
@@ -574,12 +692,12 @@ export default function PilotAwardsPage() {
                       {batchMode ? (
                         <>
                           <Users className="mr-1.5 h-3.5 w-3.5" />
-                          Batch Mode
+                          {t("Batch Mode", "批量模式")}
                         </>
                       ) : (
                         <>
                           <User className="mr-1.5 h-3.5 w-3.5" />
-                          Multi-select
+                          {t("Multi-select", "批量多选")}
                         </>
                       )}
                     </Button>
@@ -594,7 +712,7 @@ export default function PilotAwardsPage() {
                   >
                     <div className="relative flex-1">
                       <Label htmlFor="pilot-award-search" className="sr-only">
-                        Search pilots
+                        {t("Search pilots", "搜索飞行员")}
                       </Label>
                       <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                       <Input
@@ -602,11 +720,14 @@ export default function PilotAwardsPage() {
                         className="pl-8"
                         value={pilotQuery}
                         onChange={(event) => setPilotQuery(event.target.value)}
-                        placeholder="Name, callsign, IFC, email"
+                        placeholder={t(
+                          "Name, callsign, IFC, email",
+                          "姓名、呼号、IFC、邮箱",
+                        )}
                       />
                     </div>
                     <Button type="submit" variant="outline">
-                      Search
+                      {t("Search", "搜索")}
                     </Button>
                   </form>
 
@@ -623,12 +744,12 @@ export default function PilotAwardsPage() {
                           {pilots.every((p) => selectedBatchPilotIds.includes(p.id)) ? (
                             <>
                               <Square className="mr-1 h-3.5 w-3.5" />
-                              Deselect all
+                              {t("Deselect all", "取消全选")}
                             </>
                           ) : (
                             <>
                               <CheckSquare className="mr-1 h-3.5 w-3.5" />
-                              Select all visible
+                              {t("Select all visible", "全选当前可见")}
                             </>
                           )}
                         </Button>
@@ -640,12 +761,14 @@ export default function PilotAwardsPage() {
                             className="h-7 px-2 text-xs text-muted-foreground"
                             onClick={() => setSelectedBatchPilotIds([])}
                           >
-                            Clear
+                            {t("Clear", "清空")}
                           </Button>
                         ) : null}
                       </div>
                       <Badge variant="secondary">
-                        {selectedBatchPilotIds.length} selected
+                        {locale === "zh"
+                          ? `已选择 ${selectedBatchPilotIds.length} 人`
+                          : `${selectedBatchPilotIds.length} selected`}
                       </Badge>
                     </div>
                   ) : null}
@@ -656,7 +779,7 @@ export default function PilotAwardsPage() {
                     <Loader2 className="mx-auto my-8 h-5 w-5 animate-spin" />
                   ) : pilots.length === 0 ? (
                     <p className="py-8 text-center text-sm text-muted-foreground">
-                      No pilots found.
+                      {t("No pilots found.", "未找到飞行员。")}
                     </p>
                   ) : (
                     pilots.map((pilot) => {
@@ -692,7 +815,9 @@ export default function PilotAwardsPage() {
                             </div>
                             {pilot.grants.length ? (
                               <Badge variant="outline" className="text-xs">
-                                {pilot.grants.length} awards
+                                {locale === "zh"
+                                  ? `${pilot.grants.length} 项勋章`
+                                  : `${pilot.grants.length} awards`}
                               </Badge>
                             ) : null}
                           </div>
@@ -743,33 +868,48 @@ export default function PilotAwardsPage() {
                     <CardHeader>
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <CardTitle className="text-base">
-                          Batch Grant Awards ({selectedBatchPilotIds.length} pilots selected)
+                          {locale === "zh"
+                            ? `批量授予勋章 (已选择 ${selectedBatchPilotIds.length} 位飞行员)`
+                            : `Batch Grant Awards (${selectedBatchPilotIds.length} pilots selected)`}
                         </CardTitle>
                         {selectedBatchPilotIds.length > 0 ? (
                           <Badge variant="outline">
-                            {selectedBatchAwardIds.length} awards checked
+                            {locale === "zh"
+                              ? `已勾选 ${selectedBatchAwardIds.length} 项勋章`
+                              : `${selectedBatchAwardIds.length} awards checked`}
                           </Badge>
                         ) : null}
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        Select the awards below to grant to all selected pilots at once. This adds awards without removing their existing awards.
+                        {t(
+                          "Select the awards below to grant to all selected pilots at once. This adds awards without removing their existing awards.",
+                          "在下方勾选要赋予的勋章，将一次性为所选飞行员全量增授（不会影响其已有的其他勋章）。",
+                        )}
                       </p>
                     </CardHeader>
                     <CardContent>
                       {selectedBatchPilotIds.length === 0 ? (
                         <div className="py-16 text-center text-sm text-muted-foreground">
-                          Please select one or more pilots from the list on the left.
+                          {t(
+                            "Please select one or more pilots from the list on the left.",
+                            "请在左侧列表中勾选一位或多位飞行员。",
+                          )}
                         </div>
                       ) : awards.length === 0 ? (
                         <div className="py-16 text-center text-sm text-muted-foreground">
-                          No award definitions available.
+                          {t(
+                            "No award definitions available.",
+                            "暂无可用的勋章定义。",
+                          )}
                         </div>
                       ) : (
                         <div className="space-y-4">
                           {/* Selected pilots summary chips */}
                           <div className="rounded-md border bg-muted/40 p-3">
                             <p className="mb-2 text-xs font-medium text-muted-foreground">
-                              Target Pilots ({selectedBatchPilotIds.length}):
+                              {locale === "zh"
+                                ? `目标飞行员 (${selectedBatchPilotIds.length})：`
+                                : `Target Pilots (${selectedBatchPilotIds.length}):`}
                             </p>
                             <div className="flex max-h-24 flex-wrap gap-1.5 overflow-y-auto">
                               {selectedBatchPilotIds.map((id) => {
@@ -811,10 +951,20 @@ export default function PilotAwardsPage() {
                                 <AwardArtwork award={award} />
                                 <div className="min-w-0">
                                   <p className="font-medium">
-                                    {award.name || "Unnamed award"}
+                                    {locale === "zh"
+                                      ? (award as any).name_zh ||
+                                        (award as any).nameZh ||
+                                        t(award.name || "", award.name || "") ||
+                                        t("Unnamed award", "未命名勋章")
+                                      : award.name || t("Unnamed award", "未命名勋章")}
                                   </p>
                                   <p className="line-clamp-2 text-xs text-muted-foreground">
-                                    {award.description || "No description"}
+                                    {locale === "zh"
+                                      ? (award as any).description_zh ||
+                                        (award as any).descriptionZh ||
+                                        t(award.description || "", award.description || "") ||
+                                        t("No description", "暂无说明")
+                                      : award.description || t("No description", "暂无说明")}
                                   </p>
                                 </div>
                               </label>
@@ -829,7 +979,7 @@ export default function PilotAwardsPage() {
                                 setSelectedBatchAwardIds([]);
                               }}
                             >
-                              Clear
+                              {t("Clear", "清空")}
                             </Button>
                             <Button
                               onClick={() => void saveBatchAwards()}
@@ -844,7 +994,9 @@ export default function PilotAwardsPage() {
                               ) : (
                                 <UserPlus className="mr-2 h-4 w-4" />
                               )}
-                              Grant Awards ({selectedBatchAwardIds.length}) to {selectedBatchPilotIds.length} Pilots
+                              {locale === "zh"
+                                ? `向 ${selectedBatchPilotIds.length} 位飞行员授予勋章 (${selectedBatchAwardIds.length})`
+                                : `Grant Awards (${selectedBatchAwardIds.length}) to ${selectedBatchPilotIds.length} Pilots`}
                             </Button>
                           </div>
                         </div>
@@ -856,18 +1008,26 @@ export default function PilotAwardsPage() {
                     <CardHeader>
                       <CardTitle className="text-base">
                         {selectedPilot
-                          ? `Awards for ${selectedPilot.name}`
-                          : "Award assignments"}
+                          ? locale === "zh"
+                            ? `${selectedPilot.name} 的荣誉勋章`
+                            : `Awards for ${selectedPilot.name}`
+                          : t("Award assignments", "勋章分配")}
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
                       {!selectedPilot ? (
                         <div className="py-16 text-center text-sm text-muted-foreground">
-                          Select a pilot from the left to view and edit their awards.
+                          {t(
+                            "Select a pilot from the left to view and edit their awards.",
+                            "请在左侧选择一位飞行员以查看和编辑其勋章。",
+                          )}
                         </div>
                       ) : awards.length === 0 ? (
                         <div className="py-16 text-center text-sm text-muted-foreground">
-                          Create an award definition before assigning awards.
+                          {t(
+                            "Create an award definition before assigning awards.",
+                            "授勋前请先创建勋章定义。",
+                          )}
                         </div>
                       ) : (
                         <div className="space-y-4">
@@ -893,15 +1053,26 @@ export default function PilotAwardsPage() {
                                   <AwardArtwork award={award} />
                                   <div className="min-w-0">
                                     <p className="font-medium">
-                                      {award.name || "Unnamed award"}
+                                      {locale === "zh"
+                                        ? (award as any).name_zh ||
+                                          (award as any).nameZh ||
+                                          t(award.name || "", award.name || "") ||
+                                          t("Unnamed award", "未命名勋章")
+                                        : award.name || t("Unnamed award", "未命名勋章")}
                                     </p>
                                     <p className="line-clamp-2 text-xs text-muted-foreground">
-                                      {award.description || "No description"}
+                                      {locale === "zh"
+                                        ? (award as any).description_zh ||
+                                          (award as any).descriptionZh ||
+                                          t(award.description || "", award.description || "") ||
+                                          t("No description", "暂无说明")
+                                        : award.description || t("No description", "暂无说明")}
                                     </p>
                                     {grant ? (
                                       <p className="mt-1 text-xs text-muted-foreground">
-                                        Awarded{" "}
-                                        {formatAwardDate(grant.dateAwarded)}
+                                        {locale === "zh"
+                                          ? `获颁于 ${formatAwardDate(grant.dateAwarded)}`
+                                          : `Awarded ${formatAwardDate(grant.dateAwarded)}`}
                                       </p>
                                     ) : null}
                                   </div>
@@ -917,7 +1088,7 @@ export default function PilotAwardsPage() {
                               {saving ? (
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                               ) : null}
-                              Save Awards
+                              {t("Save Awards", "保存勋章设置")}
                             </Button>
                           </div>
                         </div>
@@ -934,10 +1105,12 @@ export default function PilotAwardsPage() {
             <div className="grid gap-4 lg:grid-cols-[380px_minmax(0,1fr)]">
               <Card>
                 <CardHeader className="space-y-3 pb-3">
-                  <CardTitle className="text-base">Select an award</CardTitle>
+                  <CardTitle className="text-base">
+                    {t("Select an award", "选择荣誉勋章")}
+                  </CardTitle>
                   <div className="relative">
                     <Label htmlFor="award-recipient-search" className="sr-only">
-                      Search awards
+                      {t("Search awards", "搜索荣誉勋章")}
                     </Label>
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -945,18 +1118,18 @@ export default function PilotAwardsPage() {
                       className="pl-8"
                       value={awardQuery}
                       onChange={(event) => setAwardQuery(event.target.value)}
-                      placeholder="Search awards"
+                      placeholder={t("Search awards", "搜索荣誉勋章")}
                     />
                   </div>
                 </CardHeader>
                 <CardContent className="max-h-[600px] space-y-2 overflow-y-auto">
                   {awards.length === 0 ? (
                     <p className="py-8 text-center text-sm text-muted-foreground">
-                      No award definitions found.
+                      {t("No award definitions found.", "未找到勋章定义。")}
                     </p>
                   ) : filteredAwards.length === 0 ? (
                     <p className="py-8 text-center text-sm text-muted-foreground">
-                      No awards match your search.
+                      {t("No awards match your search.", "未找到匹配的勋章。")}
                     </p>
                   ) : (
                     filteredAwards.map((award) => (
@@ -973,10 +1146,20 @@ export default function PilotAwardsPage() {
                         <AwardArtwork award={award} />
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium">
-                            {award.name || "Unnamed award"}
+                            {locale === "zh"
+                              ? (award as any).name_zh ||
+                                (award as any).nameZh ||
+                                t(award.name || "", award.name || "") ||
+                                t("Unnamed award", "未命名勋章")
+                              : award.name || t("Unnamed award", "未命名勋章")}
                           </p>
                           <p className="line-clamp-2 text-xs text-muted-foreground">
-                            {award.description || "No description"}
+                            {locale === "zh"
+                              ? (award as any).description_zh ||
+                                (award as any).descriptionZh ||
+                                t(award.description || "", award.description || "") ||
+                                t("No description", "暂无说明")
+                              : award.description || t("No description", "暂无说明")}
                           </p>
                         </div>
                       </button>
@@ -990,14 +1173,17 @@ export default function PilotAwardsPage() {
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <CardTitle className="text-base">
                       {selectedLookupAward
-                        ? `Pilots with ${selectedLookupAward.name || "this award"}`
-                        : "Award recipients"}
+                        ? locale === "zh"
+                          ? `拥有「${selectedLookupAward.name || "此勋章"}」的飞行员`
+                          : `Pilots with ${selectedLookupAward.name || "this award"}`
+                        : t("Award recipients", "勋章获颁人员")}
                     </CardTitle>
                     <div className="flex items-center gap-2">
                       {selectedLookupAward && !loadingRecipients ? (
                         <Badge variant="secondary">
-                          {recipients.length}{" "}
-                          {recipients.length === 1 ? "pilot" : "pilots"}
+                          {locale === "zh"
+                            ? `${recipients.length} 位飞行员`
+                            : `${recipients.length} ${recipients.length === 1 ? "pilot" : "pilots"}`}
                         </Badge>
                       ) : null}
                       {selectedLookupAward ? (
@@ -1006,7 +1192,7 @@ export default function PilotAwardsPage() {
                           onClick={openGrantModal}
                         >
                           <UserPlus className="mr-1.5 h-4 w-4" />
-                          Grant to Pilots
+                          {t("Grant to Pilots", "批量授予飞行员")}
                         </Button>
                       ) : null}
                     </div>
@@ -1018,7 +1204,7 @@ export default function PilotAwardsPage() {
                         htmlFor="award-pilot-search"
                         className="sr-only"
                       >
-                        Search award recipients
+                        {t("Search award recipients", "搜索获颁飞行员")}
                       </Label>
                       <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                       <Input
@@ -1028,7 +1214,10 @@ export default function PilotAwardsPage() {
                         onChange={(event) =>
                           setRecipientQuery(event.target.value)
                         }
-                        placeholder="Search by name, callsign, IFC, or email"
+                        placeholder={t(
+                          "Search by name, callsign, IFC, or email",
+                          "按姓名、呼号、IFC 或邮箱搜索",
+                        )}
                       />
                     </div>
                   ) : null}
@@ -1036,13 +1225,21 @@ export default function PilotAwardsPage() {
                 <CardContent>
                   {!selectedLookupAward ? (
                     <div className="py-16 text-center text-sm text-muted-foreground">
-                      Select an award to view recipients and grant it to pilots.
+                      {t(
+                        "Select an award to view recipients and grant it to pilots.",
+                        "选择荣誉勋章以查看获颁人员并批量授予飞行员。",
+                      )}
                     </div>
                   ) : loadingRecipients ? (
                     <Loader2 className="mx-auto my-16 h-5 w-5 animate-spin" />
                   ) : recipients.length === 0 ? (
                     <div className="py-16 text-center text-sm text-muted-foreground">
-                      <p>No pilots have received this award yet.</p>
+                      <p>
+                        {t(
+                          "No pilots have received this award yet.",
+                          "尚无飞行员获得此勋章。",
+                        )}
+                      </p>
                       <Button
                         variant="outline"
                         size="sm"
@@ -1050,12 +1247,15 @@ export default function PilotAwardsPage() {
                         onClick={openGrantModal}
                       >
                         <UserPlus className="mr-1.5 h-4 w-4" />
-                        Grant to Pilots
+                        {t("Grant to Pilots", "批量授予飞行员")}
                       </Button>
                     </div>
                   ) : filteredRecipients.length === 0 ? (
                     <div className="py-16 text-center text-sm text-muted-foreground">
-                      No recipients match your search.
+                      {t(
+                        "No recipients match your search.",
+                        "没有符合搜索条件的获得者。",
+                      )}
                     </div>
                   ) : (
                     <div className="max-h-[540px] space-y-2 overflow-y-auto">
@@ -1082,7 +1282,7 @@ export default function PilotAwardsPage() {
                           </div>
                           <div className="shrink-0 text-right">
                             <p className="text-xs text-muted-foreground">
-                              Awarded
+                              {t("Awarded", "获颁于")}
                             </p>
                             <p className="text-sm font-medium">
                               {formatAwardDate(recipient.dateAwarded)}
@@ -1096,7 +1296,7 @@ export default function PilotAwardsPage() {
                                 size="icon"
                                 className="shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                                 disabled={revokingPilotId === recipient.id}
-                                title="Revoke award"
+                                title={t("Revoke award", "撤销勋章")}
                               >
                                 {revokingPilotId === recipient.id ? (
                                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -1104,21 +1304,29 @@ export default function PilotAwardsPage() {
                                   <Trash2 className="h-4 w-4" />
                                 )}
                                 <span className="sr-only">
-                                  Revoke award from {recipient.name}
+                                  {locale === "zh"
+                                    ? `撤销 ${recipient.name} 的勋章`
+                                    : `Revoke award from ${recipient.name}`}
                                 </span>
                               </Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent>
                               <AlertDialogHeader>
                                 <AlertDialogTitle>
-                                  Revoke award from {recipient.name}?
+                                  {locale === "zh"
+                                    ? `确认从 ${recipient.name} 撤销此勋章？`
+                                    : `Revoke award from ${recipient.name}?`}
                                 </AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  This will revoke &quot;{selectedLookupAward?.name}&quot; from {recipient.name} ({recipient.callsign}).
+                                  {locale === "zh"
+                                    ? `此操作将从 ${recipient.name} (${recipient.callsign}) 撤销「${selectedLookupAward?.name}」荣誉勋章。`
+                                    : `This will revoke "${selectedLookupAward?.name}" from ${recipient.name} (${recipient.callsign}).`}
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogCancel>
+                                  {t("Cancel", "取消")}
+                                </AlertDialogCancel>
                                 <AlertDialogAction
                                   onClick={() =>
                                     void revokeAwardFromRecipient(
@@ -1127,7 +1335,7 @@ export default function PilotAwardsPage() {
                                     )
                                   }
                                 >
-                                  Revoke
+                                  {t("Revoke", "确认撤销")}
                                 </AlertDialogAction>
                               </AlertDialogFooter>
                             </AlertDialogContent>
@@ -1148,10 +1356,15 @@ export default function PilotAwardsPage() {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <UserPlus className="h-5 w-5" />
-                Grant &quot;{selectedLookupAward?.name}&quot; to Pilots
+                {locale === "zh"
+                  ? `向飞行员授予「${selectedLookupAward?.name}」`
+                  : `Grant "${selectedLookupAward?.name}" to Pilots`}
               </DialogTitle>
               <DialogDescription>
-                Select multiple pilots to award this badge simultaneously.
+                {t(
+                  "Select multiple pilots to award this badge simultaneously.",
+                  "选择多位飞行员，一次性批量授予此勋章。",
+                )}
               </DialogDescription>
             </DialogHeader>
 
@@ -1162,7 +1375,10 @@ export default function PilotAwardsPage() {
                   className="pl-8"
                   value={modalPilotQuery}
                   onChange={(e) => setModalPilotQuery(e.target.value)}
-                  placeholder="Search pilots by name, callsign, IFC, or email"
+                  placeholder={t(
+                    "Search pilots by name, callsign, IFC, or email",
+                    "按姓名、呼号、IFC 或邮箱搜索飞行员",
+                  )}
                 />
               </div>
 
@@ -1172,7 +1388,12 @@ export default function PilotAwardsPage() {
                     checked={hideExistingInModal}
                     onCheckedChange={(checked) => setHideExistingInModal(checked === true)}
                   />
-                  <span>Hide pilots who already have this award</span>
+                  <span>
+                    {t(
+                      "Hide pilots who already have this award",
+                      "隐藏已获得此勋章的飞行员",
+                    )}
+                  </span>
                 </label>
 
                 <div className="flex items-center gap-2">
@@ -1183,7 +1404,7 @@ export default function PilotAwardsPage() {
                     className="h-7 px-2 text-xs"
                     onClick={toggleSelectAllModalPilots}
                   >
-                    Select all eligible
+                    {t("Select all eligible", "全选可选飞行员")}
                   </Button>
                   {grantPilotIds.length > 0 ? (
                     <Button
@@ -1193,11 +1414,13 @@ export default function PilotAwardsPage() {
                       className="h-7 px-2 text-xs text-muted-foreground"
                       onClick={() => setGrantPilotIds([])}
                     >
-                      Clear
+                      {t("Clear", "清空")}
                     </Button>
                   ) : null}
                   <Badge variant="secondary">
-                    {grantPilotIds.length} selected
+                    {locale === "zh"
+                      ? `已选 ${grantPilotIds.length} 人`
+                      : `${grantPilotIds.length} selected`}
                   </Badge>
                 </div>
               </div>
@@ -1206,7 +1429,7 @@ export default function PilotAwardsPage() {
               <div className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
                 {modalFilteredPilots.length === 0 ? (
                   <p className="py-8 text-center text-sm text-muted-foreground">
-                    No matching pilots found.
+                    {t("No matching pilots found.", "未找到匹配的飞行员。")}
                   </p>
                 ) : (
                   modalFilteredPilots.map((pilot) => {
@@ -1248,7 +1471,7 @@ export default function PilotAwardsPage() {
                         </div>
                         {alreadyAwarded ? (
                           <Badge variant="outline" className="text-xs text-muted-foreground">
-                            Already has award
+                            {t("Already has award", "已拥有此勋章")}
                           </Badge>
                         ) : null}
                       </div>
@@ -1260,14 +1483,16 @@ export default function PilotAwardsPage() {
 
             <DialogFooter className="flex items-center justify-between gap-2 sm:justify-between">
               <span className="text-xs text-muted-foreground">
-                {grantPilotIds.length} pilot{grantPilotIds.length === 1 ? "" : "s"} selected
+                {locale === "zh"
+                  ? `已选择 ${grantPilotIds.length} 位飞行员`
+                  : `${grantPilotIds.length} pilot${grantPilotIds.length === 1 ? "" : "s"} selected`}
               </span>
               <div className="flex gap-2">
                 <Button
                   variant="outline"
                   onClick={() => setGrantDialogOpen(false)}
                 >
-                  Cancel
+                  {t("Cancel", "取消")}
                 </Button>
                 <Button
                   onClick={() => void saveModalGrantAwards()}
@@ -1278,7 +1503,9 @@ export default function PilotAwardsPage() {
                   ) : (
                     <UserPlus className="mr-2 h-4 w-4" />
                   )}
-                  Grant Award ({grantPilotIds.length})
+                  {locale === "zh"
+                    ? `确认授予 (${grantPilotIds.length})`
+                    : `Grant Award (${grantPilotIds.length})`}
                 </Button>
               </div>
             </DialogFooter>

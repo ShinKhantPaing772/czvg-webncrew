@@ -4,6 +4,7 @@ import { Op } from "sequelize";
 import { models } from "@/lib/models";
 import { formatFlightTime } from "@/lib/utils/time";
 import { hasPermission, requireCrewAuth } from "@/lib/server-auth";
+import { getPilotBadgesOverview } from "@/lib/awards/evaluator";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -67,6 +68,7 @@ export async function GET(
       recentPireps,
       ranks,
       awardGrants,
+      badgesOverview,
     ] = await Promise.all([
       models.Pirep.sum("flighttime", { where: { pilotid: pilotId, status: 1 } }),
       models.Pirep.count({ where: { pilotid: pilotId, status: 1 } }),
@@ -108,6 +110,7 @@ export async function GET(
         order: [["dateawarded", "DESC"]],
         raw: true,
       }),
+      getPilotBadgesOverview(pilotId),
     ]);
 
     const totalSeconds = Number(approvedSeconds || 0);
@@ -117,7 +120,14 @@ export async function GET(
     const awardRows = ownedAwardIds.length
       ? await models.Award.findAll({
           where: { id: { [Op.in]: ownedAwardIds } },
-          attributes: ["id", "name", "description", "imageurl"],
+          attributes: [
+            "id",
+            "name",
+            "name_zh",
+            "description",
+            "description_zh",
+            "imageurl",
+          ],
           raw: true,
         })
       : [];
@@ -132,7 +142,9 @@ export async function GET(
         {
           id: Number(award.id),
           name: award.name,
+          nameZh: award.name_zh || null,
           description: award.description,
+          descriptionZh: award.description_zh || null,
           imageurl: award.imageurl,
           dateAwarded: toDateString(grant.dateawarded),
         },
@@ -208,6 +220,7 @@ export async function GET(
       awards: {
         ownedAwardIds,
         received: receivedAwards,
+        overview: badgesOverview,
       },
       statistics: {
         approvedFlightSeconds: totalSeconds,

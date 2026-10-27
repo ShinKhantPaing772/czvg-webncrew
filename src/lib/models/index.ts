@@ -57,17 +57,33 @@ Rank.init(
 class Award extends Model {
   declare id: number;
   declare name: string;
+  declare name_zh: string | null;
   declare description: string;
+  declare description_zh: string | null;
   declare imageurl: string;
   declare featured: number | null;
+  declare category: string;
+  declare criteria: Record<string, unknown> | null;
 }
 Award.init(
   {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     name: { type: DataTypes.TEXT, allowNull: false },
+    name_zh: { type: DataTypes.STRING(255), allowNull: true, defaultValue: null },
     description: { type: DataTypes.TEXT },
+    description_zh: { type: DataTypes.TEXT, allowNull: true, defaultValue: null },
     imageurl: { type: DataTypes.TEXT, allowNull: false },
     featured: { type: DataTypes.TINYINT, allowNull: true, defaultValue: null },
+    category: {
+      type: DataTypes.STRING(50),
+      allowNull: false,
+      defaultValue: "milestone",
+    },
+    criteria: {
+      type: DataTypes.JSON,
+      allowNull: true,
+      defaultValue: null,
+    },
   },
   { sequelize, modelName: "Award", tableName: "awards", timestamps: false },
 );

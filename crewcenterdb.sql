@@ -13,9 +13,13 @@ CREATE TABLE `aircraft` (
 CREATE TABLE `awards` (
   `id` int PRIMARY KEY NOT NULL AUTO_INCREMENT,
   `name` text NOT NULL,
+  `name_zh` varchar(255) DEFAULT null,
   `description` text NOT NULL,
+  `description_zh` text DEFAULT null,
   `imageurl` text NOT NULL,
   `featured` tinyint DEFAULT null,
+  `category` varchar(50) NOT NULL DEFAULT 'milestone',
+  `criteria` json DEFAULT null,
   UNIQUE KEY `awards_one_featured` (`featured`)
 );
 

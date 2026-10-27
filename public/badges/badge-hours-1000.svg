@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96">
+  <defs>
+    <filter id="dropShadow" x="-10%" y="-10%" width="125%" height="125%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#000000" flood-opacity="0.5" />
+    </filter>
+    <linearGradient id="metalGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.8" />
+      <stop offset="25%" stop-color="#F59E0B" />
+      <stop offset="70%" stop-color="#D97706" />
+      <stop offset="100%" stop-color="#0F172A" />
+    </linearGradient>
+    <linearGradient id="coreGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1E3A8A" />
+      <stop offset="50%" stop-color="#002776" />
+      <stop offset="100%" stop-color="#020617" />
+    </linearGradient>
+    <linearGradient id="glyphGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="60%" stop-color="#F59E0B" />
+      <stop offset="100%" stop-color="#D97706" />
+    </linearGradient>
+  </defs>
+
+  
+      <polygon points="48,8 57,28 78,18 73,39 94,48 73,57 78,78 57,68 48,88 39,68 18,78 23,57 2,48 23,39 18,18 39,28" fill="url(#metalGrad)" stroke="#D97706" stroke-width="1.5" filter="url(#dropShadow)"/>
+      <circle cx="48" cy="48" r="24" fill="url(#coreGrad)" stroke="#F59E0B" stroke-width="1.5" />
+    
+
+  <g transform="translate(0, 0)">
+    
+        <path d="M 48 28 L 53 38 L 63 35 L 58 45 L 68 49 L 56 53 L 54 63 L 48 56 L 42 63 L 40 53 L 28 49 L 38 45 L 33 35 L 43 38 Z" fill="url(#glyphGrad)" stroke="#E60012" stroke-width="0.8" />
+        <circle cx="48" cy="46" r="3.5" fill="#E60012" />
+      
+  </g>
+
+  <text x="48" y="70" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="6.2" font-weight="900" fill="#F59E0B" letter-spacing="0.3">1000H</text>
+  <polygon points="38,76 40,80.5 44,80.5 41,83 42,87 38,85 34,87 35,83 32,80.5 36,80.5" fill="#F59E0B" stroke="#0F172A" stroke-width="0.5"/>
+<polygon points="48,76 50,80.5 54,80.5 51,83 52,87 48,85 44,87 45,83 42,80.5 46,80.5" fill="#F59E0B" stroke="#0F172A" stroke-width="0.5"/>
+<polygon points="58,76 60,80.5 64,80.5 61,83 62,87 58,85 54,87 55,83 52,80.5 56,80.5" fill="#F59E0B" stroke="#0F172A" stroke-width="0.5"/>
+</svg>

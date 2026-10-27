@@ -8,7 +8,8 @@
     "test": "vitest run",
     "start": "next start",
     "lint": "next lint",
-    "sync:ifc-users": "node scripts/sync-ifc-users.mjs"
+    "sync:ifc-users": "node scripts/sync-ifc-users.mjs",
+    "sync:awards": "node scripts/sync-and-backfill-awards.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
