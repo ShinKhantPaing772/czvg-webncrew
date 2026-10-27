@@ -17,9 +17,10 @@ vi.mock("@/components/crew-header", () => ({
 }));
 
 vi.mock("next/image", () => ({
-  default: ({ unoptimized, ...props }: any) => <img {...props} />,
+  default: ({ unoptimized, alt = "", ...props }: any) => <img alt={alt} {...props} />,
 }));
 
+import { I18nProvider, LOCALE_STORAGE_KEY } from "@/lib/i18n";
 import PilotAwardsPage from "./page";
 
 let container: HTMLDivElement;
@@ -93,6 +94,16 @@ beforeEach(() => {
               dateAwarded: "2026-01-01T00:00:00.000Z",
             },
           ],
+        }),
+      };
+    }
+
+    if (url.includes("/api/admin/pilot-awards/backfill") && options?.method === "POST") {
+      return {
+        ok: true,
+        json: async () => ({
+          success: true,
+          message: "全员扫描补发成功",
         }),
       };
     }
@@ -353,6 +364,68 @@ describe("PilotAwardsPage self-acceptance", () => {
     expect(mocks.authFetch).toHaveBeenCalledWith(
       "/api/admin/pilot-awards?awardId=10&pilotId=1",
       expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+
+  it("renders full Chinese localization when locale is zh", async () => {
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, "zh");
+
+    await act(async () => {
+      root!.render(
+        <I18nProvider>
+          <PilotAwardsPage />
+        </I18nProvider>,
+      );
+    });
+
+    // Header and tabs in Chinese
+    expect(container.textContent).toContain("飞行勋章管理");
+    expect(container.textContent).toContain("按飞行员授勋");
+    expect(container.textContent).toContain("按勋章浏览");
+    expect(container.textContent).toContain("选择获颁飞行员");
+    expect(container.textContent).toContain("批量多选");
+
+    // Click "批量多选"
+    const batchBtn = Array.from(container.querySelectorAll("button")).find(
+      (b) => b.textContent?.includes("批量多选"),
+    );
+    expect(batchBtn).toBeDefined();
+
+    await act(async () => {
+      batchBtn!.click();
+    });
+
+    expect(container.textContent).toContain("批量模式");
+    expect(container.textContent).toContain("全选当前可见");
+    expect(container.textContent).toContain("批量授予勋章");
+  });
+
+  it("supports one-click sync and backfill trigger", async () => {
+    await act(async () => {
+      root!.render(<PilotAwardsPage />);
+    });
+
+    const syncBtn = Array.from(container.querySelectorAll("button")).find((b) =>
+      b.textContent?.includes("Sync Catalog & Backfill All"),
+    );
+    expect(syncBtn).toBeDefined();
+
+    await act(async () => {
+      syncBtn!.click();
+    });
+
+    const confirmBtn = Array.from(document.querySelectorAll("button")).find((b) =>
+      b.textContent?.includes("Start Backfill"),
+    );
+    expect(confirmBtn).toBeDefined();
+
+    await act(async () => {
+      confirmBtn!.click();
+    });
+
+    expect(mocks.authFetch).toHaveBeenCalledWith(
+      "/api/admin/pilot-awards/backfill",
+      expect.objectContaining({ method: "POST" }),
     );
   });
 });

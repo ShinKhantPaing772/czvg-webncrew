@@ -16,8 +16,10 @@ function positiveId(value: unknown) {
 
 function validatedImageUrl(value: unknown) {
   if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (trimmed.startsWith("/")) return trimmed;
   try {
-    const url = new URL(value.trim());
+    const url = new URL(trimmed);
     return url.protocol === "https:" ? url.toString() : null;
   } catch {
     return null;
@@ -26,9 +28,13 @@ function validatedImageUrl(value: unknown) {
 
 type AwardPayload = {
   name: string;
+  name_zh?: string | null;
   description: string;
+  description_zh?: string | null;
   imageurl: string;
   featured: boolean;
+  category?: string;
+  criteria?: Record<string, unknown> | null;
 };
 
 async function validateAward(
@@ -36,13 +42,29 @@ async function validateAward(
   currentId?: number,
 ): Promise<{ error: string } | { value: AwardPayload }> {
   const name = typeof body.name === "string" ? body.name.trim() : "";
+  const name_zh = typeof body.name_zh === "string" ? body.name_zh.trim() : null;
   const description = typeof body.description === "string" ? body.description.trim() : "";
+  const description_zh = typeof body.description_zh === "string" ? body.description_zh.trim() : null;
   const imageurl = validatedImageUrl(body.imageurl);
   const featured = body.featured === true;
+  const category =
+    typeof body.category === "string" && body.category.trim()
+      ? body.category.trim()
+      : "milestone";
+  let criteria: Record<string, unknown> | null = null;
+  if (body.criteria && typeof body.criteria === "object") {
+    criteria = body.criteria as Record<string, unknown>;
+  } else if (typeof body.criteria === "string" && body.criteria.trim()) {
+    try {
+      criteria = JSON.parse(body.criteria);
+    } catch {
+      // Ignored if invalid JSON
+    }
+  }
 
   if (!name) return { error: "Award name is required" };
   if (!description) return { error: "Award description is required" };
-  if (!imageurl) return { error: "Award image must be a valid HTTPS URL" };
+  if (!imageurl) return { error: "Award image must be a valid HTTPS URL or local asset path" };
 
   const awards = await models.Award.findAll({ attributes: ["id", "name"], raw: true });
   if (
@@ -56,7 +78,18 @@ async function validateAward(
     return { error: "An award with this name already exists" };
   }
 
-  return { value: { name, description, imageurl, featured } };
+  return {
+    value: {
+      name,
+      name_zh,
+      description,
+      description_zh,
+      imageurl,
+      featured,
+      category,
+      criteria,
+    },
+  };
 }
 
 export async function GET(request: Request) {
@@ -64,8 +97,21 @@ export async function GET(request: Request) {
     const auth = await requirePermission(request, "awards");
     if (!auth.ok) return auth.response;
     const awards = await models.Award.findAll({
-      attributes: ["id", "name", "description", "imageurl", "featured"],
-      order: [["name", "ASC"]],
+      attributes: [
+        "id",
+        "name",
+        "name_zh",
+        "description",
+        "description_zh",
+        "imageurl",
+        "featured",
+        "category",
+        "criteria",
+      ],
+      order: [
+        ["category", "ASC"],
+        ["name", "ASC"],
+      ],
       raw: true,
     });
     return NextResponse.json({ awards });
@@ -86,7 +132,17 @@ async function saveAward(
     const stored = { ...values, featured: values.featured ? 1 : null };
     if (id) {
       const award = await models.Award.findByPk(id, {
-        attributes: ["id", "name", "description", "imageurl", "featured"],
+        attributes: [
+          "id",
+          "name",
+          "name_zh",
+          "description",
+          "description_zh",
+          "imageurl",
+          "featured",
+          "category",
+          "criteria",
+        ],
         transaction,
       });
       if (!award) return null;

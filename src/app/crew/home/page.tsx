@@ -13,9 +13,11 @@ import {
   Clock,
   ImageOff,
   Loader2,
+  Lock,
   Plane,
   Plus,
   RefreshCw,
+  Sparkles,
 } from "lucide-react";
 
 import {
@@ -35,6 +37,7 @@ import { useTheme } from "@/components/theme-provider";
 import { HalloweenIcon } from "@/components/halloween-icon";
 import { AirlineLogo } from "@/components/airline-logo";
 import { authFetch } from "@/lib/utils/api";
+import { useI18n } from "@/lib/i18n";
 
 type RecentPirep = {
   id: number;
@@ -55,9 +58,42 @@ type RecentPirep = {
 type ReceivedAward = {
   id: number;
   name: string | null;
+  nameZh?: string | null;
   description: string | null;
+  descriptionZh?: string | null;
   imageurl: string | null;
   dateAwarded: string;
+};
+
+type BadgeProgress = {
+  current: number;
+  target: number;
+  percentage: number;
+  unit: string;
+  label: string;
+  labelZh?: string;
+};
+
+type OverviewBadge = {
+  id: number;
+  name: string;
+  nameZh?: string | null;
+  description: string;
+  descriptionZh?: string | null;
+  imageurl: string;
+  category: string;
+  criteria: any;
+  featured: number | null;
+  isUnlocked: boolean;
+  dateAwarded?: string | null;
+  progress: BadgeProgress | null;
+};
+
+type BadgesOverview = {
+  badges: OverviewBadge[];
+  totalUnlocked: number;
+  totalAvailable: number;
+  unlockPercentage: number;
 };
 
 type DashboardData = {
@@ -90,6 +126,7 @@ type DashboardData = {
   awards: {
     ownedAwardIds: number[];
     received: ReceivedAward[];
+    overview?: BadgesOverview;
   };
   recentPireps: RecentPirep[];
 };
@@ -210,7 +247,15 @@ function displayImageUrl(value: unknown) {
   }
 }
 
-function AwardArtwork({ award }: { award: ReceivedAward }) {
+function AwardArtwork({
+  award,
+  grayscale = false,
+  size = 36,
+}: {
+  award: { imageurl?: string | null };
+  grayscale?: boolean;
+  size?: number;
+}) {
   const imageUrl = displayImageUrl(award.imageurl);
 
   if (imageUrl) {
@@ -218,17 +263,27 @@ function AwardArtwork({ award }: { award: ReceivedAward }) {
       <Image
         src={imageUrl}
         alt=""
-        width={32}
-        height={32}
+        width={size}
+        height={size}
         unoptimized
-        className="h-8 w-8 shrink-0 object-contain"
+        className={`shrink-0 object-contain transition-all duration-200 ${
+          grayscale
+            ? "grayscale opacity-40 brightness-75 contrast-75"
+            : "drop-shadow-sm"
+        }`}
+        style={{ width: `${size}px`, height: `${size}px` }}
       />
     );
   }
 
   return (
-    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted">
-      <ImageOff className="h-4 w-4 text-muted-foreground" />
+    <span
+      className={`flex shrink-0 items-center justify-center rounded-md bg-muted ${
+        grayscale ? "opacity-40" : ""
+      }`}
+      style={{ width: `${size}px`, height: `${size}px` }}
+    >
+      <Award className="h-5 w-5 text-muted-foreground" />
     </span>
   );
 }
@@ -236,6 +291,7 @@ function AwardArtwork({ award }: { award: ReceivedAward }) {
 export default function UserDashboard() {
   const { user, loading: sessionLoading } = useSession();
   const { isHalloween } = useTheme();
+  const { t, locale } = useI18n();
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -243,6 +299,7 @@ export default function UserDashboard() {
 
   const [tab, setTab] = useState("overview");
   const [query, setQuery] = useState("");
+  const [awardCategory, setAwardCategory] = useState<string>("all");
 
   async function fetchDashboard(isRefresh = false) {
     if (!user?.id) return;
@@ -482,9 +539,11 @@ export default function UserDashboard() {
             <Tabs value={tab} onValueChange={setTab}>
               <TabsList className="mb-4 grid w-full grid-cols-2 sm:w-auto sm:inline-flex">
                 <TabsTrigger value="overview">
-                  Flights &amp; analytics
+                  {t("Flights & analytics", "飞行数据与分析")}
                 </TabsTrigger>
-                <TabsTrigger value="awards">Awards &amp; rank</TabsTrigger>
+                <TabsTrigger value="awards">
+                  {t("Awards & rank", "技术职级与荣誉勋章")}
+                </TabsTrigger>
               </TabsList>
 
               {/* Tab 1: Fused Analytics + Recent Flights (Clean 2-Column Row + Flight List) */}
@@ -608,58 +667,272 @@ export default function UserDashboard() {
               </TabsContent>
 
               {/* Tab 2: Awards & Rank */}
-              <TabsContent value="awards" className="space-y-4">
-                <div className="rounded-[6px] bg-[var(--v2-background-bg-layer-01,#fafafa)] px-4 py-3.5">
+              <TabsContent value="awards" className="space-y-6">
+                {/* 1. Technical Rank Progression */}
+                <div className="rounded-[8px] border border-border/40 bg-[var(--v2-background-bg-layer-01,#fafafa)] p-4 shadow-sm dark:bg-card">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <p className="font-semibold">
-                        {dashboard.rank.current.name}
-                      </p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-foreground">
+                          {dashboard.rank.current.name}
+                        </p>
+                        <Badge variant="outline" className="text-xs">
+                          {t("Pilot Rank", "技术职级")}
+                        </Badge>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
                         {dashboard.rank.next
-                          ? `${dashboard.rank.next.remainingFormatted} remaining to reach ${dashboard.rank.next.name} (${dashboard.rank.next.timeReqFormatted} required)`
-                          : "Maximum pilot rank achieved"}
+                          ? locale === "zh"
+                            ? `距离晋升至 ${dashboard.rank.next.name} 还需 ${dashboard.rank.next.remainingFormatted}（要求 ${dashboard.rank.next.timeReqFormatted}）`
+                            : `${dashboard.rank.next.remainingFormatted} remaining to reach ${dashboard.rank.next.name} (${dashboard.rank.next.timeReqFormatted} required)`
+                          : t("Maximum pilot rank achieved", "已达成最高飞行职级")}
                       </p>
                     </div>
-                    <Badge variant="default">
+                    <Badge variant="default" className="text-xs">
                       {Math.round(dashboard.rank.progressToNextRank)}%
                     </Badge>
                   </div>
                   <Progress
                     value={dashboard.rank.progressToNextRank}
-                    className="mt-3 h-1.5"
+                    className="mt-3 h-2"
                   />
                 </div>
 
-                <div className="space-y-1.5">
-                  {dashboard.awards.received.map((award) => (
-                    <div
-                      key={award.id}
-                      className="grid w-full items-center gap-4 rounded-[6px] bg-[var(--v2-background-bg-layer-01,#fafafa)] px-4 py-3.5 md:grid-cols-[1fr_1.5fr_auto]"
-                    >
-                      <div className="flex items-center gap-3">
-                        <AwardArtwork award={award} />
-                        <div>
-                          <p className="font-semibold">
-                            {award.name || "Unnamed award"}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            Pilot Commendation
-                          </p>
+                {/* 2. Achievement Medals & Wall */}
+                {dashboard.awards?.overview ? (
+                  <div className="space-y-4">
+                    {/* Collection Overview Banner */}
+                    <div className="rounded-[8px] border border-border/40 bg-[var(--v2-background-bg-layer-01,#fafafa)] p-4 shadow-sm dark:bg-card">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5">
+                          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary">
+                            <Sparkles className="h-5 w-5" />
+                          </span>
+                          <div>
+                            <h3 className="font-semibold text-foreground">
+                              {t("Achievement Wall", "飞行成就勋章墙")}
+                            </h3>
+                            <p className="text-xs text-muted-foreground">
+                              {locale === "zh"
+                                ? `已解锁 ${dashboard.awards.overview.totalUnlocked} / 共 ${dashboard.awards.overview.totalAvailable} 枚勋章 (${dashboard.awards.overview.unlockPercentage}%)`
+                                : `${dashboard.awards.overview.totalUnlocked} of ${dashboard.awards.overview.totalAvailable} Medals Unlocked (${dashboard.awards.overview.unlockPercentage}%)`}
+                            </p>
+                          </div>
                         </div>
+
+                        <Badge
+                          variant="secondary"
+                          className="font-mono text-xs font-semibold"
+                        >
+                          {dashboard.awards.overview.totalUnlocked} /{" "}
+                          {dashboard.awards.overview.totalAvailable}
+                        </Badge>
                       </div>
 
-                      <p className="text-sm text-muted-foreground">
-                        {award.description ||
-                          "Awarded for operational service."}
-                      </p>
+                      <Progress
+                        value={dashboard.awards.overview.unlockPercentage}
+                        className="mt-3.5 h-2"
+                      />
 
-                      <div className="text-xs text-muted-foreground md:text-right">
-                        Awarded {formatUtcDate(award.dateAwarded)}
+                      {/* Category Filter Chips */}
+                      <div className="mt-4 flex flex-wrap gap-1.5 border-t border-border/30 pt-3">
+                        {[
+                          { key: "all", label: t("All", "全部") },
+                          { key: "milestone", label: t("Milestones", "飞行里程碑") },
+                          { key: "hub", label: t("Hubs & Routes", "枢纽与航线") },
+                          { key: "fleet", label: t("Fleet Mastery", "机队大师") },
+                          { key: "challenge", label: t("Challenges", "飞行挑战") },
+                          { key: "honor", label: t("Honors", "官方荣誉") },
+                        ].map((cat) => {
+                          const isActive = awardCategory === cat.key;
+                          const count =
+                            cat.key === "all"
+                              ? dashboard.awards.overview?.badges.length || 0
+                              : dashboard.awards.overview?.badges.filter(
+                                  (b) => b.category === cat.key,
+                                ).length || 0;
+
+                          return (
+                            <button
+                              key={cat.key}
+                              type="button"
+                              onClick={() => setAwardCategory(cat.key)}
+                              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-all ${
+                                isActive
+                                  ? "bg-primary text-primary-foreground shadow-sm"
+                                  : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground"
+                              }`}
+                            >
+                              <span>{cat.label}</span>
+                              <span
+                                className={`rounded-full px-1.5 py-0.2 text-[10px] ${
+                                  isActive
+                                    ? "bg-primary-foreground/20 text-primary-foreground"
+                                    : "bg-muted text-muted-foreground"
+                                }`}
+                              >
+                                {count}
+                              </span>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
-                  ))}
-                </div>
+
+                    {/* Badge Cards Grid */}
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                      {dashboard.awards.overview.badges
+                        .filter(
+                          (badge) =>
+                            awardCategory === "all" ||
+                            badge.category === awardCategory,
+                        )
+                        .map((badge) => {
+                          const badgeName =
+                            locale === "zh"
+                              ? badge.nameZh || t(badge.name, badge.name)
+                              : badge.name;
+                          const badgeDesc =
+                            locale === "zh"
+                              ? badge.descriptionZh ||
+                                t(badge.description, badge.description)
+                              : badge.description;
+
+                          return (
+                            <div
+                              key={badge.id}
+                              className={`relative flex flex-col justify-between rounded-[8px] border p-4 transition-all ${
+                                badge.isUnlocked
+                                  ? "border-primary/30 bg-card shadow-sm hover:border-primary/50"
+                                  : "border-border/40 bg-muted/20 opacity-75 hover:opacity-90"
+                              }`}
+                            >
+                              <div className="flex items-start gap-3.5">
+                                <AwardArtwork
+                                  award={badge}
+                                  grayscale={!badge.isUnlocked}
+                                  size={44}
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <p
+                                      className={`text-sm font-semibold truncate ${
+                                        badge.isUnlocked
+                                          ? "text-foreground"
+                                          : "text-muted-foreground"
+                                      }`}
+                                    >
+                                      {badgeName}
+                                    </p>
+                                    {!badge.isUnlocked && (
+                                      <Lock className="h-3 w-3 shrink-0 text-muted-foreground/70" />
+                                    )}
+                                  </div>
+
+                                  <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
+                                    {badgeDesc}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Progress bar or Unlocked pill */}
+                              <div className="mt-3.5 border-t border-border/20 pt-2.5">
+                                {badge.isUnlocked ? (
+                                  <div className="flex items-center justify-between text-xs">
+                                    <span className="inline-flex items-center gap-1 font-medium text-emerald-600 dark:text-emerald-400">
+                                      <CheckCircle2 className="h-3.5 w-3.5" />
+                                      {t("Unlocked", "已达成")}
+                                    </span>
+                                    {badge.dateAwarded && (
+                                      <span className="text-[11px] text-muted-foreground">
+                                        {formatUtcDate(badge.dateAwarded)}
+                                      </span>
+                                    )}
+                                  </div>
+                                ) : badge.progress ? (
+                                  <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                                      <span>
+                                        {t("Target Progress", "目标进度")}:{" "}
+                                        {locale === "zh"
+                                          ? badge.progress.labelZh ||
+                                            badge.progress.label
+                                          : badge.progress.label}
+                                      </span>
+                                      <span className="font-semibold text-foreground/80">
+                                        {badge.progress.percentage}%
+                                      </span>
+                                    </div>
+                                    <Progress
+                                      value={badge.progress.percentage}
+                                      className="h-1.5"
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                    <span>
+                                      {t(
+                                        "Official Special Commendation",
+                                        "官方特殊表彰",
+                                      )}
+                                    </span>
+                                    <span className="text-[11px] italic">
+                                      {t(
+                                        "Admin grant required",
+                                        "需管理员授予",
+                                      )}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </div>
+                ) : (
+                  /* Fallback to received awards if overview is unavailable */
+                  <div className="space-y-1.5">
+                    {dashboard.awards.received.map((award) => (
+                      <div
+                        key={award.id}
+                        className="grid w-full items-center gap-4 rounded-[6px] bg-[var(--v2-background-bg-layer-01,#fafafa)] px-4 py-3.5 md:grid-cols-[1fr_1.5fr_auto]"
+                      >
+                        <div className="flex items-center gap-3">
+                          <AwardArtwork award={award} size={36} />
+                          <div>
+                            <p className="font-semibold">
+                              {locale === "zh"
+                                ? award.nameZh ||
+                                  (award.name
+                                    ? t(award.name, award.name)
+                                    : "荣誉勋章")
+                                : award.name || "Unnamed award"}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {t("Pilot Commendation", "飞行员嘉奖")}
+                            </p>
+                          </div>
+                        </div>
+
+                        <p className="text-sm text-muted-foreground">
+                          {locale === "zh"
+                            ? award.descriptionZh ||
+                              (award.description
+                                ? t(award.description, award.description)
+                                : "执飞服役特别表彰。")
+                            : award.description ||
+                              "Awarded for operational service."}
+                        </p>
+
+                        <div className="text-xs text-muted-foreground md:text-right">
+                          {locale === "zh" ? "授予日期 " : "Awarded "}
+                          {formatUtcDate(award.dateAwarded)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </TabsContent>
             </Tabs>
           </>
