@@ -5,6 +5,7 @@ import sequelize from "@/lib/database";
 import { models } from "@/lib/models";
 import { requirePermission } from "@/lib/server-auth";
 import { livePilotAwardId } from "@/lib/scheduling/access";
+import { getSafeAwards } from "@/lib/awards/columns";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -96,23 +97,11 @@ export async function GET(request: Request) {
   try {
     const auth = await requirePermission(request, "awards");
     if (!auth.ok) return auth.response;
-    const awards = await models.Award.findAll({
-      attributes: [
-        "id",
-        "name",
-        "name_zh",
-        "description",
-        "description_zh",
-        "imageurl",
-        "featured",
-        "category",
-        "criteria",
-      ],
+    const awards = await getSafeAwards({
       order: [
         ["category", "ASC"],
         ["name", "ASC"],
       ],
-      raw: true,
     });
     return NextResponse.json({ awards });
   } catch (error) {

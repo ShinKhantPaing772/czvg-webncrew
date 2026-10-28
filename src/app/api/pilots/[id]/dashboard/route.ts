@@ -5,6 +5,7 @@ import { models } from "@/lib/models";
 import { formatFlightTime } from "@/lib/utils/time";
 import { hasPermission, requireCrewAuth } from "@/lib/server-auth";
 import { getPilotBadgesOverview } from "@/lib/awards/evaluator";
+import { getSafeAwards } from "@/lib/awards/columns";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -110,7 +111,10 @@ export async function GET(
         order: [["dateawarded", "DESC"]],
         raw: true,
       }),
-      getPilotBadgesOverview(pilotId),
+      getPilotBadgesOverview(pilotId).catch((err) => {
+        console.error("[Dashboard Badges Overview Error]:", err);
+        return null;
+      }),
     ]);
 
     const totalSeconds = Number(approvedSeconds || 0);
@@ -118,7 +122,7 @@ export async function GET(
       Number(grant.awardid),
     );
     const awardRows = ownedAwardIds.length
-      ? await models.Award.findAll({
+      ? await getSafeAwards({
           where: { id: { [Op.in]: ownedAwardIds } },
           attributes: [
             "id",
@@ -128,7 +132,6 @@ export async function GET(
             "description_zh",
             "imageurl",
           ],
-          raw: true,
         })
       : [];
     const awardById = new Map(
