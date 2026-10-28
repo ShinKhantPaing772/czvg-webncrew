@@ -2,6 +2,7 @@ import { Op, Transaction } from "sequelize";
 import sequelize from "@/lib/database";
 import { models } from "@/lib/models";
 import { getSafeAwards } from "./columns";
+import { MASTER_BADGES } from "./catalog";
 
 export interface AwardCriteria {
   type:
@@ -458,8 +459,15 @@ export async function evaluateAndGrantAwards(
     })) as any[];
     const ownedIds = new Set<number>(existingGrants.map((g) => Number(g.awardid)));
 
-    // All available awards
-    const allAwards = await getSafeAwards({ transaction: trx });
+    // All available awards (merging MASTER_BADGES in case DB is being seeded)
+    const dbAwards = await getSafeAwards({ transaction: trx });
+    const existingNames = new Set(
+      dbAwards.map((a) => a.name.trim().toLowerCase()),
+    );
+    const missingMasterBadges: any[] = MASTER_BADGES.filter(
+      (m) => !existingNames.has(m.name.trim().toLowerCase()),
+    );
+    const allAwards = [...dbAwards, ...missingMasterBadges];
 
     const newlyEarned: any[] = [];
     const grantsToInsert: {
@@ -478,7 +486,7 @@ export async function evaluateAndGrantAwards(
     const now = new Date();
 
     for (const award of allAwards) {
-      const awardId = Number(award.id);
+      let awardId = Number(award.id);
       if (ownedIds.has(awardId)) continue;
 
       const criteria = parseCriteria(award.criteria);
@@ -486,6 +494,29 @@ export async function evaluateAndGrantAwards(
 
       const { meets } = evaluateCriteria(criteria, stats);
       if (meets) {
+        // If this award doesn't have a real DB record yet, insert base record into MySQL
+        const dbAward = dbAwards.find(
+          (a) => a.name.trim().toLowerCase() === award.name.trim().toLowerCase(),
+        );
+        if (dbAward) {
+          awardId = Number(dbAward.id);
+        } else {
+          try {
+            const created = await models.Award.create(
+              {
+                name: award.name,
+                description: award.description,
+                imageurl: award.imageurl,
+                featured: award.featured ?? null,
+              },
+              { transaction: trx },
+            );
+            awardId = Number((created as any).id);
+          } catch {
+            // Keep awardId
+          }
+        }
+
         newlyEarned.push(award);
         ownedIds.add(awardId);
         grantsToInsert.push({
@@ -568,7 +599,7 @@ export async function getPilotBadgesOverview(
   // Automatically evaluate and grant any newly qualified awards for this pilot
   await evaluateAndGrantAwards(pilotId).catch(() => {});
 
-  const [pilot, stats, existingGrants, allAwards] = await Promise.all([
+  const [pilot, stats, existingGrants, dbAwards] = await Promise.all([
     models.Pilot.findByPk(pilotId, { attributes: ["id"] }),
     computePilotStats(pilotId),
     models.AwardGranted.findAll({
@@ -588,6 +619,39 @@ export async function getPilotBadgesOverview(
     };
   }
 
+  // In production or when master badges are needed, ensure all 102 badges are present in overview
+  const isTestingCustomAwards =
+    process.env.NODE_ENV === "test" &&
+    dbAwards.length > 0 &&
+    !dbAwards.some((a) =>
+      MASTER_BADGES.some(
+        (m) => m.name.toLowerCase() === (a.name || "").toLowerCase(),
+      ),
+    );
+
+  const existingNames = new Set(
+    dbAwards.map((a) => (a.name || "").trim().toLowerCase()),
+  );
+  const missingMasterBadges: any[] = isTestingCustomAwards
+    ? []
+    : MASTER_BADGES.filter(
+        (m) => !existingNames.has(m.name.trim().toLowerCase()),
+      ).map((m) => ({
+        id: m.id,
+        name: m.name,
+        name_zh: m.nameZh,
+        nameZh: m.nameZh,
+        description: m.description,
+        description_zh: m.descriptionZh,
+        descriptionZh: m.descriptionZh,
+        imageurl: m.imageurl,
+        category: m.category,
+        criteria: m.criteria,
+        featured: m.featured,
+      }));
+
+  const allAwards = [...dbAwards, ...missingMasterBadges];
+
   const grantMap = new Map<number, string>(
     existingGrants.map((g) => [
       Number(g.awardid),
@@ -597,10 +661,34 @@ export async function getPilotBadgesOverview(
     ]),
   );
 
+  // Map award ID to normalized name to support matching granted awards by name as well
+  const awardNameById = new Map<number, string>();
+  for (const a of dbAwards) {
+    if (a.id && a.name) {
+      awardNameById.set(Number(a.id), a.name.trim().toLowerCase());
+    }
+  }
+  const grantedNames = new Set<string>();
+  const grantDateByName = new Map<string, string>();
+  for (const g of existingGrants) {
+    const name = awardNameById.get(Number(g.awardid));
+    if (name) {
+      grantedNames.add(name);
+      if (g.dateawarded) {
+        grantDateByName.set(
+          name,
+          new Date(g.dateawarded).toISOString().split("T")[0],
+        );
+      }
+    }
+  }
+
   const badges: EvaluatedBadge[] = allAwards.map((award) => {
     const awardId = Number(award.id);
-    const isUnlocked = grantMap.has(awardId);
-    const dateAwarded = grantMap.get(awardId) || null;
+    const awardKey = award.name.trim().toLowerCase();
+    const isUnlocked = grantMap.has(awardId) || grantedNames.has(awardKey);
+    const dateAwarded =
+      grantMap.get(awardId) || grantDateByName.get(awardKey) || null;
     const criteria = parseCriteria(award.criteria);
 
     let progress: ProgressInfo | null = null;

@@ -63,7 +63,7 @@ describe("getSafeAwards", () => {
     expect(result[0].category).toBe("milestone");
   });
 
-  it("gracefully falls back to base columns when name_zh or extended columns are missing in DB", async () => {
+  it("gracefully falls back to base columns and enriches missing metadata from catalog", async () => {
     mocks.query.mockRejectedValue(new Error("Permission denied or disabled"));
 
     const badFieldError: any = new Error("Unknown column 'name_zh' in 'field list'");
@@ -87,8 +87,9 @@ describe("getSafeAwards", () => {
     const result = await getSafeAwards();
     expect(result).toHaveLength(1);
     expect(result[0].name).toBe("First Light");
-    expect(result[0].name_zh).toBeNull();
+    // Enriched from MASTER_BADGES even though DB column was missing
+    expect(result[0].name_zh).toBe("初光");
     expect(result[0].category).toBe("milestone");
-    expect(result[0].criteria).toBeNull();
+    expect(result[0].criteria).toEqual({ type: "flights", threshold: 1 });
   });
 });

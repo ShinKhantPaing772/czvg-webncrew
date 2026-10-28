@@ -1,19 +1,41 @@
 import sequelize from "@/lib/database";
 import { models } from "@/lib/models";
+import { MASTER_BADGES } from "./catalog";
+import { resolveBadgeImageUrl } from "./image";
 
 let columnsChecked = false;
 let checkPromise: Promise<void> | null = null;
 let catalogCheckTriggered = false;
 
 /**
+ * Safely fetches the list of column names actually present in the `awards` table.
+ */
+export async function getAwardExistingColumnNames(): Promise<Set<string>> {
+  if (!sequelize || typeof (sequelize as any).query !== "function") {
+    return new Set(["id", "name", "description", "imageurl", "featured"]);
+  }
+  try {
+    const [columns] = await sequelize.query("SHOW COLUMNS FROM `awards`");
+    return new Set(
+      (columns as any[]).map((c) =>
+        String(
+          c.Field || c.field || c.COLUMN_NAME || c.column_name || "",
+        ).toLowerCase(),
+      ),
+    );
+  } catch {
+    return new Set(["id", "name", "description", "imageurl", "featured"]);
+  }
+}
+
+/**
  * Checks and auto-migrates missing columns in the `awards` table.
- * Idempotent, safe across all MySQL/MariaDB versions, and executes once per process.
+ * Idempotent, safe across all MySQL/MariaDB versions, and alters columns one by one.
  */
 export async function ensureAwardColumnsExist(): Promise<void> {
   if (columnsChecked) return;
   if (checkPromise) return checkPromise;
 
-  // If sequelize or sequelize.query is not available (e.g. in mocked test environments), skip
   if (!sequelize || typeof (sequelize as any).query !== "function") {
     columnsChecked = true;
     return;
@@ -21,33 +43,48 @@ export async function ensureAwardColumnsExist(): Promise<void> {
 
   checkPromise = (async () => {
     try {
-      const [columns] = await sequelize.query("SHOW COLUMNS FROM `awards`");
-      const existingColNames = new Set(
-        (columns as any[]).map((c) => String(c.Field).toLowerCase()),
-      );
+      const existingColNames = await getAwardExistingColumnNames();
 
-      const alters: string[] = [];
       if (!existingColNames.has("name_zh")) {
-        alters.push("ADD COLUMN `name_zh` VARCHAR(255) NULL");
+        await sequelize
+          .query("ALTER TABLE `awards` ADD COLUMN `name_zh` VARCHAR(255) NULL")
+          .catch((e: any) =>
+            console.warn("[Awards Auto-Migrate] name_zh note:", e?.message || e),
+          );
       }
       if (!existingColNames.has("description_zh")) {
-        alters.push("ADD COLUMN `description_zh` TEXT NULL");
+        await sequelize
+          .query("ALTER TABLE `awards` ADD COLUMN `description_zh` TEXT NULL")
+          .catch((e: any) =>
+            console.warn(
+              "[Awards Auto-Migrate] description_zh note:",
+              e?.message || e,
+            ),
+          );
       }
       if (!existingColNames.has("category")) {
-        alters.push(
-          "ADD COLUMN `category` VARCHAR(50) NOT NULL DEFAULT 'milestone'",
-        );
+        await sequelize
+          .query(
+            "ALTER TABLE `awards` ADD COLUMN `category` VARCHAR(50) NOT NULL DEFAULT 'milestone'",
+          )
+          .catch((e: any) =>
+            console.warn(
+              "[Awards Auto-Migrate] category note:",
+              e?.message || e,
+            ),
+          );
       }
       if (!existingColNames.has("criteria")) {
-        alters.push("ADD COLUMN `criteria` JSON NULL");
+        // Try JSON type first, fallback to LONGTEXT for MariaDB / MySQL 5.6
+        await sequelize
+          .query("ALTER TABLE `awards` ADD COLUMN `criteria` JSON NULL")
+          .catch(async () => {
+            await sequelize
+              .query("ALTER TABLE `awards` ADD COLUMN `criteria` LONGTEXT NULL")
+              .catch(() => {});
+          });
       }
 
-      if (alters.length > 0) {
-        await sequelize.query(`ALTER TABLE \`awards\` ${alters.join(", ")}`);
-        console.log(
-          `[Awards Auto-Migrate] Added missing columns to 'awards': ${alters.join(", ")}`,
-        );
-      }
       columnsChecked = true;
     } catch (err: any) {
       console.warn(
@@ -76,10 +113,47 @@ export interface SafeAwardRecord {
   featured: number | null;
 }
 
+function enrichAwardRecord(
+  r: any,
+  masterByName: Map<string, any>,
+): SafeAwardRecord {
+  const master = masterByName.get(String(r.name || "").trim().toLowerCase());
+  const rawCriteria = r.criteria || master?.criteria || null;
+  let parsedCriteria = rawCriteria;
+  if (typeof rawCriteria === "string") {
+    try {
+      parsedCriteria = JSON.parse(rawCriteria);
+    } catch {
+      parsedCriteria = master?.criteria || null;
+    }
+  }
+
+  const resolvedCategory =
+    r.category && r.category !== "milestone"
+      ? r.category
+      : master?.category || r.category || "milestone";
+
+  return {
+    ...r,
+    id: Number(r.id),
+    name: r.name || master?.name || "",
+    name_zh: r.name_zh || master?.nameZh || null,
+    nameZh: r.name_zh || master?.nameZh || null,
+    description: r.description || master?.description || "",
+    description_zh: r.description_zh || master?.descriptionZh || null,
+    descriptionZh: r.description_zh || master?.descriptionZh || null,
+    imageurl: resolveBadgeImageUrl(r.imageurl || master?.imageurl || ""),
+    category: resolvedCategory,
+    criteria: parsedCriteria,
+    featured: r.featured ?? master?.featured ?? null,
+  };
+}
+
 /**
  * Safely fetches awards from database.
  * If columns like `name_zh` or `category` do not exist yet in database,
  * automatically falls back to base columns without throwing ER_BAD_FIELD_ERROR.
+ * Automatically enriches missing metadata from MASTER_BADGES.
  */
 export async function getSafeAwards(options?: {
   where?: any;
@@ -95,6 +169,10 @@ export async function getSafeAwards(options?: {
       .then((m) => m.ensureAwardCatalogSeeded())
       .catch(() => {});
   }
+
+  const masterByName = new Map(
+    MASTER_BADGES.map((b) => [b.name.trim().toLowerCase(), b]),
+  );
 
   const fullAttributes = options?.attributes || [
     "id",
@@ -120,20 +198,7 @@ export async function getSafeAwards(options?: {
       transaction: options?.transaction,
     })) as any[];
 
-    return rows.map((r) => ({
-      ...r,
-      id: Number(r.id),
-      name: r.name || "",
-      name_zh: r.name_zh || null,
-      nameZh: r.name_zh || null,
-      description: r.description || "",
-      description_zh: r.description_zh || null,
-      descriptionZh: r.description_zh || null,
-      imageurl: r.imageurl || "",
-      category: r.category || "milestone",
-      criteria: r.criteria || null,
-      featured: r.featured ?? null,
-    }));
+    return rows.map((r) => enrichAwardRecord(r, masterByName));
   } catch (err: any) {
     const isBadFieldError =
       err?.name === "SequelizeDatabaseError" &&
@@ -143,7 +208,7 @@ export async function getSafeAwards(options?: {
 
     if (isBadFieldError) {
       console.warn(
-        "[Awards] Extended columns missing in database table 'awards'. Safely falling back to base columns.",
+        "[Awards] Extended columns missing in database table 'awards'. Safely falling back to base columns with catalog enrichment.",
       );
 
       const baseRows = (await models.Award.findAll({
@@ -154,20 +219,7 @@ export async function getSafeAwards(options?: {
         transaction: options?.transaction,
       })) as any[];
 
-      return baseRows.map((r) => ({
-        ...r,
-        id: Number(r.id),
-        name: r.name || "",
-        name_zh: null,
-        nameZh: null,
-        description: r.description || "",
-        description_zh: null,
-        descriptionZh: null,
-        imageurl: r.imageurl || "",
-        category: "milestone",
-        criteria: null,
-        featured: r.featured ?? null,
-      }));
+      return baseRows.map((r) => enrichAwardRecord(r, masterByName));
     }
 
     throw err;

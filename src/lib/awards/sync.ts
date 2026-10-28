@@ -2,7 +2,11 @@ import sequelize from "@/lib/database";
 import { models } from "@/lib/models";
 import { MASTER_BADGES } from "./catalog";
 import { evaluateAndGrantAwards } from "./evaluator";
-import { ensureAwardColumnsExist } from "./columns";
+import {
+  ensureAwardColumnsExist,
+  getAwardExistingColumnNames,
+  getSafeAwards,
+} from "./columns";
 
 let catalogSeeded = false;
 let seedPromise: Promise<void> | null = null;
@@ -60,19 +64,8 @@ export async function syncAwardsCatalogToDatabase(): Promise<{
 }> {
   await ensureAwardColumnsExist().catch(() => {});
 
-  const existingAwards = (await models.Award.findAll({
-    attributes: [
-      "id",
-      "name",
-      "name_zh",
-      "description",
-      "description_zh",
-      "imageurl",
-      "category",
-      "criteria",
-      "featured",
-    ],
-  })) as any[];
+  // Fetch existing awards safely without failing on missing columns
+  const existingAwards = await getSafeAwards();
 
   const existingByName = new Map<string, any>();
   for (const award of existingAwards) {
@@ -81,6 +74,9 @@ export async function syncAwardsCatalogToDatabase(): Promise<{
     }
   }
 
+  // Detect which columns actually exist in the database table
+  const existingCols = await getAwardExistingColumnNames();
+
   const toCreate: any[] = [];
   const updatePromises: Promise<any>[] = [];
 
@@ -88,27 +84,45 @@ export async function syncAwardsCatalogToDatabase(): Promise<{
     const key = item.name.trim().toLowerCase();
     const existing = existingByName.get(key);
 
-    const payload = {
+    // Only include columns that actually exist in the MySQL awards table
+    const payload: Record<string, any> = {
       name: item.name,
-      name_zh: item.nameZh,
       description: item.description,
-      description_zh: item.descriptionZh,
       imageurl: item.imageurl,
-      category: item.category,
-      criteria: item.criteria,
       featured: item.featured,
     };
 
+    if (existingCols.has("name_zh")) {
+      payload.name_zh = item.nameZh;
+    }
+    if (existingCols.has("description_zh")) {
+      payload.description_zh = item.descriptionZh;
+    }
+    if (existingCols.has("category")) {
+      payload.category = item.category;
+    }
+    if (existingCols.has("criteria")) {
+      payload.criteria = item.criteria;
+    }
+
     if (existing) {
       const needsUpdate =
-        existing.name_zh !== item.nameZh ||
-        existing.description_zh !== item.descriptionZh ||
-        existing.imageurl !== item.imageurl ||
-        existing.category !== item.category ||
-        JSON.stringify(existing.criteria) !== JSON.stringify(item.criteria);
+        (existingCols.has("imageurl") && existing.imageurl !== item.imageurl) ||
+        (existingCols.has("name_zh") && existing.name_zh !== item.nameZh) ||
+        (existingCols.has("description_zh") &&
+          existing.description_zh !== item.descriptionZh);
 
-      if (needsUpdate) {
-        updatePromises.push(existing.update(payload));
+      if (needsUpdate && existing.id) {
+        const updateCall = models.Award.update(payload, {
+          where: { id: existing.id },
+        });
+        if (updateCall && typeof (updateCall as any).catch === "function") {
+          updatePromises.push(
+            (updateCall as any).catch((err: any) => {
+              console.warn(`[Awards Sync] Failed to update ${item.name}:`, err);
+            }),
+          );
+        }
       }
     } else {
       toCreate.push(payload);
@@ -116,11 +130,29 @@ export async function syncAwardsCatalogToDatabase(): Promise<{
   }
 
   if (toCreate.length > 0) {
-    if (typeof (models.Award as any).bulkCreate === "function") {
-      await models.Award.bulkCreate(toCreate);
-    } else {
+    try {
+      if (typeof (models.Award as any).bulkCreate === "function") {
+        await models.Award.bulkCreate(toCreate);
+      } else {
+        for (const item of toCreate) {
+          await models.Award.create(item);
+        }
+      }
+    } catch (createErr) {
+      console.warn(
+        "[Awards Sync] Bulk create fallback with minimal base columns:",
+        createErr,
+      );
+      // Infallible fallback: insert using only base columns (name, description, imageurl, featured)
       for (const item of toCreate) {
-        await models.Award.create(item);
+        await models.Award.create({
+          name: item.name,
+          description: item.description,
+          imageurl: item.imageurl,
+          featured: item.featured ?? null,
+        }).catch((e) =>
+          console.warn(`[Awards Sync] Fallback insert failed for ${item.name}:`, e),
+        );
       }
     }
   }

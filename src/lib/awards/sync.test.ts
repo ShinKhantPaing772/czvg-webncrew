@@ -5,7 +5,10 @@ const mocks = vi.hoisted(() => ({
   findAll: vi.fn(),
   bulkCreate: vi.fn(),
   create: vi.fn(),
+  update: vi.fn(),
   query: vi.fn(),
+  getSafeAwards: vi.fn(),
+  getAwardExistingColumnNames: vi.fn(),
 }));
 
 vi.mock("@/lib/database", () => ({
@@ -21,6 +24,7 @@ vi.mock("@/lib/models", () => ({
       findAll: mocks.findAll,
       bulkCreate: mocks.bulkCreate,
       create: mocks.create,
+      update: mocks.update,
     },
     Pilot: {
       findAll: vi.fn().mockResolvedValue([]),
@@ -30,6 +34,8 @@ vi.mock("@/lib/models", () => ({
 
 vi.mock("./columns", () => ({
   ensureAwardColumnsExist: vi.fn().mockResolvedValue(undefined),
+  getAwardExistingColumnNames: mocks.getAwardExistingColumnNames,
+  getSafeAwards: mocks.getSafeAwards,
 }));
 
 vi.mock("./evaluator", () => ({
@@ -42,11 +48,24 @@ import { MASTER_BADGES } from "./catalog";
 describe("awards catalog sync and auto-seed", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.getAwardExistingColumnNames.mockResolvedValue(
+      new Set([
+        "id",
+        "name",
+        "name_zh",
+        "description",
+        "description_zh",
+        "imageurl",
+        "category",
+        "criteria",
+        "featured",
+      ]),
+    );
   });
 
   it("syncAwardsCatalogToDatabase creates missing badges in batch", async () => {
     // Database only has 1 existing award
-    mocks.findAll.mockResolvedValue([
+    mocks.getSafeAwards.mockResolvedValue([
       {
         id: 1,
         name: "First Light",
@@ -57,7 +76,6 @@ describe("awards catalog sync and auto-seed", () => {
         category: "milestone",
         criteria: { type: "flights", threshold: 1 },
         featured: null,
-        update: vi.fn(),
       },
     ]);
     mocks.bulkCreate.mockResolvedValue([]);
@@ -72,7 +90,7 @@ describe("awards catalog sync and auto-seed", () => {
 
   it("ensureAwardCatalogSeeded triggers sync when count < master catalog size", async () => {
     mocks.count.mockResolvedValue(3); // only 3 awards exist in DB
-    mocks.findAll.mockResolvedValue([]);
+    mocks.getSafeAwards.mockResolvedValue([]);
     mocks.bulkCreate.mockResolvedValue([]);
 
     await ensureAwardCatalogSeeded();
