@@ -557,6 +557,17 @@ export async function getPilotBadgesOverview(
   totalAvailable: number;
   unlockPercentage: number;
 }> {
+  // Ensure master badges catalog is populated in database
+  try {
+    const { ensureAwardCatalogSeeded } = await import("./sync");
+    await ensureAwardCatalogSeeded();
+  } catch {
+    // Non-fatal if auto-seed fails or in test mocks
+  }
+
+  // Automatically evaluate and grant any newly qualified awards for this pilot
+  await evaluateAndGrantAwards(pilotId).catch(() => {});
+
   const [pilot, stats, existingGrants, allAwards] = await Promise.all([
     models.Pilot.findByPk(pilotId, { attributes: ["id"] }),
     computePilotStats(pilotId),

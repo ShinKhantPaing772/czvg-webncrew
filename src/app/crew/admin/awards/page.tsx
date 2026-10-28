@@ -40,6 +40,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "@/lib/i18n";
 import { authFetch } from "@/lib/utils/api";
+import { displayBadgeImageUrl } from "@/lib/awards/image";
 
 type Award = {
   id: number;
@@ -62,15 +63,7 @@ function editableString(value: unknown) {
 }
 
 function displayImageUrl(value: unknown) {
-  if (typeof value !== "string" || !value.trim()) return null;
-  const trimmed = value.trim();
-  if (trimmed.startsWith("/")) return trimmed;
-  try {
-    const url = new URL(trimmed);
-    return url.protocol === "https:" ? url.toString() : null;
-  } catch {
-    return null;
-  }
+  return displayBadgeImageUrl(value);
 }
 
 function isHttpsUrl(value: string) {

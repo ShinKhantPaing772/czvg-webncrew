@@ -23,6 +23,21 @@ import { MASTER_BADGES } from "./build-all-badges.mjs";
 const { loadEnvConfig } = nextEnv;
 loadEnvConfig(process.cwd(), process.env.NODE_ENV !== "production");
 
+function resolveBadgeImageUrl(pathOrFilename) {
+  if (!pathOrFilename) return "";
+  const trimmed = String(pathOrFilename).trim();
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed;
+  const filename = trimmed.replace(/^\/?(public\/)?(badges\/)?/, "");
+  const cdnBase =
+    process.env.NEXT_PUBLIC_BADGES_CDN_URL ||
+    process.env.BADGES_CDN_URL ||
+    "https://cdn.jsdelivr.net/gh/ShinKhantPaing772/czvg-webncrew@main/public/badges";
+  if (cdnBase.trim().toLowerCase() === "local") {
+    return `/badges/${filename}`;
+  }
+  return `${cdnBase.trim().replace(/\/+$/, "")}/${filename}`;
+}
+
 function databaseConfiguration() {
   const port = Number(process.env.DB_PORT || 3306);
   return {
@@ -191,6 +206,7 @@ async function main() {
       const key = badge.name.trim().toLowerCase();
       const existingId = existingMap.get(key);
       const criteriaStr = JSON.stringify(badge.criteria);
+      const cdnImageUrl = resolveBadgeImageUrl(badge.imageurl);
 
       if (existingId) {
         await connection.query(
@@ -209,7 +225,7 @@ async function main() {
             badge.nameZh,
             badge.description,
             badge.descriptionZh,
-            badge.imageurl,
+            cdnImageUrl,
             badge.category,
             criteriaStr,
             badge.featured ?? null,
@@ -228,7 +244,7 @@ async function main() {
             badge.nameZh,
             badge.description,
             badge.descriptionZh,
-            badge.imageurl,
+            cdnImageUrl,
             badge.category,
             criteriaStr,
             badge.featured ?? null,

@@ -61,6 +61,11 @@ export async function GET(
       return NextResponse.json({ error: "Pilot not found" }, { status: 404 });
     }
 
+    const badgesOverview = await getPilotBadgesOverview(pilotId).catch((err) => {
+      console.error("[Dashboard Badges Overview Error]:", err);
+      return null;
+    });
+
     const [
       approvedSeconds,
       approvedCount,
@@ -69,7 +74,6 @@ export async function GET(
       recentPireps,
       ranks,
       awardGrants,
-      badgesOverview,
     ] = await Promise.all([
       models.Pirep.sum("flighttime", { where: { pilotid: pilotId, status: 1 } }),
       models.Pirep.count({ where: { pilotid: pilotId, status: 1 } }),
@@ -110,10 +114,6 @@ export async function GET(
         attributes: ["awardid", "dateawarded"],
         order: [["dateawarded", "DESC"]],
         raw: true,
-      }),
-      getPilotBadgesOverview(pilotId).catch((err) => {
-        console.error("[Dashboard Badges Overview Error]:", err);
-        return null;
       }),
     ]);
 
