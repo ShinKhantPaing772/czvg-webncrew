@@ -138,14 +138,33 @@ async function main() {
     // -----------------------------------------------------------------
     console.log("\n[Step 1/2] Verifying table schema and columns...");
     try {
-      await connection.query(`
-        ALTER TABLE \`awards\`
-          ADD COLUMN IF NOT EXISTS \`name_zh\` VARCHAR(255) NULL,
-          ADD COLUMN IF NOT EXISTS \`description_zh\` TEXT NULL,
-          ADD COLUMN IF NOT EXISTS \`category\` VARCHAR(50) NOT NULL DEFAULT 'milestone',
-          ADD COLUMN IF NOT EXISTS \`criteria\` JSON NULL
-      `);
-      console.log("✓ Awards schema verified.");
+      const [columns] = await connection.query("SHOW COLUMNS FROM `awards`");
+      const existingColNames = new Set(
+        columns.map((c) => String(c.Field).toLowerCase()),
+      );
+
+      const alters = [];
+      if (!existingColNames.has("name_zh")) {
+        alters.push("ADD COLUMN `name_zh` VARCHAR(255) NULL");
+      }
+      if (!existingColNames.has("description_zh")) {
+        alters.push("ADD COLUMN `description_zh` TEXT NULL");
+      }
+      if (!existingColNames.has("category")) {
+        alters.push(
+          "ADD COLUMN `category` VARCHAR(50) NOT NULL DEFAULT 'milestone'",
+        );
+      }
+      if (!existingColNames.has("criteria")) {
+        alters.push("ADD COLUMN `criteria` JSON NULL");
+      }
+
+      if (alters.length > 0) {
+        await connection.query(`ALTER TABLE \`awards\` ${alters.join(", ")}`);
+        console.log(`✓ Added missing columns: ${alters.join(", ")}`);
+      } else {
+        console.log("✓ Awards schema verified (all columns present).");
+      }
     } catch (schemaErr) {
       console.log("ℹ Note on column check:", schemaErr.message || schemaErr);
     }

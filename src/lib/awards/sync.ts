@@ -2,24 +2,14 @@ import sequelize from "@/lib/database";
 import { models } from "@/lib/models";
 import { MASTER_BADGES } from "./catalog";
 import { evaluateAndGrantAwards } from "./evaluator";
+import { ensureAwardColumnsExist } from "./columns";
 
 export async function syncAwardsCatalogToDatabase(): Promise<{
   createdCount: number;
   updatedCount: number;
   totalCatalog: number;
 }> {
-  try {
-    await sequelize.query(`
-      ALTER TABLE \`awards\`
-        ADD COLUMN IF NOT EXISTS \`name_zh\` VARCHAR(255) NULL,
-        ADD COLUMN IF NOT EXISTS \`description_zh\` TEXT NULL,
-        ADD COLUMN IF NOT EXISTS \`category\` VARCHAR(50) NOT NULL DEFAULT 'milestone',
-        ADD COLUMN IF NOT EXISTS \`criteria\` JSON NULL;
-    `);
-  } catch (err) {
-    // If syntax "IF NOT EXISTS" is unsupported in older MySQL, ignore duplicate column errors
-    console.warn("[Awards Sync] Column check warning:", err);
-  }
+  await ensureAwardColumnsExist().catch(() => {});
 
   const existingAwards = (await models.Award.findAll({
     attributes: [

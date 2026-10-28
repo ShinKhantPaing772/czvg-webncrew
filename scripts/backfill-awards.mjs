@@ -118,6 +118,36 @@ async function main() {
   const connection = await mysql.createConnection(databaseConfiguration());
 
   try {
+    try {
+      const [columns] = await connection.query("SHOW COLUMNS FROM `awards`");
+      const existingColNames = new Set(
+        columns.map((c) => String(c.Field).toLowerCase()),
+      );
+
+      const alters = [];
+      if (!existingColNames.has("name_zh")) {
+        alters.push("ADD COLUMN `name_zh` VARCHAR(255) NULL");
+      }
+      if (!existingColNames.has("description_zh")) {
+        alters.push("ADD COLUMN `description_zh` TEXT NULL");
+      }
+      if (!existingColNames.has("category")) {
+        alters.push(
+          "ADD COLUMN `category` VARCHAR(50) NOT NULL DEFAULT 'milestone'",
+        );
+      }
+      if (!existingColNames.has("criteria")) {
+        alters.push("ADD COLUMN `criteria` JSON NULL");
+      }
+
+      if (alters.length > 0) {
+        await connection.query(`ALTER TABLE \`awards\` ${alters.join(", ")}`);
+        console.log(`✓ Added missing columns: ${alters.join(", ")}`);
+      }
+    } catch (schemaErr) {
+      console.log("ℹ Note on column check:", schemaErr.message || schemaErr);
+    }
+
     const [pilots] = await connection.query(`
       SELECT id, callsign, name, joined
       FROM pilots

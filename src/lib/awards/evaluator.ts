@@ -1,6 +1,7 @@
 import { Op, Transaction } from "sequelize";
 import sequelize from "@/lib/database";
 import { models } from "@/lib/models";
+import { getSafeAwards } from "./columns";
 
 export interface AwardCriteria {
   type:
@@ -458,18 +459,7 @@ export async function evaluateAndGrantAwards(
     const ownedIds = new Set<number>(existingGrants.map((g) => Number(g.awardid)));
 
     // All available awards
-    const allAwards = (await models.Award.findAll({
-      attributes: [
-        "id",
-        "name",
-        "description",
-        "imageurl",
-        "category",
-        "criteria",
-      ],
-      raw: true,
-      transaction: trx,
-    })) as any[];
+    const allAwards = await getSafeAwards({ transaction: trx });
 
     const newlyEarned: any[] = [];
     const grantsToInsert: {
@@ -575,24 +565,7 @@ export async function getPilotBadgesOverview(
       attributes: ["awardid", "dateawarded"],
       raw: true,
     }) as Promise<any[]>,
-    models.Award.findAll({
-      attributes: [
-        "id",
-        "name",
-        "name_zh",
-        "description",
-        "description_zh",
-        "imageurl",
-        "category",
-        "criteria",
-        "featured",
-      ],
-      order: [
-        ["category", "ASC"],
-        ["id", "ASC"],
-      ],
-      raw: true,
-    }) as Promise<any[]>,
+    getSafeAwards(),
   ]);
 
   if (!pilot) {
@@ -634,7 +607,7 @@ export async function getPilotBadgesOverview(
       imageurl: award.imageurl,
       category: award.category || "milestone",
       criteria,
-      featured: award.featured,
+      featured: award.featured ?? null,
       isUnlocked,
       dateAwarded,
       progress,
