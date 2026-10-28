@@ -3,6 +3,7 @@ import { models } from "@/lib/models";
 
 let columnsChecked = false;
 let checkPromise: Promise<void> | null = null;
+let catalogCheckTriggered = false;
 
 /**
  * Checks and auto-migrates missing columns in the `awards` table.
@@ -87,6 +88,13 @@ export async function getSafeAwards(options?: {
   attributes?: string[];
 }): Promise<SafeAwardRecord[]> {
   await ensureAwardColumnsExist().catch(() => {});
+
+  if (!catalogCheckTriggered) {
+    catalogCheckTriggered = true;
+    import("./sync")
+      .then((m) => m.ensureAwardCatalogSeeded())
+      .catch(() => {});
+  }
 
   const fullAttributes = options?.attributes || [
     "id",
