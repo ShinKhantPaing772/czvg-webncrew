@@ -152,34 +152,47 @@ async function main() {
     // Step 1: Ensure Table Schema
     // -----------------------------------------------------------------
     console.log("\n[Step 1/2] Verifying table schema and columns...");
+    let existingColNames = new Set();
     try {
       const [columns] = await connection.query("SHOW COLUMNS FROM `awards`");
-      const existingColNames = new Set(
-        columns.map((c) => String(c.Field).toLowerCase()),
+      existingColNames = new Set(
+        columns.map((c) =>
+          String(
+            c.Field || c.field || c.COLUMN_NAME || c.column_name || "",
+          ).toLowerCase(),
+        ),
       );
 
-      const alters = [];
       if (!existingColNames.has("name_zh")) {
-        alters.push("ADD COLUMN `name_zh` VARCHAR(255) NULL");
+        await connection
+          .query("ALTER TABLE `awards` ADD COLUMN `name_zh` VARCHAR(255) NULL")
+          .then(() => existingColNames.add("name_zh"))
+          .catch((e) => console.log("ℹ Note on name_zh column:", e.message || e));
       }
       if (!existingColNames.has("description_zh")) {
-        alters.push("ADD COLUMN `description_zh` TEXT NULL");
+        await connection
+          .query("ALTER TABLE `awards` ADD COLUMN `description_zh` TEXT NULL")
+          .then(() => existingColNames.add("description_zh"))
+          .catch((e) => console.log("ℹ Note on description_zh column:", e.message || e));
       }
       if (!existingColNames.has("category")) {
-        alters.push(
-          "ADD COLUMN `category` VARCHAR(50) NOT NULL DEFAULT 'milestone'",
-        );
+        await connection
+          .query("ALTER TABLE `awards` ADD COLUMN `category` VARCHAR(50) NOT NULL DEFAULT 'milestone'")
+          .then(() => existingColNames.add("category"))
+          .catch((e) => console.log("ℹ Note on category column:", e.message || e));
       }
       if (!existingColNames.has("criteria")) {
-        alters.push("ADD COLUMN `criteria` JSON NULL");
+        await connection
+          .query("ALTER TABLE `awards` ADD COLUMN `criteria` JSON NULL")
+          .then(() => existingColNames.add("criteria"))
+          .catch(async () => {
+            await connection
+              .query("ALTER TABLE `awards` ADD COLUMN `criteria` LONGTEXT NULL")
+              .then(() => existingColNames.add("criteria"))
+              .catch((e) => console.log("ℹ Note on criteria column:", e.message || e));
+          });
       }
-
-      if (alters.length > 0) {
-        await connection.query(`ALTER TABLE \`awards\` ${alters.join(", ")}`);
-        console.log(`✓ Added missing columns: ${alters.join(", ")}`);
-      } else {
-        console.log("✓ Awards schema verified (all columns present).");
-      }
+      console.log("✓ Awards schema check completed.");
     } catch (schemaErr) {
       console.log("ℹ Note on column check:", schemaErr.message || schemaErr);
     }
@@ -209,48 +222,82 @@ async function main() {
       const cdnImageUrl = resolveBadgeImageUrl(badge.imageurl);
 
       if (existingId) {
-        await connection.query(
-          `
-          UPDATE \`awards\`
-          SET \`name_zh\` = ?,
-              \`description\` = ?,
-              \`description_zh\` = ?,
-              \`imageurl\` = ?,
-              \`category\` = ?,
-              \`criteria\` = ?,
-              \`featured\` = ?
-          WHERE \`id\` = ?
-        `,
-          [
-            badge.nameZh,
-            badge.description,
-            badge.descriptionZh,
-            cdnImageUrl,
-            badge.category,
-            criteriaStr,
-            badge.featured ?? null,
-            existingId,
-          ],
-        );
+        if (existingColNames.has("name_zh")) {
+          await connection.query(
+            `
+            UPDATE \`awards\`
+            SET \`name_zh\` = ?,
+                \`description\` = ?,
+                \`description_zh\` = ?,
+                \`imageurl\` = ?,
+                \`category\` = ?,
+                \`criteria\` = ?,
+                \`featured\` = ?
+            WHERE \`id\` = ?
+          `,
+            [
+              badge.nameZh,
+              badge.description,
+              badge.descriptionZh,
+              cdnImageUrl,
+              badge.category,
+              criteriaStr,
+              badge.featured ?? null,
+              existingId,
+            ],
+          );
+        } else {
+          await connection.query(
+            `
+            UPDATE \`awards\`
+            SET \`description\` = ?,
+                \`imageurl\` = ?,
+                \`featured\` = ?
+            WHERE \`id\` = ?
+          `,
+            [
+              badge.description,
+              cdnImageUrl,
+              badge.featured ?? null,
+              existingId,
+            ],
+          );
+        }
         updatedBadges++;
       } else {
-        const [res] = await connection.query(
-          `
-          INSERT INTO \`awards\` (\`name\`, \`name_zh\`, \`description\`, \`description_zh\`, \`imageurl\`, \`category\`, \`criteria\`, \`featured\`)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `,
-          [
-            badge.name,
-            badge.nameZh,
-            badge.description,
-            badge.descriptionZh,
-            cdnImageUrl,
-            badge.category,
-            criteriaStr,
-            badge.featured ?? null,
-          ],
-        );
-        existingMap.set(key, res.insertId);
+        if (existingColNames.has("name_zh")) {
+          const [res] = await connection.query(
+            `
+            INSERT INTO \`awards\` (\`name\`, \`name_zh\`, \`description\`, \`description_zh\`, \`imageurl\`, \`category\`, \`criteria\`, \`featured\`)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          `,
+            [
+              badge.name,
+              badge.nameZh,
+              badge.description,
+              badge.descriptionZh,
+              cdnImageUrl,
+              badge.category,
+              criteriaStr,
+              badge.featured ?? null,
+            ],
+          );
+          existingMap.set(key, res.insertId);
+        } else {
+          const [res] = await connection.query(
+            `
+            INSERT INTO \`awards\` (\`name\`, \`description\`, \`imageurl\`, \`featured\`)
+            VALUES (?, ?, ?, ?)
+          `,
+            [
+              badge.name,
+              badge.description,
+              cdnImageUrl,
+              badge.featured ?? null,
+            ],
+          );
+          existingMap.set(key, res.insertId);
+        }
         insertedBadges++;
       }
     }
