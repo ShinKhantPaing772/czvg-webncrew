@@ -14,8 +14,6 @@ import { useSession } from "@/hooks/use-session";
 import { LanguageSwitcher, useI18n } from "@/lib/i18n";
 import { getCrewLandingPath, usesApplicantPortal } from "@/lib/pilot-status";
 import { logout } from "@/lib/utils/auth";
-import { HalloweenThemeToggle } from "@/components/halloween-theme-toggle";
-import { HalloweenIcon } from "@/components/halloween-icon";
 
 const brandLogoSrc = "/brand/czvg-logo-horizontal.png";
 const brandLogoWhiteSrc = "/brand/czvg-logo-horizontal-white.png";
@@ -64,7 +62,7 @@ export function Header() {
         <div className="flex min-w-0 items-center gap-2">
           <Link
             href="/"
-            className="halloween-logo-container flex min-w-0 items-center gap-2 rounded-lg transition-all"
+            className="flex min-w-0 items-center gap-2 rounded-lg transition-all"
           >
             <img
               src={brandLogoSrc}
@@ -76,13 +74,6 @@ export function Header() {
               alt="China Southern Virtual Group Logo"
               className="brand-logo-dark h-10 w-auto max-w-[190px] shrink-0 object-contain"
             />
-            <span className="halloween-logo-badge hidden items-center gap-1 rounded-full border border-orange-500/30 bg-orange-500/10 px-2 py-0.5 text-[11px] font-bold text-orange-400 shadow-[0_0_8px_rgba(249,115,22,0.25)] sm:inline-flex">
-              CZVG
-              <HalloweenIcon
-                name="jack-o-lantern"
-                className="h-3.5 w-3.5 shrink-0"
-              />
-            </span>
           </Link>
         </div>
         <nav className="hidden items-center gap-1 md:flex">
@@ -137,7 +128,6 @@ export function Header() {
           )}
         </nav>
         <div className="flex shrink-0 items-center gap-2">
-          <HalloweenThemeToggle />
           <LanguageSwitcher />
           {user ? (
             <DropdownMenu>
@@ -202,7 +192,7 @@ export function Header() {
         <div className="flex items-center justify-between">
           <Link
             href="/"
-            className="halloween-logo-container flex items-center gap-2 rounded-lg transition-all"
+            className="flex items-center gap-2 rounded-lg transition-all"
           >
             <img
               src={brandLogoSrc}
@@ -214,13 +204,6 @@ export function Header() {
               alt="China Southern Virtual Group Logo"
               className="brand-logo-dark h-10 w-auto max-w-[220px] object-contain"
             />
-            <span className="halloween-logo-badge inline-flex items-center gap-1 rounded-full border border-orange-500/30 bg-orange-500/10 px-2 py-0.5 text-[11px] font-bold text-orange-400 shadow-[0_0_8px_rgba(249,115,22,0.25)]">
-              CZVG
-              <HalloweenIcon
-                name="jack-o-lantern"
-                className="h-3.5 w-3.5 shrink-0"
-              />
-            </span>
           </Link>
           <Button
             variant="outline"

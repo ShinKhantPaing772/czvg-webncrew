@@ -3,13 +3,11 @@
 import React, { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
-import { useTheme } from "@/components/theme-provider";
 import { useI18n } from "@/lib/i18n";
 
 function NavigationProgressInner() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { isHalloween } = useTheme();
   const { t } = useI18n();
 
   const [isVisible, setIsVisible] = useState(false);
@@ -192,11 +190,7 @@ function NavigationProgressInner() {
         }}
       >
         <div
-          className={`h-full transition-all duration-200 ease-out ${
-            isHalloween
-              ? "bg-gradient-to-r from-amber-500 via-orange-500 to-purple-600 shadow-[0_0_12px_rgba(249,115,22,0.9)]"
-              : "bg-gradient-to-r from-sky-500 via-[#0052a5] to-[#00a3e0] shadow-[0_0_10px_rgba(0,82,165,0.8)]"
-          }`}
+          className="h-full bg-gradient-to-r from-sky-500 via-[#0052a5] to-[#00a3e0] shadow-[0_0_10px_rgba(0,82,165,0.8)] transition-all duration-200 ease-out"
           style={{
             width: `${progress}%`,
           }}
@@ -208,20 +202,14 @@ function NavigationProgressInner() {
         aria-hidden={!isVisible}
         role="status"
         aria-live="polite"
-        className={`pointer-events-none fixed top-3 right-4 z-[99999] flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold shadow-xl backdrop-blur-md transition-all duration-200 select-none ${
+        className={`pointer-events-none fixed top-3 right-4 z-[99999] flex items-center gap-2 rounded-full border border-slate-200/80 bg-white/95 px-3 py-1.5 text-xs font-semibold text-slate-800 shadow-[0_4px_20px_rgba(0,0,0,0.12)] backdrop-blur-md transition-all duration-200 select-none dark:border-slate-800 dark:bg-slate-900/95 dark:text-slate-100 ${
           isVisible
             ? "translate-y-0 opacity-100 scale-100"
             : "-translate-y-2 opacity-0 scale-95"
-        } ${
-          isHalloween
-            ? "border-orange-500/30 bg-[#1c1917]/95 text-orange-400 shadow-[0_4px_20px_rgba(249,115,22,0.25)]"
-            : "border-slate-200/80 bg-white/95 text-slate-800 shadow-[0_4px_20px_rgba(0,0,0,0.12)] dark:border-slate-800 dark:bg-slate-900/95 dark:text-slate-100"
         }`}
       >
         <Loader2
-          className={`size-3.5 shrink-0 animate-spin ${
-            isHalloween ? "text-orange-500" : "text-[#0052a5]"
-          }`}
+          className="size-3.5 shrink-0 animate-spin text-[#0052a5]"
         />
         <span className="tracking-wide">
           {t("Loading...", "加载中...")}

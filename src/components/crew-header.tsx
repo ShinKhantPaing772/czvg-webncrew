@@ -33,7 +33,6 @@ import { clearSessionCache, useSession } from "@/hooks/use-session";
 import { LanguageSwitcher, useI18n } from "@/lib/i18n";
 import { clearApiCache } from "@/lib/utils/api";
 import { logout } from "@/lib/utils/auth";
-import { HalloweenThemeToggle } from "@/components/halloween-theme-toggle";
 
 interface CrewHeaderProps {
   children?: React.ReactNode;
@@ -363,7 +362,6 @@ export function CrewHeader({ children }: CrewHeaderProps) {
         {isSidebarOpen ? (
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-1 px-1">
-              <HalloweenThemeToggle className="flex-1 justify-center" />
               <LanguageSwitcher className="flex-1 justify-center" />
             </div>
             <div className="flex h-8 items-center justify-between gap-2 rounded-[6px] px-2.5">
@@ -384,7 +382,6 @@ export function CrewHeader({ children }: CrewHeaderProps) {
           </div>
         ) : (
           <div className="flex flex-col items-center gap-1">
-            <HalloweenThemeToggle compact className="size-8 p-0" />
             <LanguageSwitcher compact className="size-8 p-0" />
             <button
               type="button"
@@ -430,7 +427,6 @@ export function CrewHeader({ children }: CrewHeaderProps) {
               className="brand-logo-dark h-7 w-auto max-w-[140px] object-contain"
             />
             <div className="flex items-center gap-1">
-              <HalloweenThemeToggle compact className="size-8 p-0" />
               <LanguageSwitcher compact className="size-8 p-0" />
             </div>
             <SheetTitle className="sr-only">CZVG Crew</SheetTitle>

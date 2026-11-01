@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { FeaturedRouteRotator } from "@/components/featured-route-rotator";
-import { HalloweenIcon, type HalloweenIconName } from "@/components/halloween-icon";
 
 const stats = [
   { value: "300+", label: "Destinations around the world" },
@@ -29,8 +28,6 @@ const highlights = [
     body: "Choose from domestic sectors, long-haul wide-body flights, cargo operations, and partner routes.",
     href: "/operations/routes",
     action: "Explore routes",
-    watermark: "cobweb" as HalloweenIconName,
-    variant: "orange",
   },
   {
     icon: Plane,
@@ -38,8 +35,6 @@ const highlights = [
     body: "Fly China Southern, Xiamen Air, Chongqing Airlines, Hebei Airlines, Jiangxi Air, and more.",
     href: "/operations/fleet",
     action: "View fleet",
-    watermark: "bat" as HalloweenIconName,
-    variant: "purple",
   },
   {
     icon: Users,
@@ -47,8 +42,6 @@ const highlights = [
     body: "Join an Infinite Flight virtual airline group built around realistic schedules and shared events.",
     href: "/crew?type=signup",
     action: "Apply now",
-    watermark: "cobweb" as HalloweenIconName,
-    variant: "orange",
   },
 ];
 
@@ -143,24 +136,11 @@ export default function Home() {
             priority
           />
           {/* Default cold blue overlay */}
-          <div className="hero-overlay-standard absolute inset-0 bg-[linear-gradient(90deg,rgba(2,24,49,0.92),rgba(2,24,49,0.76)_46%,rgba(2,24,49,0.2))]" />
-          {/* Halloween twilight purple-orange gradient overlay */}
-          <div className="hero-overlay-halloween absolute inset-0" />
-
-          {/* Glowing Moon & Bats Silhouette in sky */}
-          <div
-            aria-hidden="true"
-            className="halloween-hero-bats pointer-events-none absolute right-4 top-8 select-none sm:right-16 sm:top-12 md:right-24 md:top-16"
-          >
-            <HalloweenIcon
-              name="moon-bats"
-              className="h-44 w-44 text-amber-500/20 drop-shadow-[0_0_24px_rgba(245,158,11,0.35)] sm:h-56 sm:w-56 md:h-72 md:w-72"
-            />
-          </div>
+          <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(2,24,49,0.92),rgba(2,24,49,0.76)_46%,rgba(2,24,49,0.2))]" />
 
           <div className="site-container relative z-10 flex min-h-[calc(100vh-4rem)] items-center py-14">
             <div className="max-w-4xl pb-16 pt-10 text-white">
-              <div className="hero-cert-badge mb-6 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-semibold uppercase text-white/85 backdrop-blur transition-all">
+              <div               className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-semibold uppercase text-white/85 backdrop-blur transition-all">
                 <BadgeCheck className="h-4 w-4 text-sky-200" />
                 IFVARB Approved Virtual Airline
               </div>
@@ -179,7 +159,7 @@ export default function Home() {
                 <Button
                   asChild
                   size="lg"
-                  className="hero-primary-btn bg-white font-bold text-primary hover:bg-sky-50"
+                  className="bg-white font-bold text-primary hover:bg-sky-50"
                 >
                   <Link href="/crew?type=signup">
                     Apply Now
@@ -190,7 +170,7 @@ export default function Home() {
                   asChild
                   size="lg"
                   variant="outline"
-                  className="hero-secondary-btn border-white/50 bg-transparent text-white backdrop-blur-md hover:bg-white/10 hover:text-white"
+                  className="border-white/50 bg-transparent text-white backdrop-blur-md hover:bg-white/10 hover:text-white"
                 >
                   <Link href="/about-us">Learn More</Link>
                 </Button>
@@ -199,22 +179,12 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="stats-section border-b border-slate-200 bg-white transition-colors">
+        <section className="border-b border-slate-200 bg-white transition-colors">
           <div className="site-container">
             <div className="grid gap-0 divide-y divide-slate-200 md:grid-cols-4 md:divide-x md:divide-y-0">
               {stats.map((stat) => (
                 <div key={stat.label} className="group relative py-6 md:px-8">
-                  {/* Cobweb watermark in top-right */}
-                  <div
-                    aria-hidden="true"
-                    className="halloween-stat-cobweb pointer-events-none absolute right-2 top-2 select-none"
-                  >
-                    <HalloweenIcon
-                      name="cobweb"
-                      className="h-8 w-8 text-orange-400 opacity-10 transition-opacity duration-300 group-hover:opacity-25"
-                    />
-                  </div>
-                  <p className="stat-number text-3xl font-bold text-primary transition-all">
+                  <p className="text-3xl font-bold text-primary transition-all">
                     {stat.value}
                   </p>
                   <p className="mt-1 text-sm font-medium text-slate-600">
@@ -237,44 +207,13 @@ export default function Home() {
             <div className="mt-10 grid gap-5 lg:grid-cols-3">
               {highlights.map((item) => {
                 const HighlightIcon = item.icon;
-                const isPurple = item.variant === "purple";
-
                 return (
                   <Link
                     key={item.title}
                     href={item.href}
-                    className={`site-card highlight-card ${
-                      isPurple ? "highlight-purple" : "highlight-orange"
-                    } group relative overflow-hidden p-6 transition-all duration-300 hover:-translate-y-1`}
+                    className="site-card group relative overflow-hidden p-6 transition-all duration-300 hover:-translate-y-1"
                   >
-                    {/* Top 1px highlight gradient line */}
-                    <div
-                      aria-hidden="true"
-                      className="halloween-card-topline pointer-events-none absolute inset-x-0 top-0 h-[1px]"
-                    />
-
-                    {/* Top-right watermark icon */}
-                    <div
-                      aria-hidden="true"
-                      className="halloween-card-watermark pointer-events-none absolute -top-1 -right-1 select-none"
-                    >
-                      <HalloweenIcon
-                        name={item.watermark}
-                        className={`h-11 w-11 transition-all duration-300 ${
-                          isPurple
-                            ? "text-purple-400 opacity-[0.08] group-hover:scale-105 group-hover:opacity-[0.22]"
-                            : "text-orange-400 opacity-[0.08] group-hover:scale-105 group-hover:opacity-[0.22]"
-                        }`}
-                      />
-                    </div>
-
-                    <div
-                      className={`relative z-10 flex h-11 w-11 items-center justify-center rounded-lg transition-colors ${
-                        isPurple
-                          ? "highlight-icon-purple bg-primary/10 text-primary"
-                          : "highlight-icon-orange bg-primary/10 text-primary"
-                      }`}
-                    >
+                    <div className="relative z-10 flex h-11 w-11 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors">
                       <HighlightIcon className="h-5 w-5" />
                     </div>
                     <h3 className="relative z-10 mt-5 text-xl font-bold text-slate-950">

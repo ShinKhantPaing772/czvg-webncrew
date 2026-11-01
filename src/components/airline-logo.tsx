@@ -10,7 +10,7 @@ export interface AirlineLogoProps {
 
 /**
  * Theme-adaptive Airline Logo.
- * Automatically switches between standard (light) and high-contrast white (dark/halloween)
+ * Automatically switches between standard (light) and high-contrast white (dark)
  * logo assets via CSS classes `.brand-logo-light` and `.brand-logo-dark`, preventing SSR flash.
  */
 export function AirlineLogo({

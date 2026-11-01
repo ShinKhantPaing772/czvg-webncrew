@@ -15,7 +15,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/components/theme-provider", () => ({
-  useTheme: () => ({ isHalloween: false }),
+  useTheme: () => ({}),
 }));
 
 vi.mock("@/lib/i18n", () => ({
