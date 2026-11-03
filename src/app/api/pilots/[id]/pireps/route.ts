@@ -37,13 +37,14 @@ const pirepInclude: Includeable[] = [
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const auth = await requireCrewAuth(request);
     if (!auth.ok) return auth.response;
 
-    const pilotId = Number(params.id);
+    const { id } = await params;
+    const pilotId = Number(id);
     if (!Number.isInteger(pilotId) || pilotId <= 0) {
       return NextResponse.json({ error: "Invalid pilot id" }, { status: 400 });
     }
@@ -201,13 +202,14 @@ export async function GET(
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const auth = await requireCrewAuth(request);
     if (!auth.ok) return auth.response;
 
-    const pilotId = Number(params.id);
+    const { id } = await params;
+    const pilotId = Number(id);
     if (!Number.isInteger(pilotId) || pilotId <= 0) {
       return NextResponse.json({ error: "Invalid pilot id" }, { status: 400 });
     }

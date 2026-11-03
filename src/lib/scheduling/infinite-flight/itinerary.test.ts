@@ -38,6 +38,13 @@ describe("IF itinerary ordering with optional planned times", () => {
     const external = { ...untimed, briefing: "External", originIcao: "KJFK", destinationIcao: "KBOS" };
     expect(() => assertIfItinerary({ schedules: [external], localFlights: [local], target: { publicId: PUBLIC, desired: desired.schedule } })).toThrow("discontinuous");
   });
+  it("allows IF publishing across an external route gap while preserving local queue continuity", () => {
+    const external = { ...untimed, briefing: "External", originIcao: "KJFK", destinationIcao: "KBOS" };
+    const target = { publicId: PUBLIC, desired: desired.schedule };
+    expect(() => assertIfItinerary({ schedules: [external], localFlights: [local], target, allowExternalRouteDiscontinuity: true })).not.toThrow();
+    const second = { ...local, id: 2, public_id: NEXT, queue_order: 2, departure: "KSEA", arrival: "KLAX" };
+    expect(() => assertIfItinerary({ schedules: [external], localFlights: [local, second], target, allowExternalRouteDiscontinuity: true })).toThrow("local aircraft itinerary is discontinuous");
+  });
   it("requires the preceding untimed local flight to publish before the next leg", () => {
     const second = { ...local, id: 2, public_id: NEXT, queue_order: 2, departure: "CYVR", arrival: "KSEA" };
     const payload = buildIfPayload(second, desired.crew);

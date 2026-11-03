@@ -42,7 +42,7 @@ beforeEach(() => {
 });
 afterEach(() => { vi.resetAllMocks(); vi.unstubAllEnvs(); });
 
-describe("IF durable publishing worker", () => {
+describe("IF durable publishing", () => {
   it.each([
     ["freight", 3], ["ferry", 12], ["charter", 2], ["other", 12],
   ])("publishes the selected %s local flight type as IF category %s", async (flightType, expected) => {
@@ -166,11 +166,24 @@ describe("IF durable publishing worker", () => {
     expect(mocks.binding).not.toHaveBeenCalled(); expect(mocks.create).not.toHaveBeenCalled();
   });
 
-  it("blocks an external earlier leg that would leave the aircraft at the wrong airport", async () => {
+  it("publishes despite an external earlier leg that does not connect to the local flight", async () => {
     const payload = buildIfPayload(flight, [{ userId: UUID, role: 0 }]);
-    mocks.schedules.mockReset().mockResolvedValue([{ ...payload.schedule, id: REMOTE_ID, aircraftId: UUID, organizationId: UUID, status: 1, crew: [], briefing: "External", originIcao: "CYYZ", destinationIcao: "KJFK", scheduledDepartureUtc: "2026-10-04T05:00:00Z", scheduledArrivalUtc: "2026-10-04T08:00:00Z" }]);
+    const external = { ...payload.schedule, id: "40000000-0000-0000-0000-000000000004", aircraftId: UUID, organizationId: UUID, status: 1, crew: [], briefing: "External", originIcao: "CYYZ", destinationIcao: "KJFK", scheduledDepartureUtc: "2026-10-04T05:00:00Z", scheduledArrivalUtc: "2026-10-04T08:00:00Z" };
+    const created = { ...payload.schedule, id: REMOTE_ID, aircraftId: UUID, organizationId: UUID, status: 1, crew: payload.crew };
+    mocks.schedules.mockReset().mockResolvedValueOnce([external]).mockResolvedValue([external, created]);
+    expect(await runIfLivePublisher()).toMatchObject({ published: 1, states: { published: 1 } });
+    expect(mocks.create).toHaveBeenCalledOnce();
+  });
+
+  it("still blocks publishing when local flights do not connect to one another", async () => {
+    const payload = buildIfPayload(flight, [{ userId: UUID, role: 0 }]);
+    mocks.liveFlight.findAll.mockImplementation(async (options: any) => options.attributes?.[0] === "id" ? [] : [
+      flight,
+      { ...flight, id: 2, public_id: "30000000-0000-0000-0000-000000000003", queue_order: 2, departure: "KSEA", arrival: "KLAX", revision: 1, published_revision: 0 },
+    ]);
+    mocks.schedules.mockReset().mockResolvedValue([{ ...payload.schedule, id: REMOTE_ID, aircraftId: UUID, organizationId: UUID, status: 1, crew: [], briefing: "External", originIcao: "KJFK", destinationIcao: "KBOS", scheduledDepartureUtc: "2026-10-04T05:00:00Z", scheduledArrivalUtc: "2026-10-04T08:00:00Z" }]);
     expect(await runIfLivePublisher()).toMatchObject({ published: 0, states: { conflict: 1 } });
-    expect(mocks.create).not.toHaveBeenCalled(); expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.create).not.toHaveBeenCalled();
   });
 
   it("selects eligible aircraft before limiting the oldest queue window", async () => {
@@ -225,7 +238,7 @@ describe("IF durable publishing worker", () => {
     expect(mocks.token).not.toHaveBeenCalled();
   });
 
-  it.each(["processing", "done"])("does not reclaim a job another worker changed to %s", async state => {
+  it.each(["processing", "done"])("does not reclaim a job another publisher changed to %s", async state => {
     mocks.outbox.findByPk.mockImplementation(async () => ({ ...job, state }));
     expect(await runIfLivePublisher()).toMatchObject({ processed: 0 });
     expect(job.update).not.toHaveBeenCalled(); expect(mocks.token).not.toHaveBeenCalled();
@@ -276,7 +289,7 @@ describe("local aircraft publishing scope", () => {
     expect(mocks.outbox.findAll).not.toHaveBeenCalled();
   });
 
-  it.each([0, -1, 1.5, Number.NaN, Number.MAX_SAFE_INTEGER + 1])("rejects invalid worker scope %s before DB or IF work", async aircraftId => {
+  it.each([0, -1, 1.5, Number.NaN, Number.MAX_SAFE_INTEGER + 1])("rejects invalid publishing scope %s before DB or IF work", async aircraftId => {
     await expect(runIfLivePublisher({ aircraftId })).rejects.toMatchObject({ code: "validation", status: 400 });
     expect(mocks.query).not.toHaveBeenCalled(); expect(mocks.token).not.toHaveBeenCalled();
   });

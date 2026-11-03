@@ -6,13 +6,13 @@ import { requirePermission } from "@/lib/server-auth";
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const auth = await requirePermission(request, "routes");
     if (!auth.ok) return auth.response;
 
-    const routeId = params.id;
+    const { id: routeId } = await params;
 
     // Build the SQL query to get route details with aircraft
     const routeQuery = `

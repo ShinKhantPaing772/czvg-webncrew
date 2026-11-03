@@ -1,7 +1,9 @@
+import { fileURLToPath } from "node:url";
 import { securityHeaders } from "./src/lib/http-security.mjs";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  outputFileTracingRoot: fileURLToPath(new URL(".", import.meta.url)),
   async headers() {
     return [
       {

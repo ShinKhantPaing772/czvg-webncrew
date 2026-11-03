@@ -101,6 +101,7 @@ export function assertIfItinerary(input: {
   requirePublishedPredecessors?: boolean;
   requireUnstartedReservations?: boolean;
   allowStartedReservations?: boolean;
+  allowExternalRouteDiscontinuity?: boolean;
 }) {
   const known = (input.localFlights ?? []).filter(flight => !flight.status || ["approved", "in_progress"].includes(flight.status) || REMOVAL_STATUSES.has(flight.status));
   const local = known.filter(flight => !flight.status || !REMOVAL_STATUSES.has(flight.status));
@@ -160,24 +161,33 @@ export function assertIfItinerary(input: {
   // Removing the first planned leg must not silently strand a remaining foreign flight at its destination.
   const origin = input.target && !input.target.desired && targetRemote && active[0] === targetRemote
     ? targetRemote.originIcao.toUpperCase() : null;
-  const routeConflict = (rows: IfItineraryLeg[]) => {
-    if (origin && rows.length && rows[0].origin !== origin) return new IfLiveError(`Removing this reservation would leave the aircraft at ${origin}, but the next flight departs from ${rows[0].origin}`, "conflict", 409);
+  const routeConflict = (rows: IfItineraryLeg[], checkContinuity = true, checkRemovalOrigin = !input.allowExternalRouteDiscontinuity) => {
+    if (checkRemovalOrigin && origin && rows.length && rows[0].origin !== origin) return new IfLiveError(`Removing this reservation would leave the aircraft at ${origin}, but the next flight departs from ${rows[0].origin}`, "conflict", 409);
     const timed = rows.filter(row => row.departure !== null && row.arrival !== null);
     for (let index = 1; index < timed.length; index += 1) {
       if (timed[index].departure! < timed[index - 1].arrival!) return new IfLiveError("This flight overlaps another active IF or local reservation for the aircraft; review its bookings before publishing", "conflict", 409);
     }
-    for (let index = 1; index < rows.length; index += 1) {
+    for (let index = 1; checkContinuity && index < rows.length; index += 1) {
       const previous = rows[index - 1]; const next = rows[index];
       if (previous.destination !== next.origin) return new IfLiveError(`The aircraft itinerary is discontinuous: the preceding flight arrives at ${previous.destination}, but the next departs from ${next.origin}`, "conflict", 409);
     }
     return null;
   };
-  const conflict = routeConflict(itinerary);
+  const conflict = routeConflict(itinerary, !input.allowExternalRouteDiscontinuity);
   if (conflict) {
-    if (input.target && !input.target.desired && pendingRemovals.size && !routeConflict(itinerary.filter(row => !row.remoteId || !pendingRemovals.has(row.remoteId)))) {
+    if (input.target && !input.target.desired && pendingRemovals.size && !routeConflict(itinerary.filter(row => !row.remoteId || !pendingRemovals.has(row.remoteId)), !input.allowExternalRouteDiscontinuity)) {
       throw new IfLiveError("Remove the aircraft's downstream owned IF reservations before removing this leg", "removal_pending", 409);
     }
     throw conflict;
+  }
+  if (input.allowExternalRouteDiscontinuity) {
+    const localItinerary = orderedIfLocalFlights(local).map(flight => leg(flight.departure, flight.arrival, flight.scheduled_departure, flight.scheduled_arrival, flight.public_id, flight.if_schedule_id ?? null, null));
+    const localConflict = routeConflict(localItinerary, false, true);
+    if (localConflict) throw localConflict;
+    for (let index = 1; index < localItinerary.length; index += 1) {
+      const previous = localItinerary[index - 1]; const next = localItinerary[index];
+      if (previous.destination !== next.origin) throw new IfLiveError(`The local aircraft itinerary is discontinuous: the preceding flight arrives at ${previous.destination}, but the next departs from ${next.origin}`, "conflict", 409);
+    }
   }
   if (target && input.requirePublishedPredecessors) {
     const preceding = itinerary.slice(0, itinerary.indexOf(target));

@@ -146,6 +146,7 @@ async function publishClaimedJob(job: IfLiveOutbox) {
     last_published_payload: row.last_published_payload as PublishedPayload | null, revision: row.revision, published_revision: row.published_revision }));
   const result = await synchronizeIfFlight({ publicId: flight.public_id, remoteId: flight.if_schedule_id, schedules, desired,
     previous: flight.last_published_payload as PublishedPayload | null, action, uncertainCreation: uncertain, localFlights,
+    allowExternalRouteDiscontinuity: true,
     api: {
       create: async body => { await beforeWrite(); return createIfSchedule(token, aircraft.if_aircraft_id!, body); },
       update: async (id, body) => { await beforeWrite(); return updateIfSchedule(token, aircraft.if_aircraft_id!, id, body); },
@@ -157,14 +158,14 @@ async function publishClaimedJob(job: IfLiveOutbox) {
   if (desired && result.remoteId) {
     const currentSchedules = await getIfSchedules(token, aircraft.if_aircraft_id, { fresh: true });
     const localOrder = await LiveFlight.findAll({ where: { live_aircraft_id: flight.live_aircraft_id, status: { [Op.in]: ["approved", "in_progress"] } }, attributes: ["public_id"], order: [["queue_order", "ASC"], ["id", "ASC"]] });
-    const reorder = planIfSequence(currentSchedules, localOrder, result.remoteId, localFlights);
+    const reorder = planIfSequence(currentSchedules, localOrder, result.remoteId, localFlights, true);
     if (reorder) { await beforeWrite(); await reorderIfSchedule(token, aircraft.if_aircraft_id, reorder.scheduleId, reorder.afterId); }
   }
   await finishJob(job.id, flight.id, job.revision, desired, result.remoteId);
   return "published";
 }
 
-/** Protected worker and admin endpoints share the same bounded, leased queue. */
+/** Admin publishing and post-approval attempts share the same bounded, leased queue. */
 export async function runIfLivePublisher(options: IfPublishOptions = {}) {
   if ((options.aircraftId !== undefined && options.flightId !== undefined) ||
       [options.aircraftId, options.flightId].some(value => value !== undefined && (!Number.isSafeInteger(value) || value <= 0 || value > 2_147_483_647))) {
@@ -225,7 +226,7 @@ async function publishCandidates(attemptedIds: number[], options: IfPublishOptio
   // Filter blocked chains before LIMIT, using the existing aircraft queue and
   // outbox indexes. A busy aircraft must not occupy every candidate slot.
   // IS_FREE_LOCK is only a selection hint; GET_LOCK and transactional checks
-  // below remain the authority when another worker races this snapshot.
+  // below remain the authority when another publisher races this snapshot.
   const queryBudgetMs = Math.min(5000, Math.max(1, Math.floor(ifBudgetRemainingMs() - 750)));
   return sequelize.query<IfLiveOutbox>(`
     SELECT /*+ MAX_EXECUTION_TIME(${queryBudgetMs}) */ pending.*
@@ -303,7 +304,7 @@ async function runBoundedIfLivePublisher(options: IfPublishOptions) {
         const currentFlight = await LiveFlight.findByPk(job.flight_id, { transaction });
         if (currentFlight?.live_aircraft_id !== options.aircraftId) return;
       }
-      const message = "The publishing worker stopped before confirmation; reconcile the IF schedule before retrying";
+      const message = "The publishing attempt stopped before confirmation; reconcile the IF schedule before retrying";
       const [updated] = await IfLiveOutbox.update({ state: "reconciliation", lease_until: null, error: message }, { where: { id: job.id, state: "processing", lease_until: { [Op.lt]: new Date() } }, transaction });
       if (updated) await LiveFlight.update({ publishing_state: "reconciliation", error: message }, { where: { id: job.flight_id, revision: job.revision }, transaction });
     });
@@ -376,7 +377,7 @@ export async function retryIfPublish(flightId: number, action: "retry" | "overwr
     if (!flight) throw new IfLiveError("Flight not found", "not_found", 404);
     if (!["approved", ...REMOVAL_STATES].includes(flight.status)) throw new IfLiveError("Only planned or cancelled flights can be republished", "validation", 409);
     const current = await IfLiveOutbox.findOne({ where: { flight_id: flight.id, revision: flight.revision }, transaction, lock: transaction.LOCK.UPDATE });
-    if (current?.state === "processing") throw new IfLiveError("This flight is currently publishing; wait for the worker to finish", "conflict", 409);
+    if (current?.state === "processing") throw new IfLiveError("This flight is currently publishing; wait for the publishing attempt to finish", "conflict", 409);
     const values = { state: "queued", action: action === "retry" ? "sync" : action, attempts: 0, next_attempt_at: new Date(), lease_until: null, error: null };
     if (current) await current.update(values, { transaction });
     else await IfLiveOutbox.create({ flight_id: flight.id, revision: flight.revision, ...values }, { transaction });

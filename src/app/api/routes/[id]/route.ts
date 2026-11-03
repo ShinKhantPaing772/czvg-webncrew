@@ -5,10 +5,10 @@ import { QueryTypes } from "sequelize";
 
 export async function GET(
   _request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const routeId = params.id;
+    const { id: routeId } = await params;
 
     // Build the SQL query to get route details with aircraft
     const routeQuery = `

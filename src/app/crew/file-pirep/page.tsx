@@ -87,10 +87,12 @@ const formSchema = z.object({
     message: "Flight time must be in format HH:MM.",
   }),
   date: z.string({
-    required_error: "Please select a date.",
+    error: (issue) =>
+      issue.input === undefined ? "Please select a date." : undefined,
   }),
   aircraftId: z.string({
-    required_error: "Please select an aircraft.",
+    error: (issue) =>
+      issue.input === undefined ? "Please select an aircraft." : undefined,
   }),
   fuelUsed: z.string().regex(/^\d+(\.\d+)?$/, {
     message: "Fuel used must be a number.",

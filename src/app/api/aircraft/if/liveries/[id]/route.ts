@@ -10,14 +10,15 @@ export const runtime = "nodejs";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const auth = await requirePermission(req, "aircrafts");
   if (!auth.ok) return auth.response;
 
   try {
+    const { id } = await params;
     const { data, cacheStatus } = await getInfiniteFlightAircraftLiveries(
-      params.id,
+      id,
     );
     return NextResponse.json(data, {
       status: 200,

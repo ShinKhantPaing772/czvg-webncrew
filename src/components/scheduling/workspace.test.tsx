@@ -40,11 +40,13 @@ describe("individual admin IF publishing", () => {
     data = { ...data, aircraft: data.aircraft.map(tail => ({ ...tail, if_aircraft_id: "if-aircraft" })), flights: [flight(2, "pending")] };
     mocks.mutate.mockImplementation(async (input: Record<string, unknown>) => {
       if (input.action === "approve") data = { ...data, flights: [{ ...data.flights[0], status: "approved", publishing_state: "queued" }] };
+      return input.action === "approve" ? { publication: { flight: { state: "published", message: "The approved schedule and crew were published to IF." } } } : undefined;
     });
     await render(true); await selectFlight("pending");
     expect(button("Publish to IF")).toBeUndefined();
     await act(async () => button("Approve flight").click());
     await act(async () => button("Confirm").click());
+    expect(document.body.textContent).toContain("Flight approved. The approved schedule and crew were published to IF.");
     expect(button("Publish to IF")).toBeDefined();
     let resolvePublish!: (response: Response) => void;
     mocks.fetch.mockImplementation(() => new Promise<Response>(resolve => { resolvePublish = resolve; }));

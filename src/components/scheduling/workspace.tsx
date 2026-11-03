@@ -120,8 +120,13 @@ export function SchedulingWorkspace({ admin = false }: { admin?: boolean }) {
       if (body.action === "retry_publish" || body.action === "reconcile_publish") {
         await schedulingResponse(await authFetch("/api/admin/scheduling/if/retry", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ flightId: body.flight_id, action: "retry" }) }));
         await refresh();
-      } else await mutate(body);
-      setSuccess(message);
+      } else {
+        const result = await mutate(body);
+        const publicationMessage = body.action === "approve"
+          ? result?.publication?.flight?.message || result?.publication?.message
+          : null;
+        setSuccess(publicationMessage ? `Flight approved. ${publicationMessage}` : message);
+      }
     } catch (actionFailure) {
       setActionError(errorMessage(actionFailure));
       throw actionFailure;

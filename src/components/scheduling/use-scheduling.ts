@@ -79,8 +79,9 @@ export function useScheduling(admin: boolean) {
       method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     });
     if ([401, 403].includes(response.status) && mounted.current) setData(null);
-    await schedulingResponse(response);
+    const result = await schedulingResponse(response);
     await refresh();
+    return result;
   }, [endpoint, refresh]);
 
   return { data, loading, refreshing, error, refresh, mutate };

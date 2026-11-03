@@ -374,7 +374,7 @@ export async function changeFlight(actor: SchedulingActor, body: Body) {
     } else throw new SchedulingError("Unknown scheduling action");
     await event(aircraft, flight, actor, action, { reason, before, after: flightState(flight), actual_arrival: body.actual_arrival ?? null, member_id: body.member_id ?? null,
       ...(action === "start" ? { if_publication_bypassed: ifPublicationBypassed } : {}) }, transaction);
-    return { flight_id: flight.id };
+    return { flight_id: flight.id, if_aircraft_linked: Boolean(aircraft.if_aircraft_id) };
   });
 }
 

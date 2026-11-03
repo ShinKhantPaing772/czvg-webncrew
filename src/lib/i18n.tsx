@@ -2085,7 +2085,7 @@ export const EN_TO_ZH_PHRASES: Record<string, string> = {
   "Aircraft linking is unavailable. Choose local scheduling or refresh the IF connection.": "飞机关联不可用。请选择本地排班或刷新 IF 连接。",
   "IF-linked flights require the latest IF publication and departure checks before starting.": "已关联 IF 的航班在起飞前须完成最新 IF 发布与起飞检查。",
   "Publishing is currently disabled. Check the start policy above before starting a linked aircraft flight.": "当前已禁用发布。启动关联飞机航班前请先检查上方起飞策略。",
-  "IF schedule publishing is enabled. Queued changes publish when an admin or the automatic worker runs publishing.": "已启用 IF 排班发布。排队变更将在管理员或自动任务执行发布时同步。",
+  "IF schedule publishing is enabled. Approval attempts to publish immediately; other queued changes can be sent by an admin here.": "已启用 IF 排班发布。批准航班后会立即尝试发布；其他排队变更可由管理员在此处发布。",
   "Review Crew Center flights alongside the aircraft’s Infinite Flight schedules. IF schedules load when you request them. All times are UTC.": "对照查看机组中心航班与该机的 Infinite Flight 排班。IF 排班在您请求时加载。所有时刻均为 UTC。",
   "These IF schedules may have changed. The last refresh is over 60 seconds old, or a schedule was changed. Refresh IF schedules before relying on this view.": "这些 IF 排班可能已变更。距上次刷新已超过 60 秒，或排班已改动。依赖此视图前请先刷新 IF 排班。",
   "Configure the connection in your hosting environment, then authorize an IF organization owner or admin. Client secrets stay on the server.": "请在托管环境中配置连接，然后授权 IF 组织所有者或管理员。客户端密钥仅保存在服务器端。",

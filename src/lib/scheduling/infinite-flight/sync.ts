@@ -47,6 +47,7 @@ export async function synchronizeIfFlight(input: {
   publicId: string; remoteId: string | null; schedules: IfSchedule[]; desired: AuthoredIfPayload | null;
   previous: PublishedPayload | null; action: PublishAction; uncertainCreation: boolean;
   localFlights?: IfLocalFlight[];
+  allowExternalRouteDiscontinuity?: boolean;
   api: SyncApi; checkpoint(id: string, authored: PublishedPayload): Promise<void>;
 }) {
   const marker = scheduleMarker(input.publicId);
@@ -69,12 +70,13 @@ export async function synchronizeIfFlight(input: {
     if (!remote && input.uncertainCreation) throw new IfLiveError("An earlier IF create request was not confirmed; verify that no reservation remains before removing the binding", "reconciliation", 409);
     // Already cancelled/arrived reservations are history, not live bookings to delete.
     if (remote && !terminalRemoval) {
-      assertIfItinerary({ schedules: input.schedules, localFlights: input.localFlights, target: { publicId: input.publicId, desired: null } });
+      assertIfItinerary({ schedules: input.schedules, localFlights: input.localFlights, target: { publicId: input.publicId, desired: null }, allowExternalRouteDiscontinuity: input.allowExternalRouteDiscontinuity });
       await input.api.remove(remote.id);
     }
     return { remoteId: null, removed: true as const };
   }
-  assertIfItinerary({ schedules: input.schedules, localFlights: input.localFlights, target: { publicId: input.publicId, desired: input.desired.schedule }, requirePublishedPredecessors: Boolean(input.localFlights) });
+  assertIfItinerary({ schedules: input.schedules, localFlights: input.localFlights, target: { publicId: input.publicId, desired: input.desired.schedule },
+    requirePublishedPredecessors: Boolean(input.localFlights), allowExternalRouteDiscontinuity: input.allowExternalRouteDiscontinuity });
   const transitionalPayload: PublishedPayload = { ...input.desired, crewPending: true,
     previousCrew: normalizedCrew([...(input.previous?.crew ?? []), ...(input.previous?.previousCrew ?? [])]) };
   if (!remote) {

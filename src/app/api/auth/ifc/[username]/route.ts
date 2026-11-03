@@ -10,11 +10,12 @@ export const runtime = "nodejs";
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { username: string } },
+  { params }: { params: Promise<{ username: string }> },
 ) {
   try {
-    const { data, cacheStatus } = await getInfiniteFlightUser(params.username);
-    const user = findInfiniteFlightUser(data.result, params.username);
+    const { username } = await params;
+    const { data, cacheStatus } = await getInfiniteFlightUser(username);
+    const user = findInfiniteFlightUser(data.result, username);
     return NextResponse.json(
       { ...data, result: user ? [user] : [] },
       {

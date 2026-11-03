@@ -12,7 +12,7 @@
     "sync:awards": "node scripts/sync-and-backfill-awards.mjs"
   },
   "dependencies": {
-    "@hookform/resolvers": "^3.10.0",
+    "@hookform/resolvers": "^5.9.2",
     "@radix-ui/react-accordion": "^1.2.3",
     "@radix-ui/react-alert-dialog": "^1.1.6",
     "@radix-ui/react-aspect-ratio": "^1.1.2",
@@ -45,44 +45,59 @@
     "bcryptjs": "^2.4.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "cmdk": "1.0.4",
+    "cmdk": "1.1.1",
     "date-fns": "^3.6.0",
     "embla-carousel-react": "8.5.1",
     "framer-motion": "^12.5.0",
     "input-otp": "1.4.1",
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.454.0",
-    "mysql2": "^3.14.0",
-    "next": "^14.2.32",
+    "mysql2": "^3.24.6",
+    "next": "~15.5.29",
     "next-themes": "^0.4.6",
-    "react": "^18.3.1",
-    "react-day-picker": "^8.10.1",
-    "react-dom": "^18.3.1",
-    "react-hook-form": "^7.54.2",
+    "react": "~19.1.10",
+    "react-day-picker": "^8.10.2",
+    "react-dom": "~19.1.10",
+    "react-hook-form": "^7.55.0",
     "react-resizable-panels": "^2.1.7",
     "recharts": "2.15.0",
-    "sequelize": "^6.37.7",
+    "sequelize": "^6.37.8",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
-    "vaul": "^0.9.9",
-    "zod": "^3.24.2"
+    "vaul": "^1.1.2",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.7",
     "@types/bcryptjs": "^2.4.6",
     "@types/jest": "^29.5.14",
     "@types/jsonwebtoken": "^9.0.9",
     "@types/node": "^20.17.24",
-    "@types/react": "^18.3.18",
-    "@types/react-dom": "^18.3.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "@types/uuid": "^10.0.0",
     "autoprefixer": "^10.4.21",
-    "eslint": "^8.57.1",
-    "eslint-config-next": "14.0.4",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "15.5.29",
     "jsdom": "^26.1.0",
     "mini-css-extract-plugin": "^2.9.2",
-    "postcss": "^8.5.3",
+    "postcss": "^8.5.32",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.2",
-    "vitest": "^3.2.4"
+    "vitest": "~4.1.12"
+  },
+  "overrides": {
+    "postcss": "$postcss",
+    "uuid": "11.1.1",
+    "recharts": {
+      "react-is": "19.1.10"
+    }
+  },
+  "pnpm": {
+    "overrides": {
+      "postcss": "^8.5.32",
+      "uuid": "11.1.1",
+      "recharts>react-is": "19.1.10"
+    }
   }
 }

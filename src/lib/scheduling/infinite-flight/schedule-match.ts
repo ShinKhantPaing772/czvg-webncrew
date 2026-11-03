@@ -92,7 +92,7 @@ async function currentMatch(input: MatchInput, actorId: number, original: LiveFl
     const flights = await LiveFlight.findAll({ where: { live_aircraft_id: aircraft.id }, transaction });
     if (flights.some(row => row.status === "in_progress")) throw new IfLiveError("Finish the aircraft's in-progress local flight before matching its IF itinerary", "conflict", 409);
     if (await IfLiveOutbox.findOne({ where: { flight_id: flight.id, state: "processing" }, transaction, lock: transaction.LOCK.UPDATE })) {
-      throw new IfLiveError("This flight is already publishing; wait for the worker before matching", "conflict", 409);
+      throw new IfLiveError("This flight is already publishing; wait for that publishing attempt before matching", "conflict", 409);
     }
     const desired = buildIfPayload(flight, crew);
     if (expectedPayload && (!sameIfSchedule(desired.schedule, expectedPayload.schedule) || !sameIfCrew(desired.crew, expectedPayload.crew))) {

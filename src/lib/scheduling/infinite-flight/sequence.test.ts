@@ -72,6 +72,11 @@ describe("safe IF schedule sequence reconciliation", () => {
   it("does not reorder a valid local sequence through an incompatible foreign prefix", () => {
     expect(() => planIfSequence([row(3, { destinationIcao: "CYVR" }), row(1), row(0)], local.slice(0, 2), remoteIds[0])).toThrow("discontinuous");
   });
+  it("permits publishing a continuous local sequence after a foreign IF route gap", () => {
+    const external = row(3, { destinationIcao: "KJFK" });
+    const localFlight = { public_id: publicIds[0], departure: "CYYZ", arrival: "CYVR", scheduled_departure: null, scheduled_arrival: null, queue_order: 1, status: "approved" };
+    expect(planIfSequence([external, row(0)], local.slice(0, 1), remoteIds[0], [localFlight], true)).toBeNull();
+  });
   it("preserves an unpublished future local bridge when reconciling IF order", () => {
     const unpublished = { public_id: publicIds[1], departure: "KJFK", arrival: "CYVR", scheduled_departure: "2026-10-04T13:00:00Z", scheduled_arrival: "2026-10-04T15:00:00Z" };
     const external = row(3, { originIcao: "CYVR", destinationIcao: "KLAX", scheduledDepartureUtc: "2026-10-04T16:00:00Z", scheduledArrivalUtc: "2026-10-04T18:00:00Z" });

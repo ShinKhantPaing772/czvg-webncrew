@@ -128,7 +128,7 @@ export function AircraftSchedulesDialog({ aircraft, flights, pilots = [], admin,
       const issues = ["conflict", "reconciliation", "failed", "queued"].filter(state => Number(states[state]) > 0)
         .map(state => `${Number(states[state])} ${state === "queued" ? "waiting to retry" : state}`).join("; ");
       setMessage(outcome?.disabled ? "Publishing is unavailable. Refresh the IF connection settings." :
-        `${Number(outcome?.published || 0)} of ${Number(outcome?.processed || 0)} processed jobs synchronized with IF.${issues ? " " + issues + "." : ""} Refresh IF schedules to see the latest queue. Additional queued flights need another run or the automatic worker.`);
+        `${Number(outcome?.published || 0)} of ${Number(outcome?.processed || 0)} processed jobs synchronized with IF.${issues ? " " + issues + "." : ""} Refresh IF schedules to see the latest queue. Additional queued flights need another admin publishing attempt.`);
       setStale(true);
       await onRefresh();
     } catch (publishError) {

@@ -4,7 +4,7 @@ import type { IfSchedule } from "./types";
 import { ifScheduleTimeMs } from "./schedule-time";
 
 /** Move this app's current schedule only; preserve every external reservation's position. */
-export function planIfSequence(schedules: IfSchedule[], localOrder: { public_id: string }[], targetId: string, localFlights?: IfLocalFlight[]) {
+export function planIfSequence(schedules: IfSchedule[], localOrder: { public_id: string }[], targetId: string, localFlights?: IfLocalFlight[], allowExternalRouteDiscontinuity = false) {
   const active = orderedIfSchedules(schedules).filter(row => ![9, 11].includes(row.status));
   const desired: string[] = [];
   for (const flight of localOrder) {
@@ -27,7 +27,7 @@ export function planIfSequence(schedules: IfSchedule[], localOrder: { public_id:
   }
   const targetLocal = localOrder.find(flight => moved.briefing?.includes(scheduleMarker(flight.public_id)));
   const validate = (rows: IfSchedule[]) => assertIfItinerary({ schedules: rows.map((row, index) => ({ ...row, sequence: index + 1 })), localFlights,
-    ...(localFlights && targetLocal ? { target: { publicId: targetLocal.public_id, desired: moved } } : {}) });
+    ...(localFlights && targetLocal ? { target: { publicId: targetLocal.public_id, desired: moved } } : {}), allowExternalRouteDiscontinuity });
   if (current.join("|") === desired.join("|")) { validate(active); return null; }
   if (current.filter(id => id !== targetId).join("|") !== desired.filter(id => id !== targetId).join("|")) {
     throw new IfLiveError("Other IF legs differ from the local queue order; reconcile those flights first", "conflict", 409);

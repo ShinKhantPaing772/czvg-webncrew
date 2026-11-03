@@ -111,14 +111,13 @@ Configure these **server-only** environment variables:
 | Variable | Value |
 | --- | --- |
 | `IF_LIVE_PREVIEW_ENABLED` | `true` to enable admin OAuth linking and temporary reads; default `false` |
-| `IF_LIVE_AUTO_PUBLISH_ENABLED` | `true` to permit IF schedule writes from the admin publishing action and automatic worker; default `false` |
+| `IF_LIVE_AUTO_PUBLISH_ENABLED` | `true` to permit immediate publishing attempts on approval and admin-initiated IF schedule writes; default `false` |
 | `IF_LIVE_DURABLE_BINDINGS_ALLOWED` | `true` after IF permits retained integration identifiers; enables aircraft linking independently of publishing; default `false` |
 | `IF_LIVE_CLIENT_ID` | Approved confidential OAuth client ID |
 | `IF_LIVE_CLIENT_SECRET` | Client secret |
 | `IF_LIVE_REDIRECT_URI` | Exact registered callback on the domain used for the admin page; see below |
 | `IF_LIVE_REVOCATION_URL` | Optional for OAuth, reads, and publishing. Leave unset until IF confirms a supported official HTTPS token-revocation URL; disconnect then removes local credentials only |
 | `IF_LIVE_TOKEN_ENCRYPTION_KEY` | Base64 of 32 random bytes for AES-256-GCM; back it up securely |
-| `IF_LIVE_WORKER_SECRET` | A separate long random secret for the automatic worker endpoint; not needed for the authenticated admin publishing action |
 | `IF_API` | Existing server Live API key, also used for type/livery validation and departure-airport coordinates |
 
 Generate secrets locally, without putting them in Git. For example,
@@ -144,8 +143,8 @@ For OAuth testing, configure `IF_LIVE_PREVIEW_ENABLED=true`, the approved client
 ID and secret, the matching callback, and the encryption key. Leave
 `IF_LIVE_REVOCATION_URL` unset until IF confirms a supported endpoint. Keep
 `IF_LIVE_AUTO_PUBLISH_ENABLED=false` and
-`IF_LIVE_DURABLE_BINDINGS_ALLOWED=false`. No worker is required to connect the
-account and temporarily inspect its organizations and fleet. The admin tab
+`IF_LIVE_DURABLE_BINDINGS_ALLOWED=false`. No background worker is required to connect
+the account and temporarily inspect its organizations and fleet. The admin tab
 shows safe setup checks; it never returns client secrets or stored tokens.
 
 The client must be **Confidential** with these requested scopes enabled:
@@ -215,7 +214,7 @@ can change this requirement using **Allow starts without IF publishing** in the
 Infinite Flight tab. Existing aircraft
 catalog entries and pilot/admin-confirmed airports remain the local source of
 truth. Publishing requires the publishing flag and permitted durable identifiers.
-Automatic unattended publishing additionally needs the protected worker.
+Approving a flight attempts to publish its latest approved revision immediately.
 
 ### View aircraft locations
 
@@ -273,19 +272,21 @@ Set `IF_LIVE_PREVIEW_ENABLED=true`,
 `IF_LIVE_DURABLE_BINDINGS_ALLOWED=true`, and
 `IF_LIVE_AUTO_PUBLISH_ENABLED=true` in hosting and redeploy. The connected IF
 owner/admin must have granted `live:schedules.read` and `live:schedules.write`.
-After approving a request, open that flight's details in **Approvals** and use
-**Publish to IF** to publish only its latest approved schedule and assigned crew.
-This button is available to scheduling admins for approved flights on IF-linked
-aircraft. It shows the selected flight's result and refreshes its local publishing
-status. Earlier legs and unresolved removals must be published separately first;
-blocked, failed, or conflicting jobs remain subject to the existing repair controls.
-Use **Publish queued flights** in an aircraft's schedule dialog to process that
-aircraft only, or use the same button in the Infinite Flight admin tab to process
-the whole eligible queue. Each click processes at most two jobs within 25 seconds;
-run again for additional jobs or configure the automatic worker below. This
-admin action uses the site's scheduling permission and never exposes the worker
-secret or OAuth credentials. The write flag can disable all schedule writes
-without hiding temporary schedule reads.
+To retry or inspect a queued approved schedule, open that flight's details in
+**Approvals** and use **Publish to IF**. This button is available to scheduling admins for approved flights
+on IF-linked aircraft. It shows the selected flight's result and refreshes its
+local publishing status. Earlier legs and unresolved removals must be published
+separately first; blocked, failed, or conflicting jobs remain subject to the
+existing repair controls. Approval attempts to publish that flight immediately
+after the local approval commits. The result reports whether IF confirmed the
+write or whether the flight remains queued, blocked, or needs attention.
+Amendments, crew changes, and any remaining queued jobs can be sent with
+**Publish queued flights** in an aircraft's schedule dialog or the Infinite Flight
+admin tab. Each admin publishing
+request processes at most two jobs within 25 seconds; run it again for additional
+jobs or retries. No background worker or external scheduler is used. Publishing
+requests use the site's scheduling permission and never expose OAuth credentials.
+The write flag can disable all schedule writes without hiding temporary reads.
 
 Only approved local decisions are published: flight approval/amendments and
 crew changes synchronize the complete schedule and assigned crew; cancellation
@@ -347,8 +348,9 @@ IF requires callsigns, so an empty local callsign is published as `WNC<flight ID
 Confirmed local airports remain authoritative for local scheduling: IF positions
 show timestamped coordinates, not a confirmed ICAO airport.
 
-Approvals and crew changes enqueue publishing atomically. The worker sends the
-latest approved flight and complete crew assignment. With the default start
+Approvals and crew changes enqueue publishing atomically. Approval then attempts
+to send the latest approved flight and complete crew assignment immediately.
+With the default start
 policy, a linked flight cannot start locally until that revision has been
 published and a fresh departure check passes.
 Start the local flight **before departing in IF**: its IF reservation must still be
@@ -370,12 +372,13 @@ Publishing safeguards:
 - A stable local UUID marker identifies application-managed IF schedules.
 - External schedules and externally changed crew produce a conflict; they are
   never silently overwritten or deleted.
-- The worker reads fresh IF schedules before publishing and reconciles the local
+- Publishing reads fresh IF schedules before writing and reconciles the local
   queue order. It stops if reordering would shift an external or active reservation.
-- The combined IF/local itinerary must have continuous adjoining airports and
-  non-overlapping times, including reservations created outside the crew center.
-  Unpublished local future legs remain part of this validation; predecessors
-  must publish before later legs.
+- Local Crew Center flights must have continuous adjoining airports in their
+  local queue. Publishing does not require airport continuity with unrelated
+  external IF reservations; timed overlaps and queue-order safeguards still apply.
+  Unpublished local future legs remain part of continuity validation, and local
+  predecessors must publish before later legs.
 - Invalidated/cancelled owned reservations are removed from downstream to upstream
   before amendments publish. Already Cancelled/Arrived IF reservations reconcile
   as terminal history without a delete, after reference and authored fields/crew
@@ -392,22 +395,9 @@ Publishing safeguards:
   continuation. Credentials and fetched responses are excluded from job payloads,
   responses, and logs.
 
-## Automatic publishing on Vercel Hobby
+## Publishing retries
 
-Vercel Hobby's built-in cron is daily, so do not add a minutely cron to
-`vercel.json`. Configure one external job at [cron-job.org](https://cron-job.org/en/faq/):
-
-- URL: `https://YOUR_DOMAIN/api/internal/if-live-publish`
-- Method: **POST**, every minute
-- Header: `Authorization: Bearer <IF_LIVE_WORKER_SECRET>`
-- Disable saving response bodies; the endpoint returns aggregate counts only.
-
-This scheduler receives only the dedicated worker secret, never IF credentials.
-Jobs have processing leases, retries, and revision checks. A stopped worker leaves
-work for a later invocation; an uncertain write requires reconciliation.
-Publishing state/errors are visible in the scheduling admin page. Apply deployment
-protection exceptions for this single endpoint if your Vercel deployment requires
-them; its bearer-secret authentication must stay enabled.
+There is no background publishing worker or external scheduler. Failed transient attempts remain queued for an admin to retry with **Publish queued flights**; uncertain writes must be reconciled before they can be retried.
 
 ## Verification
 

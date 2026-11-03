@@ -4,13 +4,13 @@ import { hasPermission, requireCrewAuth } from "@/lib/server-auth";
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const auth = await requireCrewAuth(request);
     if (!auth.ok) return auth.response;
 
-    const pilotId = params.id;
+    const { id: pilotId } = await params;
     const canViewPilot =
       String(auth.user.id) === String(pilotId) ||
       hasPermission(auth.user, ["users", "pireps"]);
