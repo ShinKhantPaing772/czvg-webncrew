@@ -4,6 +4,7 @@ import {
   getInfiniteFlightUser,
   InfiniteFlightApiError,
 } from "@/lib/infinite-flight-api";
+import { extractInfiniteFlightMetrics } from "@/lib/infinite-flight/user-metrics";
 import { models } from "@/lib/models";
 import { requirePermission } from "@/lib/server-auth";
 
@@ -11,61 +12,6 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 type UnknownRecord = Record<string, unknown>;
-
-function getNestedValue(record: UnknownRecord, paths: string[][]) {
-  for (const path of paths) {
-    let current: unknown = record;
-
-    for (const part of path) {
-      if (!current || typeof current !== "object" || !(part in current)) {
-        current = undefined;
-        break;
-      }
-
-      current = (current as UnknownRecord)[part];
-    }
-
-    if (current !== undefined && current !== null) return current;
-  }
-
-  return null;
-}
-
-function normalizeInteger(value: unknown) {
-  if (value === null || value === undefined || value === "") return null;
-
-  const numberValue =
-    typeof value === "number" ? value : Number(String(value).trim());
-
-  return Number.isFinite(numberValue) ? Math.trunc(numberValue) : null;
-}
-
-function extractInfiniteFlightMetrics(user: UnknownRecord) {
-  const grade = normalizeInteger(
-    getNestedValue(user, [
-      ["grade"],
-      ["userGrade"],
-      ["statistics", "grade"],
-      ["stats", "grade"],
-    ]),
-  );
-
-  const violationsValue = getNestedValue(user, [
-    ["violations"],
-    ["violationCount"],
-    ["totalViolations"],
-    ["statistics", "violations"],
-    ["statistics", "violationCount"],
-    ["stats", "violations"],
-    ["stats", "violationCount"],
-  ]);
-
-  const violations = Array.isArray(violationsValue)
-    ? violationsValue.length
-    : normalizeInteger(violationsValue);
-
-  return { grade, violations };
-}
 
 export async function POST(request: Request) {
   try {

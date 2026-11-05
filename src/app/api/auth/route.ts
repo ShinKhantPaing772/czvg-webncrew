@@ -8,10 +8,21 @@ import {
   getApplicantPortalUrl,
   sendEmail,
 } from "@/lib/email";
+import {
+  findInfiniteFlightUser,
+  getInfiniteFlightUser,
+  InfiniteFlightApiError,
+} from "@/lib/infinite-flight-api";
+import { isIfcLookupRateLimited } from "@/lib/infinite-flight/lookup-rate-limit";
+import { extractInfiniteFlightMetrics } from "@/lib/infinite-flight/user-metrics";
 import { canPilotLogIn, getCrewLandingPath } from "@/lib/pilot-status";
 import { isValidSignupName } from "@/lib/utils/signup-name";
 
 const JWT_SECRET = process.env.JWT_SECRET;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MIN_PASSWORD_LENGTH = 8;
+const INVALID_IFC_MESSAGE =
+  "IFC username entered is not valid, please enter a valid IFC username.";
 
 export async function POST(request: NextRequest) {
   try {
@@ -35,11 +46,12 @@ export async function POST(request: NextRequest) {
 
     const { action = "login", ...data } = body;
 
+    // Awaited so unexpected errors reach the JSON error response below.
     switch (action) {
       case "login":
-        return handleLogin(data);
+        return await handleLogin(data);
       case "signup":
-        return handleSignup(data);
+        return await handleSignup(data, request);
       default:
         return NextResponse.json({ error: "Invalid action" }, { status: 400 });
     }
@@ -183,23 +195,77 @@ async function generateUniqueCallsign() {
   }
 }
 
-async function handleSignup({
-  email,
-  password,
-  name,
-  ifc,
-  ifUserId,
-  ifGrade,
-  ifViolations,
-}: {
-  email: string;
-  password: string;
-  name: string;
-  ifc: string;
-  ifUserId: string;
-  ifGrade?: unknown;
-  ifViolations?: unknown;
-}) {
+/**
+ * Looks the IFC username up on the server. Whatever the signup form sends
+ * about the IF account can be edited, so only this result is stored. It is
+ * usually a cache hit from the form's own username check moments earlier.
+ */
+async function lookUpIfcIdentity(ifc: string, request: Request) {
+  if (await isIfcLookupRateLimited(request)) {
+    return {
+      response: NextResponse.json(
+        {
+          error:
+            "Too many IFC username checks. Please wait a few minutes and try again.",
+        },
+        { status: 429 },
+      ),
+    };
+  }
+
+  let user: ReturnType<typeof findInfiniteFlightUser> = null;
+  try {
+    const { data } = await getInfiniteFlightUser(ifc);
+    user = findInfiniteFlightUser(data.result, ifc);
+  } catch (error) {
+    const isUnknownUser =
+      error instanceof InfiniteFlightApiError &&
+      (error.status === 400 || error.status === 404);
+    if (!isUnknownUser) {
+      console.error("[Signup] IFC lookup failed:", error);
+      return {
+        response: NextResponse.json(
+          {
+            error:
+              "We couldn't verify your IFC username right now. Please try again in a few minutes.",
+          },
+          { status: 503 },
+        ),
+      };
+    }
+  }
+
+  if (!user) {
+    return {
+      response: NextResponse.json(
+        { error: INVALID_IFC_MESSAGE },
+        { status: 400 },
+      ),
+    };
+  }
+
+  return {
+    identity: {
+      userId: String(user.userId),
+      ...extractInfiniteFlightMetrics(user),
+    },
+  };
+}
+
+async function handleSignup(
+  {
+    email,
+    password,
+    name,
+    ifc,
+  }: {
+    email?: unknown;
+    password?: unknown;
+    name?: unknown;
+    ifc?: unknown;
+  },
+  request: Request,
+) {
   if (!isValidSignupName(name)) {
     return NextResponse.json(
       {
@@ -209,8 +275,29 @@ async function handleSignup({
     );
   }
 
+  if (typeof email !== "string" || !EMAIL_PATTERN.test(email.trim())) {
+    return NextResponse.json(
+      { error: "Enter a valid email address." },
+      { status: 400 },
+    );
+  }
+
+  if (typeof password !== "string" || password.length < MIN_PASSWORD_LENGTH) {
+    return NextResponse.json(
+      {
+        error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters long.`,
+      },
+      { status: 400 },
+    );
+  }
+
+  if (typeof ifc !== "string" || !ifc.trim()) {
+    return NextResponse.json({ error: INVALID_IFC_MESSAGE }, { status: 400 });
+  }
+
   const normalizedName = name.trim();
   const normalizedEmail = email.trim().toLowerCase();
+  const normalizedIfc = ifc.trim();
   const existingPilotMail = await models.Pilot.findOne({
     where: { email: normalizedEmail },
   });
@@ -226,7 +313,7 @@ async function handleSignup({
   }
 
   const existingPilotIFC = await models.Pilot.findOne({
-    where: { ifc: ifc },
+    where: { ifc: normalizedIfc },
   });
 
   if (existingPilotIFC) {
@@ -239,6 +326,10 @@ async function handleSignup({
     );
   }
 
+  const ifLookup = await lookUpIfcIdentity(normalizedIfc, request);
+  if (ifLookup.response) return ifLookup.response;
+  const ifIdentity = ifLookup.identity;
+
   const hashedPassword = await bcryptjs.hash(password, 10);
   const callsign = await generateUniqueCallsign();
 
@@ -247,20 +338,17 @@ async function handleSignup({
     password: hashedPassword,
     name: normalizedName,
     callsign,
-    ifc: ifc.trim(),
-    ifuserid: ifUserId,
+    ifc: normalizedIfc,
+    ifuserid: ifIdentity.userId,
     status: 0, // Pending approval
   });
 
   await models.Application.create({
     pilotid: pilot.id,
     exam_status: 0,
-    if_grade: normalizeInteger(ifGrade),
-    if_violations: normalizeInteger(ifViolations),
-    if_metrics_updated_at:
-      normalizeInteger(ifGrade) !== null || normalizeInteger(ifViolations) !== null
-        ? new Date()
-        : null,
+    if_grade: ifIdentity.grade,
+    if_violations: ifIdentity.violations,
+    if_metrics_updated_at: new Date(),
   });
 
   const webhookUrl = process.env.DISCORD_WEBHOOK_ADMIN;
@@ -278,12 +366,12 @@ async function handleSignup({
             },
             {
               name: "IFC Username",
-              value: `${ifc.trim()}`,
+              value: normalizedIfc,
               inline: false,
             },
             {
               name: "IFC UserId",
-              value: `${ifUserId}`,
+              value: ifIdentity.userId,
               inline: false,
             },
             {
@@ -342,13 +430,4 @@ async function handleSignup({
     },
     { status: 201 },
   );
-}
-
-function normalizeInteger(value: unknown) {
-  if (value === null || value === undefined || value === "") return null;
-
-  const numberValue =
-    typeof value === "number" ? value : Number(String(value).trim());
-
-  return Number.isFinite(numberValue) ? Math.trunc(numberValue) : null;
 }

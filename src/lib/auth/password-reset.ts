@@ -3,42 +3,47 @@ import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { sendPasswordResetOtp } from "@/lib/auth/password-reset-email";
 import sequelize, { models } from "@/lib/db";
+import { deleteCached, incrementCounter } from "@/lib/utils/if-cache";
 
 const OTP_TTL_MS = 10 * 60 * 1000;
-const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const RATE_LIMIT_WINDOW_SECONDS = 15 * 60;
 const MAX_REQUESTS_PER_WINDOW = 3;
 const MAX_VERIFY_ATTEMPTS = 5;
 const GENERIC_REQUEST_MESSAGE =
   "If an account exists with this email, an OTP has been sent.";
 
-type AttemptStore = Map<string, { count: number; resetAt: number }>;
-
-const requestAttempts: AttemptStore = new Map();
-const verifyAttempts: AttemptStore = new Map();
+type AttemptKind = "request" | "verify";
 
 export function normalizeEmail(email: unknown) {
   return typeof email === "string" ? email.trim().toLowerCase() : "";
 }
 
-function isRateLimited(store: AttemptStore, key: string, limit: number) {
-  const now = Date.now();
-  const current = store.get(key);
-
-  if (!current || current.resetAt <= now) {
-    store.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return false;
-  }
-
-  current.count += 1;
-  return current.count > limit;
+// Attempts are counted in the database so the limits hold across serverless
+// instances. The email is hashed to keep keys short and addresses out of the
+// cache table.
+function attemptKey(kind: AttemptKind, email: string) {
+  const digest = crypto.createHash("sha256").update(email).digest("hex");
+  return `rate:password-reset:${kind}:${digest}`;
 }
 
-function clearAttempts(store: AttemptStore, key: string) {
-  store.delete(key);
+async function isRateLimited(kind: AttemptKind, email: string, limit: number) {
+  const attempts = await incrementCounter(
+    attemptKey(kind, email),
+    RATE_LIMIT_WINDOW_SECONDS,
+  );
+  return attempts > limit;
+}
+
+async function clearAttempts(kind: AttemptKind, email: string) {
+  try {
+    await deleteCached(attemptKey(kind, email));
+  } catch {
+    // The cache already logged it, and the counter expires with its window.
+  }
 }
 
 export async function requestPasswordResetOtp(email: string) {
-  if (isRateLimited(requestAttempts, email, MAX_REQUESTS_PER_WINDOW)) {
+  if (await isRateLimited("request", email, MAX_REQUESTS_PER_WINDOW)) {
     return NextResponse.json(
       { error: "Too many OTP requests. Please try again later." },
       { status: 429 },
@@ -72,6 +77,10 @@ export async function requestPasswordResetOtp(email: string) {
     });
     if (!delivered) throw new Error("Failed to send email");
 
+    // A new code gets a fresh set of attempts, as the 429 message promises.
+    // Requests are capped too, so guesses stay limited.
+    await clearAttempts("verify", email);
+
     return NextResponse.json({ message: GENERIC_REQUEST_MESSAGE });
   } catch (error) {
     console.error("Password reset email error:", error);
@@ -83,7 +92,7 @@ export async function requestPasswordResetOtp(email: string) {
 }
 
 export async function verifyPasswordResetOtp(email: string, otp: unknown) {
-  if (isRateLimited(verifyAttempts, email, MAX_VERIFY_ATTEMPTS)) {
+  if (await isRateLimited("verify", email, MAX_VERIFY_ATTEMPTS)) {
     return NextResponse.json(
       { error: "Too many invalid attempts. Please request a new code." },
       { status: 429 },
@@ -110,7 +119,7 @@ export async function verifyPasswordResetOtp(email: string, otp: unknown) {
     return NextResponse.json({ error: "Invalid OTP" }, { status: 400 });
   }
 
-  clearAttempts(verifyAttempts, email);
+  await clearAttempts("verify", email);
   return NextResponse.json({ message: "OTP verified successfully" });
 }
 
@@ -119,7 +128,7 @@ export async function resetPassword(
   otp: unknown,
   password: unknown,
 ) {
-  if (isRateLimited(verifyAttempts, email, MAX_VERIFY_ATTEMPTS)) {
+  if (await isRateLimited("verify", email, MAX_VERIFY_ATTEMPTS)) {
     return NextResponse.json(
       { error: "Too many invalid attempts. Please request a new code." },
       { status: 429 },
@@ -170,8 +179,8 @@ export async function resetPassword(
     await otpRecord.destroy({ transaction });
   });
 
-  clearAttempts(verifyAttempts, email);
-  clearAttempts(requestAttempts, email);
+  await clearAttempts("verify", email);
+  await clearAttempts("request", email);
 
   return NextResponse.json({ message: "Password reset successfully" });
 }
