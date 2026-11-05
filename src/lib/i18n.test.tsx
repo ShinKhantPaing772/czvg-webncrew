@@ -133,22 +133,53 @@ describe("rank names in both languages", () => {
     );
   });
 
-  // Names as listed on the public ranks page (/operations/ranks), plus the
-  // two instructor ranks above Fleet Captain.
+  // The agreed name of each rank in both languages, lowest first.
+  const RANK_NAMES: Array<[string, string]> = [
+    ["飞行学员", "Trainee"],
+    ["见习第二副驾驶", "Trainee Second Officer"],
+    ["第二副驾驶", "Second Officer"],
+    ["副机长", "First Officer"],
+    ["资深副机长", "Senior First Officer"],
+    ["机长", "Captain"],
+    ["资深机长", "SR Captain"],
+    ["机队机长", "Fleet Captain"],
+    ["机长教员", "Captain Instructor"],
+    ["资深机长教员", "SR Captain Instructor"],
+  ];
+
+  it.each(RANK_NAMES)("shows %s as %s in the English UI", (chinese, english) => {
+    expect(translateTextToEn(chinese)).toBe(english);
+    expect(translateTextToEn(`Next: ${chinese}`)).toBe(`Next: ${english}`);
+  });
+
+  it.each(RANK_NAMES)("shows %s for %s in the Chinese UI", (chinese, english) => {
+    expect(translateTextToZh(english)).toBe(chinese);
+    expect(translateTextToZh(`001VG ${english}`)).toBe(`001VG ${chinese}`);
+  });
+
   it.each([
-    "Trainee Second Officer",
-    "Second Officer",
-    "First Officer",
-    "SR First Officer",
-    "Captain",
-    "SR Captain",
-    "Fleet Captain",
-    "Captain Instructor",
-    "SR Captain Instructor",
-  ])("round-trips %s through Chinese and back", (name) => {
-    const chinese = translateTextToZh(name);
-    expect(chinese).not.toBe(name);
-    expect(translateTextToEn(chinese)).toBe(name);
+    ["见习二副", "Trainee Second Officer"],
+    ["二副驾驶", "Second Officer"],
+    ["第一副驾驶", "First Officer"],
+    ["资深副驾驶", "Senior First Officer"],
+    ["高级副驾驶", "Senior First Officer"],
+    ["责任机长", "Captain"],
+    ["机队总机长", "Fleet Captain"],
+  ])("still shows the older name %s as %s", (chinese, english) => {
+    expect(translateTextToEn(chinese)).toBe(english);
+  });
+
+  it("gives the other English spellings the same Chinese name", () => {
+    expect(translateTextToZh("SR First Officer")).toBe("资深副机长");
+    expect(translateTextToZh("Senior Captain")).toBe("资深机长");
+  });
+
+  it("only translates whole rank titles", () => {
+    expect(translateTextToEn("见习第一副驾驶")).toBe("见习第一副驾驶");
+    expect(translateTextToEn("机长室")).toBe("机长室");
+    expect(translateTextToEn("机长教员、资深机长教员")).toBe(
+      "Captain Instructor、SR Captain Instructor",
+    );
   });
 
   it("leaves English text and other Chinese text alone", () => {
@@ -173,7 +204,7 @@ describe("rank names in both languages", () => {
 
     applyDomTranslation(root, "zh");
     expect(chineseRank.textContent).toBe("机长教员");
-    expect(englishRank.textContent).toBe("责任机长");
+    expect(englishRank.textContent).toBe("机长");
 
     applyDomTranslation(root, "en");
     expect(chineseRank.textContent).toBe("Captain Instructor");
