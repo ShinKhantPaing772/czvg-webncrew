@@ -288,6 +288,7 @@ class Notification extends Model {
   declare subject: string;
   declare content: string;
   declare datetime: Date;
+  declare read_at: Date | null;
 }
 Notification.init(
   {
@@ -301,6 +302,10 @@ Notification.init(
       allowNull: false,
       defaultValue: DataTypes.NOW,
     },
+    // No defaultValue on purpose: INSERTs then leave the column out, so award
+    // grants still record notifications on a database without the
+    // 20261104_notifications_read_at migration.
+    read_at: { type: DataTypes.DATE, allowNull: true },
   },
   {
     sequelize,

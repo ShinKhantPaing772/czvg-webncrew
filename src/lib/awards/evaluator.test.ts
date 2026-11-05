@@ -198,6 +198,37 @@ describe("evaluateAndGrantAwards", () => {
     );
   });
 
+  it("stores award notifications as an award id that fits the columns", async () => {
+    // 70 characters: the old Chinese sentence around it overflowed VARCHAR(60).
+    const longName =
+      "Extraordinary Transcontinental Long-Haul Excellence Commendation Award";
+    mocks.findAwards.mockResolvedValue([
+      {
+        id: 7,
+        name: longName,
+        category: "honor",
+        criteria: { type: "flights", threshold: 1 },
+      },
+    ]);
+
+    await evaluateAndGrantAwards(10);
+
+    const [rows, options] = mocks.bulkCreateNotifications.mock.calls[0];
+    expect(options).toEqual({ transaction: transactionObj });
+    expect(rows).toContainEqual(
+      expect.objectContaining({
+        pilotid: 10,
+        icon: "award",
+        subject: "award_granted",
+        content: '{"awardId":7}',
+      }),
+    );
+    for (const row of rows) {
+      expect(row.subject).toBe("award_granted");
+      expect(row.content.length).toBeLessThanOrEqual(60);
+    }
+  });
+
   it("skips previously granted awards", async () => {
     mocks.findGrants.mockResolvedValue([{ awardid: 101 }]);
 

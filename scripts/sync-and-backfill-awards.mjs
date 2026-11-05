@@ -18,6 +18,11 @@ import process from "node:process";
 import nextEnv from "@next/env";
 import mysql from "mysql2/promise";
 import { databaseSslOptions } from "../src/lib/database-ssl.mjs";
+import {
+  AWARD_GRANTED_SUBJECT,
+  AWARD_NOTIFICATION_ICON,
+  awardGrantedContent,
+} from "../src/lib/notification-format.mjs";
 import { MASTER_BADGES } from "./build-all-badges.mjs";
 
 const { loadEnvConfig } = nextEnv;
@@ -430,11 +435,12 @@ async function main() {
         if (meets) {
           ownedIds.add(awardId);
           grantsToInsert.push([awardId, pilotId, now]);
+          // Same language-neutral row as evaluateAndGrantAwards writes.
           notificationsToInsert.push([
             pilotId,
-            "award",
-            "获得新勋章",
-            `祝贺你解锁了成就勋章【${award.name}】！`,
+            AWARD_NOTIFICATION_ICON,
+            AWARD_GRANTED_SUBJECT,
+            awardGrantedContent(awardId),
             now,
           ]);
           newlyAwardedNames.push(award.name);
