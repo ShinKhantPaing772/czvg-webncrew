@@ -5,6 +5,24 @@ import { models } from "@/lib/models";
 import { canAccessLiveScheduling } from "@/lib/scheduling/access";
 
 const JWT_SECRET = process.env.JWT_SECRET;
+const TOKEN_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
+
+let lastTokenCleanupAt = 0;
+
+// Expired tokens are already rejected below, so deleting them only keeps the
+// table small. Verify runs on every page focus; once an hour per server
+// instance is plenty.
+async function deleteExpiredTokens() {
+  const now = Date.now();
+  if (now - lastTokenCleanupAt < TOKEN_CLEANUP_INTERVAL_MS) return;
+  lastTokenCleanupAt = now;
+
+  await models.Token.destroy({
+    where: {
+      expiresAt: { [Op.lt]: new Date(now) },
+    },
+  });
+}
 
 export async function POST(request: Request) {
   try {
@@ -18,13 +36,7 @@ export async function POST(request: Request) {
 
     let token: string | null = null;
 
-    // --- CLEANUP STEP: Delete all expired tokens ---
-
-    await models.Token.destroy({
-      where: {
-        expiresAt: { [Op.lt]: new Date() },
-      },
-    });
+    await deleteExpiredTokens();
 
     // Try to get token from request body
     try {
