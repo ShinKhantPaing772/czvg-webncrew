@@ -77,6 +77,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import Link from "next/link";
 import { authFetch } from "@/lib/utils/api";
+import { formatFlightTime } from "@/lib/utils/time";
 
 interface Pilots {
   id: string;
@@ -138,7 +139,7 @@ export default function Users() {
     email: "",
     callsign: "",
     status: "0",
-    transhours: "0",
+    transhours: "00:00",
     transflights: "0",
   });
   const [applicationForm, setApplicationForm] = useState<ApplicationEditForm>({
@@ -289,7 +290,8 @@ export default function Users() {
       email: user.email,
       callsign: user.callsign,
       status: user.status.toString(),
-      transhours: String(user.transhours ?? 0),
+      // Stored in seconds; edited as HH:MM like PIREP flight times.
+      transhours: formatFlightTime(Number(user.transhours) || 0),
       transflights: String(user.transflights ?? 0),
     });
     setApplicationForm({
@@ -418,14 +420,21 @@ export default function Users() {
       return;
     }
 
-    const transferHours = Number(editForm.transhours);
+    const transferTime = editForm.transhours.trim().match(/^(\d{1,6}):([0-5]\d)$/);
+    const transferSeconds = transferTime
+      ? Number(transferTime[1]) * 3600 + Number(transferTime[2]) * 60
+      : null;
+    // HH:MM drops seconds, so only send the time when it was actually edited.
+    const transferTimeChanged =
+      editForm.transhours.trim() !==
+      formatFlightTime(Number(user.transhours) || 0);
     const transferFlights = Number(editForm.transflights);
-    if (
-      ![transferHours, transferFlights].every(
-        (value) => Number.isInteger(value) && value >= 0,
-      )
-    ) {
-      setUpdateError("Transfer hours and flights must be whole numbers, 0 or more.");
+    if (transferSeconds === null) {
+      setUpdateError("Transfer flight time must be in HH:MM format.");
+      return;
+    }
+    if (!Number.isInteger(transferFlights) || transferFlights < 0) {
+      setUpdateError("Transfer flights must be a whole number, 0 or more.");
       return;
     }
 
@@ -442,7 +451,7 @@ export default function Users() {
           email,
           callsign,
           status: Number(editForm.status),
-          transhours: transferHours,
+          transhours: transferTimeChanged ? transferSeconds : undefined,
           transflights: transferFlights,
         }),
       });
@@ -918,14 +927,11 @@ export default function Users() {
                                                 <Label
                                                   htmlFor={`transhours-${user.id}`}
                                                 >
-                                                  Transfer hours
+                                                  Transfer flight time
                                                 </Label>
                                                 <Input
                                                   id={`transhours-${user.id}`}
-                                                  type="number"
-                                                  min={0}
-                                                  step={1}
-                                                  inputMode="numeric"
+                                                  placeholder="HH:MM"
                                                   value={editForm.transhours}
                                                   disabled={!isEditingUser}
                                                   onChange={(event) =>
@@ -960,9 +966,10 @@ export default function Users() {
                                               </div>
                                             </div>
                                             <p className="text-xs text-muted-foreground">
-                                              Hours from the pilot&apos;s
-                                              previous VA count toward rank
-                                              and aircraft unlocks.
+                                              Flight time from the
+                                              pilot&apos;s previous VA counts
+                                              toward rank and aircraft
+                                              unlocks.
                                             </p>
                                           </div>
 

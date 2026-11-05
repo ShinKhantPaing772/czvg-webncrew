@@ -378,6 +378,7 @@ export const EN_TO_ZH_PHRASES: Record<string, string> = {
   "SR Captain": "资深机长",
   "Fleet Captain": "机队总机长",
   "Captain Instructor": "机长教员",
+  "SR Captain Instructor": "资深机长教员",
   "Senior Captain Instructor": "资深机长教员",
   "China Southern Airlines": "中国南方航空",
   "China Southern Cargo": "中国南方航空货运",
@@ -2271,14 +2272,14 @@ const EN_TO_ZH_LOWERCASE_PHRASES: Record<string, string> = (() => {
 })();
 
 const RANK_TITLE_REPLACE: Array<[RegExp, string]> = [
-  [/\bSenior Captain Instructor\b/g, "资深机长教员"],
+  [/\b(?:SR|Senior) Captain Instructor\b/g, "资深机长教员"],
   [/\bCaptain Instructor\b/g, "机长教员"],
   [/\bTrainee Second Officer\b/g, "见习二副"],
   [/\bSenior First Officer\b/g, "高级副驾驶"],
   [/\bSR First Officer\b/g, "资深副驾驶"],
   [/\bFirst Officer\b/g, "第一副驾驶"],
   [/\bSecond Officer\b/g, "二副驾驶"],
-  [/\bSenior Captain\b/g, "资深机长"],
+  [/\b(?:SR|Senior) Captain\b/g, "资深机长"],
   [/\bFleet Captain\b/g, "机队总机长"],
   [/\bCaptain\b/g, "责任机长"],
   [/\bTrainee\b/g, "学员"],
@@ -2366,20 +2367,21 @@ export function translateTextToZh(input: string): string {
 }
 
 // Rank names are database content, and some ranks are named in Chinese.
-// The English UI translates them back; longest titles first, so
-// "资深机长教员" isn't caught by "资深机长".
+// The English UI shows them under the names used on the public ranks page
+// (/operations/ranks); the two instructor ranks above Fleet Captain follow
+// its "SR" style. Longest titles first, so "资深机长教员" isn't caught by
+// "资深机长".
 const ZH_TO_EN_RANK_TITLES: Array<[string, string]> = (
   [
-    ["资深机长教员", "Senior Captain Instructor"],
-    ["机长教员", "Captain Instructor"],
-    ["机队总机长", "Fleet Captain"],
-    ["资深机长", "SR Captain"],
-    ["责任机长", "Captain"],
-    ["资深副驾驶", "SR First Officer"],
-    ["高级副驾驶", "Senior First Officer"],
-    ["第一副驾驶", "First Officer"],
-    ["二副驾驶", "Second Officer"],
     ["见习二副", "Trainee Second Officer"],
+    ["二副驾驶", "Second Officer"],
+    ["第一副驾驶", "First Officer"],
+    ["资深副驾驶", "SR First Officer"],
+    ["责任机长", "Captain"],
+    ["资深机长", "SR Captain"],
+    ["机队总机长", "Fleet Captain"],
+    ["机长教员", "Captain Instructor"],
+    ["资深机长教员", "SR Captain Instructor"],
   ] as Array<[string, string]>
 ).sort(([a], [b]) => b.length - a.length);
 
