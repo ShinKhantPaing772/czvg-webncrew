@@ -29,6 +29,8 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { NotificationBell } from "@/components/notification-bell";
+import { usePilotNotifications } from "@/hooks/use-pilot-notifications";
 import { clearSessionCache, useSession } from "@/hooks/use-session";
 import { LanguageSwitcher, useI18n } from "@/lib/i18n";
 import { clearApiCache } from "@/lib/utils/api";
@@ -63,6 +65,8 @@ export function CrewHeader({ children }: CrewHeaderProps) {
 
   const { user } = useSession();
   const { t } = useI18n();
+  // One inbox for every bell below (desktop sidebar and mobile button).
+  const inbox = usePilotNotifications(user?.id);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -363,6 +367,7 @@ export function CrewHeader({ children }: CrewHeaderProps) {
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-1 px-1">
               <LanguageSwitcher className="flex-1 justify-center" />
+              <NotificationBell inbox={inbox} />
             </div>
             <div className="flex h-8 items-center justify-between gap-2 rounded-[6px] px-2.5">
               <span className="truncate text-[13px] font-medium text-[var(--v2-text-text-muted,#475569)]">
@@ -383,6 +388,7 @@ export function CrewHeader({ children }: CrewHeaderProps) {
         ) : (
           <div className="flex flex-col items-center gap-1">
             <LanguageSwitcher compact className="size-8 p-0" />
+            <NotificationBell inbox={inbox} />
             <button
               type="button"
               onClick={handleLogout}
@@ -399,16 +405,25 @@ export function CrewHeader({ children }: CrewHeaderProps) {
 
       {/* Mobile Drawer */}
       <Sheet>
-        <SheetTrigger asChild>
-          <button
-            type="button"
-            className="fixed bottom-4 left-4 z-50 flex h-8 items-center gap-2 rounded-[6px] bg-[#0052a5] px-2.5 text-[13px] font-medium text-white shadow-[var(--v2-elevation-floating)] md:hidden"
-            aria-label="Open crew center sidebar"
-          >
-            <Menu className="size-3.5" />
-            <span>{t("Menu", "菜单")}</span>
-          </button>
-        </SheetTrigger>
+        <div className="fixed bottom-4 left-4 z-50 flex items-center gap-2 md:hidden">
+          <SheetTrigger asChild>
+            <button
+              type="button"
+              className="flex h-8 items-center gap-2 rounded-[6px] bg-[#0052a5] px-2.5 text-[13px] font-medium text-white shadow-[var(--v2-elevation-floating)]"
+              aria-label="Open crew center sidebar"
+            >
+              <Menu className="size-3.5" />
+              <span>{t("Menu", "菜单")}</span>
+            </button>
+          </SheetTrigger>
+          {/* Outside the drawer: a popover inside the Sheet's scroll lock could not scroll. */}
+          <NotificationBell
+            inbox={inbox}
+            side="top"
+            align="start"
+            className="bg-[var(--v2-background-bg-base,#ffffff)] shadow-[var(--v2-elevation-floating)]"
+          />
+        </div>
         <SheetContent
           side="left"
           className="w-60 gap-0 border-0 bg-[#f2f6fb] p-3"
