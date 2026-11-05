@@ -9,7 +9,7 @@ import {
 } from "@/lib/pirep-comments";
 import { formatFlightTime } from "@/lib/utils/time";
 import { hasPermission, requireCrewAuth } from "@/lib/server-auth";
-import { transferHoursToSeconds } from "@/lib/pilot-flight-time";
+import { transferTimeSeconds } from "@/lib/pilot-flight-time";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -141,12 +141,12 @@ export async function GET(
       }),
     ]);
 
-    // Approved PIREP time plus hours transferred from another VA
+    // Approved PIREP time plus flight time transferred from another VA
     const totalSeconds =
       approvedPireps.reduce(
         (total, pirep) => total + (pirep.flighttime || 0),
         0,
-      ) + transferHoursToSeconds(pilot?.transhours);
+      ) + transferTimeSeconds(pilot?.transhours);
 
     // Fetch all ranks
     const ranks = await models.Rank.findAll({

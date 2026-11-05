@@ -71,7 +71,7 @@ describe("PUT /api/admin/users transfer hours", () => {
     ["negative hours", { transhours: -1 }],
     ["fractional hours", { transhours: 2.5 }],
     ["text flights", { transflights: "lots" }],
-    ["an absurd total", { transhours: 1_000_000 }],
+    ["more than 100,000 hours", { transhours: 400_000_000 }],
   ])("rejects %s without saving", async (_case, fields) => {
     const response = await PUT(updateRequest(fields));
 

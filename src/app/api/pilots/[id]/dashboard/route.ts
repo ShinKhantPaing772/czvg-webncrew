@@ -6,7 +6,7 @@ import { formatFlightTime } from "@/lib/utils/time";
 import { hasPermission, requireCrewAuth } from "@/lib/server-auth";
 import { getPilotBadgesOverview } from "@/lib/awards/evaluator";
 import { getSafeAwards } from "@/lib/awards/columns";
-import { transferHoursToSeconds } from "@/lib/pilot-flight-time";
+import { transferTimeSeconds } from "@/lib/pilot-flight-time";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -129,11 +129,11 @@ export async function GET(
     ]);
 
     const approvedFlightSeconds = Number(approvedSeconds || 0);
-    const transferFlightSeconds = transferHoursToSeconds(
+    const transferFlightSeconds = transferTimeSeconds(
       (pilot as any).transhours,
     );
-    // Rank, aircraft unlocks and the headline total include hours the pilot
-    // transferred from another VA.
+    // Rank, aircraft unlocks and the headline total include flight time the
+    // pilot transferred from another VA.
     const totalSeconds = approvedFlightSeconds + transferFlightSeconds;
     const ownedAwardIds = awardGrants.map((grant: any) =>
       Number(grant.awardid),

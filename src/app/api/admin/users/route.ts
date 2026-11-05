@@ -15,7 +15,8 @@ import {
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const MAX_TRANSFER_VALUE = 100_000;
+const MAX_TRANSFER_SECONDS = 100_000 * 3600; // 100,000 hours
+const MAX_TRANSFER_FLIGHTS = 100_000;
 
 function normalizeNullableNumber(value: unknown) {
   if (value === null || value === undefined || value === "") return null;
@@ -183,25 +184,26 @@ export async function PUT(request: Request) {
       updateFields.notes = typeof notes === "string" ? notes : "";
     }
 
-    // Hours and flights carried over from a pilot's previous VA. Transfer
-    // hours count toward rank, aircraft unlocks and multiplier access.
+    // Flight time (in seconds, despite the column name) and flights carried
+    // over from a pilot's previous VA. Transfer time counts toward rank,
+    // aircraft unlocks and multiplier access.
     const transferFields = [
-      ["transhours", transhours, "Transfer hours"],
-      ["transflights", transflights, "Transfer flights"],
+      ["transhours", transhours, "Transfer flight time (seconds)", MAX_TRANSFER_SECONDS],
+      ["transflights", transflights, "Transfer flights", MAX_TRANSFER_FLIGHTS],
     ] as const;
-    for (const [field, value, label] of transferFields) {
+    for (const [field, value, label, max] of transferFields) {
       if (value === undefined) continue;
-      const count = Number(value);
-      if (!Number.isInteger(count) || count < 0 || count > MAX_TRANSFER_VALUE) {
+      const amount = Number(value);
+      if (!Number.isInteger(amount) || amount < 0 || amount > max) {
         return NextResponse.json(
           {
             success: false,
-            message: `${label} must be a whole number from 0 to ${MAX_TRANSFER_VALUE}`,
+            message: `${label} must be a whole number from 0 to ${max}`,
           },
           { status: 400 },
         );
       }
-      updateFields[field] = count;
+      updateFields[field] = amount;
     }
 
     const applicationUpdates: Record<string, string | number | Date | null> =
