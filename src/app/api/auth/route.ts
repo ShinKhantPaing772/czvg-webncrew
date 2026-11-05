@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { models } from "@/lib/db";
 import bcryptjs from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { postDiscordWebhook } from "@/lib/discord-webhook";
 import {
   applicationReceivedEmail,
   getApplicantPortalUrl,
@@ -301,24 +302,28 @@ async function handleSignup({
       ],
     };
 
-    await fetch(webhookUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(discordPayload),
-    });
+    // The account already exists, so post after responding: a Discord outage
+    // must not turn a successful signup into an error.
+    after(() => postDiscordWebhook(webhookUrl, discordPayload, "[Signup]"));
   }
 
-  sendEmail({
-    to: { email: pilot.email, name: pilot.name },
-    subject: "Your CZVG application has been received",
-    htmlContent: applicationReceivedEmail({
-      name: pilot.name,
-      callsign: pilot.callsign,
-      portalUrl: getApplicantPortalUrl(),
+  // `after` keeps the serverless function alive until the email is sent.
+  after(() =>
+    sendEmail({
+      to: { email: pilot.email, name: pilot.name },
+      subject: "Your CZVG application has been received",
+      htmlContent: applicationReceivedEmail({
+        name: pilot.name,
+        callsign: pilot.callsign,
+        portalUrl: getApplicantPortalUrl(),
+      }),
+    }).catch((error) => {
+      console.error(
+        "[Signup] Failed to send application received email:",
+        error,
+      );
     }),
-  }).catch((error) => {
-    console.error("[Signup] Failed to send application received email:", error);
-  });
+  );
 
   const tokenString = await createAuthToken(pilot.id, pilot.email);
 

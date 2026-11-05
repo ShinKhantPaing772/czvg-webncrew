@@ -2,7 +2,7 @@ import bcryptjs from "bcryptjs";
 import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { sendPasswordResetOtp } from "@/lib/auth/password-reset-email";
-import { models } from "@/lib/db";
+import sequelize, { models } from "@/lib/db";
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
@@ -147,12 +147,29 @@ export async function resetPassword(
     );
   }
 
-  await models.Pilot.update(
-    { password: await bcryptjs.hash(password, 10) },
-    { where: { email } },
-  );
+  const passwordHash = await bcryptjs.hash(password, 10);
+  const pilots = await models.Pilot.findAll({
+    where: { email },
+    attributes: ["id"],
+  });
+  const pilotIds = pilots.map((pilot) => pilot.id);
 
-  await otpRecord.destroy();
+  // A reset signs out every device, so a leaked session token can't outlive
+  // the password it was issued under.
+  await sequelize.transaction(async (transaction) => {
+    await models.Pilot.update(
+      { password: passwordHash },
+      { where: { email }, transaction },
+    );
+    if (pilotIds.length > 0) {
+      await models.Token.destroy({
+        where: { pilotId: pilotIds },
+        transaction,
+      });
+    }
+    await otpRecord.destroy({ transaction });
+  });
+
   clearAttempts(verifyAttempts, email);
   clearAttempts(requestAttempts, email);
 

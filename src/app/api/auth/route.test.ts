@@ -1,16 +1,27 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 const mocks = vi.hoisted(() => ({
+  after: vi.fn(),
   findPilot: vi.fn(),
+  createPilot: vi.fn(),
+  createApplication: vi.fn(),
   createToken: vi.fn(),
   comparePassword: vi.fn(),
+  hashPassword: vi.fn(),
   signToken: vi.fn(),
+  sendEmail: vi.fn(),
+}));
+
+vi.mock("next/server", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/server")>()),
+  after: mocks.after,
 }));
 
 vi.mock("@/lib/db", () => ({
   models: {
-    Pilot: { findOne: mocks.findPilot },
+    Pilot: { findOne: mocks.findPilot, create: mocks.createPilot },
+    Application: { create: mocks.createApplication },
     Token: { create: mocks.createToken },
   },
 }));
@@ -18,7 +29,7 @@ vi.mock("@/lib/db", () => ({
 vi.mock("bcryptjs", () => ({
   default: {
     compare: mocks.comparePassword,
-    hash: vi.fn(),
+    hash: mocks.hashPassword,
   },
 }));
 
@@ -31,7 +42,7 @@ vi.mock("jsonwebtoken", () => ({
 vi.mock("@/lib/email", () => ({
   applicationReceivedEmail: vi.fn(),
   getApplicantPortalUrl: vi.fn(),
-  sendEmail: vi.fn(),
+  sendEmail: mocks.sendEmail,
 }));
 
 import { POST } from "./route";
@@ -140,5 +151,102 @@ describe("POST /api/auth login status routing", () => {
     expect(mocks.comparePassword).toHaveBeenCalled();
     expect(mocks.signToken).not.toHaveBeenCalled();
     expect(mocks.createToken).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/auth signup follow-up work", () => {
+  const webhookUrl = "https://discord.test/admin-webhook";
+  let consoleError: ReturnType<typeof vi.spyOn>;
+
+  function signupRequest() {
+    return new NextRequest("http://localhost/api/auth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "signup",
+        email: " New.Pilot@Example.com ",
+        password: "a-long-password",
+        name: "New Pilot",
+        ifc: "newpilot",
+        ifUserId: "if-user-1",
+        ifGrade: 3,
+        ifViolations: 0,
+      }),
+    });
+  }
+
+  async function runAfterCallbacks() {
+    for (const [callback] of mocks.after.mock.calls) {
+      await callback();
+    }
+  }
+
+  beforeEach(() => {
+    mocks.findPilot.mockReset().mockResolvedValue(null);
+    mocks.hashPassword.mockReset().mockResolvedValue("password-hash");
+    mocks.createPilot.mockReset().mockImplementation(async (values) => ({
+      id: 77,
+      ...values,
+    }));
+    mocks.createApplication.mockReset().mockResolvedValue({});
+    mocks.createToken.mockReset().mockResolvedValue({});
+    mocks.signToken.mockReset().mockReturnValue("signed-token");
+    mocks.sendEmail.mockReset().mockResolvedValue(true);
+    consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    delete process.env.DISCORD_WEBHOOK_ADMIN;
+    vi.unstubAllGlobals();
+    consoleError.mockRestore();
+  });
+
+  it("completes the signup when Discord is unreachable", async () => {
+    process.env.DISCORD_WEBHOOK_ADMIN = webhookUrl;
+    const fetchMock = vi.fn().mockRejectedValue(new Error("Discord is down"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await POST(signupRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(body).toMatchObject({
+      token: "signed-token",
+      redirectTo: "/crew/application",
+      user: { id: 77, email: "new.pilot@example.com", status: 0 },
+    });
+    // The webhook and the email both wait until the response has been sent.
+    expect(mocks.after).toHaveBeenCalledTimes(2);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(mocks.sendEmail).not.toHaveBeenCalled();
+
+    await expect(runAfterCallbacks()).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledWith(
+      webhookUrl,
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(consoleError).toHaveBeenCalledWith(
+      "[Signup] Discord webhook failed:",
+      expect.any(Error),
+    );
+    expect(mocks.sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: { email: "new.pilot@example.com", name: "New Pilot" },
+      }),
+    );
+  });
+
+  it("logs an email that fails after the response", async () => {
+    mocks.sendEmail.mockRejectedValue(new Error("Brevo is down"));
+
+    const response = await POST(signupRequest());
+    expect(response.status).toBe(201);
+    expect(mocks.after).toHaveBeenCalledTimes(1);
+
+    await expect(runAfterCallbacks()).resolves.toBeUndefined();
+    expect(consoleError).toHaveBeenCalledWith(
+      "[Signup] Failed to send application received email:",
+      expect.any(Error),
+    );
   });
 });

@@ -163,6 +163,53 @@ export async function setCached<T>(key: string, data: T, ttlSeconds: number) {
   }
 }
 
+/**
+ * Counts one hit in a fixed window that starts at the first hit and returns
+ * the number of hits so far in that window. Counters live in the cache table,
+ * so the expiry sweep removes them like any other entry.
+ */
+export async function incrementCounter(key: string, windowSeconds: number) {
+  assertCacheKey(key);
+  if (!Number.isFinite(windowSeconds) || windowSeconds <= 0) {
+    throw new Error("Counter windows must be a positive number of seconds");
+  }
+
+  try {
+    const databaseAvailable = await ensureCacheTable();
+    if (!databaseAvailable) {
+      throw new Error("Infinite Flight database cache is unavailable");
+    }
+
+    await cleanupExpiredDbCache();
+    const now = Date.now();
+    // `value` must be assigned first: MySQL applies these left to right, and
+    // the reset check has to see the window's old `expires_at`.
+    await sequelize.query(
+      `INSERT INTO ${TABLE_NAME} (cache_key, value, expires_at)
+       VALUES (?, '1', ?)
+       ON DUPLICATE KEY UPDATE
+         value = IF(expires_at <= ?, '1', CAST(value AS UNSIGNED) + 1),
+         expires_at = IF(expires_at <= ?, VALUES(expires_at), expires_at)`,
+      {
+        replacements: [key, now + windowSeconds * 1000, now, now],
+        type: QueryTypes.INSERT,
+      },
+    );
+
+    const rows = await sequelize.query<{ value: string }>(
+      `SELECT value FROM ${TABLE_NAME} WHERE cache_key = ? LIMIT 1`,
+      {
+        replacements: [key],
+        type: QueryTypes.SELECT,
+      },
+    );
+    return Number(rows[0]?.value) || 1;
+  } catch (error) {
+    console.error("[IF Cache] DB counter error:", error);
+    throw error;
+  }
+}
+
 export async function deleteCached(key: string) {
   assertCacheKey(key);
 
