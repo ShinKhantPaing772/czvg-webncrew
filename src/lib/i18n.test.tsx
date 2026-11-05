@@ -3,10 +3,12 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  applyDomTranslation,
   detectPreferredLocale,
   I18nProvider,
   LanguageSwitcher,
   LOCALE_STORAGE_KEY,
+  translateTextToEn,
   translateTextToZh,
   useI18n,
 } from "./i18n";
@@ -113,5 +115,49 @@ describe("i18n multi-language support & auto-detection", () => {
 
     expect(container.querySelector("#current-locale")?.textContent).toBe("en");
     expect(window.localStorage.getItem(LOCALE_STORAGE_KEY)).toBe("en");
+  });
+});
+
+describe("rank names in both languages", () => {
+  it("translates Chinese rank names for the English UI", () => {
+    expect(translateTextToEn("机长教员")).toBe("Captain Instructor");
+    expect(translateTextToEn("Next: 资深机长教员")).toBe(
+      "Next: Senior Captain Instructor",
+    );
+    expect(
+      translateTextToEn(
+        "China Southern 001VG · 机长教员 · 580:47 remaining to 资深机长教员",
+      ),
+    ).toBe(
+      "China Southern 001VG · Captain Instructor · 580:47 remaining to Senior Captain Instructor",
+    );
+  });
+
+  it("leaves English text and other Chinese text alone", () => {
+    expect(translateTextToEn("Total flight time")).toBe("Total flight time");
+    expect(translateTextToEn("飞行数据与分析")).toBe("飞行数据与分析");
+  });
+
+  it("translates the instructor ranks to Chinese as whole titles", () => {
+    expect(translateTextToZh("Captain Instructor")).toBe("机长教员");
+    expect(translateTextToZh("Senior Captain Instructor")).toBe("资深机长教员");
+  });
+
+  it("switches rank names on the page in both directions", () => {
+    const root = document.createElement("div");
+    root.innerHTML = "<p>机长教员</p><p>Captain</p>";
+    const [chineseRank, englishRank] = Array.from(root.children);
+
+    applyDomTranslation(root, "en");
+    expect(chineseRank.textContent).toBe("Captain Instructor");
+    expect(englishRank.textContent).toBe("Captain");
+
+    applyDomTranslation(root, "zh");
+    expect(chineseRank.textContent).toBe("机长教员");
+    expect(englishRank.textContent).toBe("责任机长");
+
+    applyDomTranslation(root, "en");
+    expect(chineseRank.textContent).toBe("Captain Instructor");
+    expect(englishRank.textContent).toBe("Captain");
   });
 });

@@ -1,4 +1,5 @@
 import { models } from "@/lib/models";
+import { getPilotRankTime } from "@/lib/pilot-flight-time";
 
 export type AircraftRequirements = {
   rankreq?: number | null;
@@ -14,11 +15,9 @@ export async function canPilotUseAircraft(
 
   if (!rankRequired && !awardRequired) return false;
 
-  const [approvedFlightSeconds, requiredRank, awardGrant] = await Promise.all([
+  const [rankSeconds, requiredRank, awardGrant] = await Promise.all([
     rankRequired
-      ? models.Pirep.sum("flighttime", {
-          where: { pilotid: pilotId, status: 1 },
-        })
+      ? getPilotRankTime(pilotId).then((time) => time.rankSeconds)
       : Promise.resolve(0),
     rankRequired
       ? models.Rank.findByPk(rankRequired, { attributes: ["timereq"] })
@@ -34,7 +33,7 @@ export async function canPilotUseAircraft(
   const meetsRank = Boolean(
     rankRequired &&
       requiredRank &&
-      Number(approvedFlightSeconds || 0) >= Number(requiredRank.timereq),
+      rankSeconds >= Number(requiredRank.timereq),
   );
   const hasAward = Boolean(awardRequired && awardGrant);
 

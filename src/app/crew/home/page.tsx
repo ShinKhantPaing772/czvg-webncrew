@@ -116,6 +116,8 @@ type DashboardData = {
   };
   statistics: {
     totalFlightTime: string;
+    transferFlightSeconds?: number;
+    transferFlightTime?: string;
     approvedPireps: number;
     pendingPireps: number;
     rejectedPireps: number;
@@ -134,10 +136,12 @@ function SummaryCard({
   icon,
   label,
   value,
+  hint,
 }: {
   icon: ReactNode;
   label: string;
   value: string | number;
+  hint?: string;
 }) {
   return (
     <Card className="group relative overflow-hidden transition-all">
@@ -150,6 +154,9 @@ function SummaryCard({
         <div>
           <p className="text-xl font-semibold sm:text-2xl">{value}</p>
           <p className="text-xs text-muted-foreground">{label}</p>
+          {hint && (
+            <p className="text-[11px] text-muted-foreground">{hint}</p>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -433,6 +440,14 @@ export default function UserDashboard() {
                 icon={<Clock className="h-4 w-4" />}
                 label="Total flight time"
                 value={dashboard.statistics.totalFlightTime}
+                hint={
+                  dashboard.statistics.transferFlightSeconds
+                    ? t(
+                        `Includes ${dashboard.statistics.transferFlightTime} transferred`,
+                        `含转入时长 ${dashboard.statistics.transferFlightTime}`,
+                      )
+                    : undefined
+                }
               />
               <SummaryCard
                 icon={<CheckCircle2 className="h-4 w-4" />}

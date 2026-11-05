@@ -9,6 +9,7 @@ import {
 } from "@/lib/pirep-comments";
 import { formatFlightTime } from "@/lib/utils/time";
 import { hasPermission, requireCrewAuth } from "@/lib/server-auth";
+import { transferHoursToSeconds } from "@/lib/pilot-flight-time";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -129,23 +130,30 @@ export async function GET(
       flighttime: formatFlightTime(pirep.flighttime || 0),
     }));
 
-    const approvedPireps = await models.Pirep.findAll({
-      where: { pilotid: pilotId, status: 1 },
-      attributes: ["flighttime"],
-    });
+    const [approvedPireps, pilot] = await Promise.all([
+      models.Pirep.findAll({
+        where: { pilotid: pilotId, status: 1 },
+        attributes: ["flighttime"],
+      }),
+      models.Pilot.findByPk(pilotId, {
+        attributes: ["transhours"],
+        raw: true,
+      }),
+    ]);
 
-    // Calculate total flight time using only approved PIREPs
-    const totalSeconds = approvedPireps.reduce(
-      (total, pirep) => total + (pirep.flighttime || 0),
-      0,
-    );
+    // Approved PIREP time plus hours transferred from another VA
+    const totalSeconds =
+      approvedPireps.reduce(
+        (total, pirep) => total + (pirep.flighttime || 0),
+        0,
+      ) + transferHoursToSeconds(pilot?.transhours);
 
     // Fetch all ranks
     const ranks = await models.Rank.findAll({
       order: [["timereq", "ASC"]],
     });
 
-    // Determine the pilot's rank based on total approved flight time
+    // Determine the pilot's rank based on that total
     let pilotRank = { id: 0, name: "Trainee", timereq: 0 }; // Default rank
     for (const rank of ranks) {
       if (totalSeconds >= rank.timereq) {

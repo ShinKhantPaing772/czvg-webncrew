@@ -5,6 +5,7 @@ import sequelize from "@/lib/database";
 import { requireCrewAuth } from "@/lib/server-auth";
 import { canPilotUseAircraft } from "@/lib/aircraft-eligibility";
 import { postDiscordWebhook } from "@/lib/discord-webhook";
+import { getPilotRankTime } from "@/lib/pilot-flight-time";
 
 function normalizeIcao(value: unknown) {
   return typeof value === "string" ? value.trim().toUpperCase() : "";
@@ -47,12 +48,8 @@ async function canUseMultiplier(pilotId: number, minrankid?: number | null) {
   const rank = await models.Rank.findByPk(minrankid);
   if (!rank) return false;
 
-  const approvedFlightSeconds =
-    (await models.Pirep.sum("flighttime", {
-      where: { pilotid: pilotId, status: 1 },
-    })) || 0;
-
-  return approvedFlightSeconds >= rank.timereq;
+  const { rankSeconds } = await getPilotRankTime(pilotId);
+  return rankSeconds >= rank.timereq;
 }
 
 export async function POST(request: NextRequest) {

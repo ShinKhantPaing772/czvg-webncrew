@@ -108,6 +108,8 @@ interface UserEditForm {
   email: string;
   callsign: string;
   status: string;
+  transhours: string;
+  transflights: string;
 }
 
 interface ApplicationEditForm {
@@ -136,6 +138,8 @@ export default function Users() {
     email: "",
     callsign: "",
     status: "0",
+    transhours: "0",
+    transflights: "0",
   });
   const [applicationForm, setApplicationForm] = useState<ApplicationEditForm>({
     examScore: "",
@@ -285,6 +289,8 @@ export default function Users() {
       email: user.email,
       callsign: user.callsign,
       status: user.status.toString(),
+      transhours: String(user.transhours ?? 0),
+      transflights: String(user.transflights ?? 0),
     });
     setApplicationForm({
       examScore:
@@ -412,6 +418,17 @@ export default function Users() {
       return;
     }
 
+    const transferHours = Number(editForm.transhours);
+    const transferFlights = Number(editForm.transflights);
+    if (
+      ![transferHours, transferFlights].every(
+        (value) => Number.isInteger(value) && value >= 0,
+      )
+    ) {
+      setUpdateError("Transfer hours and flights must be whole numbers, 0 or more.");
+      return;
+    }
+
     setIsUpdating(true);
     try {
       const response = await authFetch("/api/admin/users", {
@@ -425,6 +442,8 @@ export default function Users() {
           email,
           callsign,
           status: Number(editForm.status),
+          transhours: transferHours,
+          transflights: transferFlights,
         }),
       });
       const data = await response.json();
@@ -894,6 +913,57 @@ export default function Users() {
                                                 </SelectContent>
                                               </Select>
                                             </div>
+                                            <div className="grid grid-cols-2 gap-4">
+                                              <div className="space-y-2">
+                                                <Label
+                                                  htmlFor={`transhours-${user.id}`}
+                                                >
+                                                  Transfer hours
+                                                </Label>
+                                                <Input
+                                                  id={`transhours-${user.id}`}
+                                                  type="number"
+                                                  min={0}
+                                                  step={1}
+                                                  inputMode="numeric"
+                                                  value={editForm.transhours}
+                                                  disabled={!isEditingUser}
+                                                  onChange={(event) =>
+                                                    handleEditFormChange(
+                                                      "transhours",
+                                                      event.target.value,
+                                                    )
+                                                  }
+                                                />
+                                              </div>
+                                              <div className="space-y-2">
+                                                <Label
+                                                  htmlFor={`transflights-${user.id}`}
+                                                >
+                                                  Transfer flights
+                                                </Label>
+                                                <Input
+                                                  id={`transflights-${user.id}`}
+                                                  type="number"
+                                                  min={0}
+                                                  step={1}
+                                                  inputMode="numeric"
+                                                  value={editForm.transflights}
+                                                  disabled={!isEditingUser}
+                                                  onChange={(event) =>
+                                                    handleEditFormChange(
+                                                      "transflights",
+                                                      event.target.value,
+                                                    )
+                                                  }
+                                                />
+                                              </div>
+                                            </div>
+                                            <p className="text-xs text-muted-foreground">
+                                              Hours from the pilot&apos;s
+                                              previous VA count toward rank
+                                              and aircraft unlocks.
+                                            </p>
                                           </div>
 
                                           {updateError && (
