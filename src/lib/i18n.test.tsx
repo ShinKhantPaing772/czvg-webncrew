@@ -122,15 +122,33 @@ describe("rank names in both languages", () => {
   it("translates Chinese rank names for the English UI", () => {
     expect(translateTextToEn("机长教员")).toBe("Captain Instructor");
     expect(translateTextToEn("Next: 资深机长教员")).toBe(
-      "Next: Senior Captain Instructor",
+      "Next: SR Captain Instructor",
     );
     expect(
       translateTextToEn(
         "China Southern 001VG · 机长教员 · 580:47 remaining to 资深机长教员",
       ),
     ).toBe(
-      "China Southern 001VG · Captain Instructor · 580:47 remaining to Senior Captain Instructor",
+      "China Southern 001VG · Captain Instructor · 580:47 remaining to SR Captain Instructor",
     );
+  });
+
+  // Names as listed on the public ranks page (/operations/ranks), plus the
+  // two instructor ranks above Fleet Captain.
+  it.each([
+    "Trainee Second Officer",
+    "Second Officer",
+    "First Officer",
+    "SR First Officer",
+    "Captain",
+    "SR Captain",
+    "Fleet Captain",
+    "Captain Instructor",
+    "SR Captain Instructor",
+  ])("round-trips %s through Chinese and back", (name) => {
+    const chinese = translateTextToZh(name);
+    expect(chinese).not.toBe(name);
+    expect(translateTextToEn(chinese)).toBe(name);
   });
 
   it("leaves English text and other Chinese text alone", () => {
@@ -140,6 +158,7 @@ describe("rank names in both languages", () => {
 
   it("translates the instructor ranks to Chinese as whole titles", () => {
     expect(translateTextToZh("Captain Instructor")).toBe("机长教员");
+    expect(translateTextToZh("SR Captain Instructor")).toBe("资深机长教员");
     expect(translateTextToZh("Senior Captain Instructor")).toBe("资深机长教员");
   });
 

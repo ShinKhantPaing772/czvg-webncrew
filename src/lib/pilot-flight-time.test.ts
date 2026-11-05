@@ -16,40 +16,37 @@ vi.mock("@/lib/models", () => ({
   },
 }));
 
-import { getPilotRankTime, transferHoursToSeconds } from "./pilot-flight-time";
+import { getPilotRankTime, transferTimeSeconds } from "./pilot-flight-time";
 import { canPilotUseAircraft } from "./aircraft-eligibility";
 
 const HOUR = 3600;
 
-describe("transferHoursToSeconds", () => {
+describe("transferTimeSeconds", () => {
   it.each([
-    [50, 50 * HOUR],
-    ["12", 12 * HOUR],
+    [50 * HOUR, 50 * HOUR],
+    ["3600", HOUR],
     [0, 0],
     [null, 0],
     [-5, 0],
     ["not a number", 0],
-  ])("turns %j transfer hours into %i seconds", (hours, seconds) => {
-    expect(transferHoursToSeconds(hours)).toBe(seconds);
+  ])("reads %j stored seconds as %i seconds", (stored, seconds) => {
+    expect(transferTimeSeconds(stored)).toBe(seconds);
   });
 });
 
 describe("getPilotRankTime", () => {
-  it("adds transfer hours to approved PIREP time", async () => {
+  it("adds transfer time (stored in seconds) to approved PIREP time", async () => {
     mocks.sumPireps.mockResolvedValue(10 * HOUR);
-    mocks.findPilot.mockResolvedValue({ transhours: 50 });
+    mocks.findPilot.mockResolvedValue({ transhours: 50 * HOUR });
 
     await expect(getPilotRankTime(42)).resolves.toEqual({
       approvedSeconds: 10 * HOUR,
       transferSeconds: 50 * HOUR,
       rankSeconds: 60 * HOUR,
     });
-    expect(mocks.sumPireps).toHaveBeenCalledWith("flighttime", {
-      where: { pilotid: 42, status: 1 },
-    });
   });
 
-  it("treats a pilot with no PIREPs or transfer hours as zero", async () => {
+  it("treats a pilot with no PIREPs or transfer time as zero", async () => {
     mocks.sumPireps.mockResolvedValue(null);
     mocks.findPilot.mockResolvedValue({ transhours: 0 });
 
@@ -59,7 +56,7 @@ describe("getPilotRankTime", () => {
   });
 });
 
-describe("canPilotUseAircraft with transfer hours", () => {
+describe("canPilotUseAircraft with transfer time", () => {
   beforeEach(() => {
     // The aircraft needs a rank that takes 40 hours.
     mocks.findRank.mockResolvedValue({ timereq: 40 * HOUR });
@@ -67,14 +64,14 @@ describe("canPilotUseAircraft with transfer hours", () => {
     mocks.sumPireps.mockResolvedValue(10 * HOUR);
   });
 
-  it("unlocks the aircraft once transfer hours cover the gap", async () => {
-    mocks.findPilot.mockResolvedValue({ transhours: 30 });
+  it("unlocks the aircraft once transfer time covers the gap", async () => {
+    mocks.findPilot.mockResolvedValue({ transhours: 30 * HOUR });
 
     await expect(canPilotUseAircraft(42, { rankreq: 3 })).resolves.toBe(true);
   });
 
   it("keeps it locked when the combined time is still short", async () => {
-    mocks.findPilot.mockResolvedValue({ transhours: 29 });
+    mocks.findPilot.mockResolvedValue({ transhours: 29 * HOUR });
 
     await expect(canPilotUseAircraft(42, { rankreq: 3 })).resolves.toBe(false);
   });

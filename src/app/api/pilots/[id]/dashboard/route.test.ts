@@ -50,7 +50,7 @@ describe("GET /api/pilots/[id]/dashboard transfer hours", () => {
       id: 42,
       name: "Test Pilot",
       status: 1,
-      transhours: 30,
+      transhours: 30 * HOUR,
       transflights: 12,
     });
     mocks.sumPireps.mockResolvedValue(15 * HOUR);
