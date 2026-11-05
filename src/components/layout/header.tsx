@@ -57,133 +57,135 @@ export function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-slate-200/80 bg-white/95 backdrop-blur-md">
-      <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between px-4 md:px-6">
-        <div className="flex min-w-0 items-center gap-2">
-          <Link
-            href="/"
-            className="flex min-w-0 items-center gap-2 rounded-lg transition-all"
-          >
-            <img
-              src={brandLogoSrc}
-              alt="China Southern Virtual Group Logo"
-              className="brand-logo-light h-10 w-auto max-w-[190px] shrink-0 object-contain"
-            />
-            <img
-              src={brandLogoWhiteSrc}
-              alt="China Southern Virtual Group Logo"
-              className="brand-logo-dark h-10 w-auto max-w-[190px] shrink-0 object-contain"
-            />
-          </Link>
-        </div>
-        <nav className="hidden items-center gap-1 md:flex">
-          {navLinks.map((link) => (
+    <>
+      <header className="sticky top-0 z-50 w-full border-b border-slate-200/80 bg-white/95 backdrop-blur-md">
+        <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between px-4 md:px-6">
+          <div className="flex min-w-0 items-center gap-2">
             <Link
-              key={link.href}
-              href={link.href}
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                isActive(link.href)
-                  ? "bg-[#eef6ff] text-[#0052a5]"
-                  : "text-slate-600 hover:bg-[#0052a5]/[0.05] hover:text-[#003a74]"
-              }`}
+              href="/"
+              className="flex min-w-0 items-center gap-2 rounded-lg transition-all"
             >
-              {link.label}
+              <img
+                src={brandLogoSrc}
+                alt="China Southern Virtual Group Logo"
+                className="brand-logo-light h-10 w-auto max-w-[190px] shrink-0 object-contain"
+              />
+              <img
+                src={brandLogoWhiteSrc}
+                alt="China Southern Virtual Group Logo"
+                className="brand-logo-dark h-10 w-auto max-w-[190px] shrink-0 object-contain"
+              />
             </Link>
-          ))}
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              className={`flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                isActive("/operations")
-                  ? "bg-[#eef6ff] text-[#0052a5]"
-                  : "text-slate-600 hover:bg-[#0052a5]/[0.05] hover:text-[#003a74]"
-              }`}
-            >
-              {t("Operations", "运行中心")}
-              <ChevronDown className="h-4 w-4" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="rounded-xl border-0 bg-white p-1 shadow-[var(--v2-elevation-floating)]">
-              {operationLinks.map((link) => (
-                <DropdownMenuItem key={link.href}>
-                  <Link href={link.href} className="flex w-full">
-                    {link.label}
-                  </Link>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          {!user ? (
-            <Link
-              href="/crew?type=signup"
-              className="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-[#0052a5]/[0.05] hover:text-[#003a74]"
-            >
-              {t("Join Us", "加入我们")}
-            </Link>
-          ) : (
-            <Link
-              href={portalHref}
-              className="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-[#0052a5]/[0.05] hover:text-[#003a74]"
-            >
-              {portalLabel}
-            </Link>
-          )}
-        </nav>
-        <div className="flex shrink-0 items-center gap-2">
-          <LanguageSwitcher />
-          {user ? (
+          </div>
+          <nav className="hidden items-center gap-1 md:flex">
+            {navLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                  isActive(link.href)
+                    ? "bg-[#eef6ff] text-[#0052a5]"
+                    : "text-slate-600 hover:bg-[#0052a5]/[0.05] hover:text-[#003a74]"
+                }`}
+              >
+                {link.label}
+              </Link>
+            ))}
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="default"
-                  className="hidden bg-primary text-white md:inline-flex"
-                >
-                  <div className="flex items-center gap-2">
-                    <p>{user?.name}</p>
-                    <ChevronDown className="h-4 w-4" />
-                  </div>
-                </Button>
+              <DropdownMenuTrigger
+                className={`flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                  isActive("/operations")
+                    ? "bg-[#eef6ff] text-[#0052a5]"
+                    : "text-slate-600 hover:bg-[#0052a5]/[0.05] hover:text-[#003a74]"
+                }`}
+              >
+                {t("Operations", "运行中心")}
+                <ChevronDown className="h-4 w-4" />
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="bg-white">
-                <DropdownMenuItem
-                  onClick={handleLogout}
-                  disabled={isLoggingOut}
-                >
-                  <div className="flex w-full items-center">
-                    <LogOut className="mr-2 h-4 w-4" />
-                    {isLoggingOut
-                      ? t("Logging out...", "正在退出...")
-                      : t("Log Out", "退出登录")}
-                  </div>
-                </DropdownMenuItem>
+              <DropdownMenuContent className="rounded-xl border-0 bg-white p-1 shadow-[var(--v2-elevation-floating)]">
+                {operationLinks.map((link) => (
+                  <DropdownMenuItem key={link.href}>
+                    <Link href={link.href} className="flex w-full">
+                      {link.label}
+                    </Link>
+                  </DropdownMenuItem>
+                ))}
               </DropdownMenuContent>
             </DropdownMenu>
-          ) : (
+            {!user ? (
+              <Link
+                href="/crew?type=signup"
+                className="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-[#0052a5]/[0.05] hover:text-[#003a74]"
+              >
+                {t("Join Us", "加入我们")}
+              </Link>
+            ) : (
+              <Link
+                href={portalHref}
+                className="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-[#0052a5]/[0.05] hover:text-[#003a74]"
+              >
+                {portalLabel}
+              </Link>
+            )}
+          </nav>
+          <div className="flex shrink-0 items-center gap-2">
+            <LanguageSwitcher />
+            {user ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="default"
+                    className="hidden bg-primary text-white md:inline-flex"
+                  >
+                    <div className="flex items-center gap-2">
+                      <p>{user?.name}</p>
+                      <ChevronDown className="h-4 w-4" />
+                    </div>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="bg-white">
+                  <DropdownMenuItem
+                    onClick={handleLogout}
+                    disabled={isLoggingOut}
+                  >
+                    <div className="flex w-full items-center">
+                      <LogOut className="mr-2 h-4 w-4" />
+                      {isLoggingOut
+                        ? t("Logging out...", "正在退出...")
+                        : t("Log Out", "退出登录")}
+                    </div>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <Button
+                asChild
+                variant="default"
+                className="bg-primary text-white hidden md:inline-flex"
+              >
+                <Link href="/crew">{t("Pilot Portal", "飞行员门户")}</Link>
+              </Button>
+            )}
             <Button
-              asChild
-              variant="default"
-              className="bg-primary text-white hidden md:inline-flex"
+              variant="outline"
+              size="icon"
+              className="bg-white md:hidden"
+              aria-expanded={mobileMenuOpen}
+              aria-controls="mobile-menu"
+              onClick={() => setMobileMenuOpen(true)}
             >
-              <Link href="/crew">{t("Pilot Portal", "飞行员门户")}</Link>
+              <Menu className="h-6 w-6" />
+              <span className="sr-only">Toggle menu</span>
             </Button>
-          )}
-          <Button
-            variant="outline"
-            size="icon"
-            className="bg-white md:hidden"
-            aria-expanded={mobileMenuOpen}
-            aria-controls="mobile-menu"
-            onClick={() => setMobileMenuOpen(true)}
-          >
-            <Menu className="h-6 w-6" />
-            <span className="sr-only">Toggle menu</span>
-          </Button>
+          </div>
         </div>
-      </div>
+      </header>
 
-      {/* Mobile Menu */}
+      {/* Keep the fixed menu outside the header's backdrop-filter containing block. */}
       <div
         id="mobile-menu"
         aria-hidden={!mobileMenuOpen}
-        className={`fixed inset-y-0 right-0 z-50 w-full transform bg-white px-6 py-6 shadow-xl sm:max-w-sm sm:ring-1 sm:ring-gray-900/10 ${
+        className={`fixed inset-y-0 right-0 z-50 w-full transform overflow-y-auto bg-white px-6 py-6 shadow-xl sm:max-w-sm sm:ring-1 sm:ring-gray-900/10 ${
           mobileMenuOpen
             ? "visible translate-x-0"
             : "hidden invisible translate-x-full pointer-events-none"
@@ -314,6 +316,6 @@ export function Header() {
           </div>
         </nav>
       </div>
-    </header>
+    </>
   );
 }
