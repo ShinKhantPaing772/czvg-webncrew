@@ -377,6 +377,8 @@ export const EN_TO_ZH_PHRASES: Record<string, string> = {
   "Senior Captain": "资深机长",
   "SR Captain": "资深机长",
   "Fleet Captain": "机队总机长",
+  "Captain Instructor": "机长教员",
+  "Senior Captain Instructor": "资深机长教员",
   "China Southern Airlines": "中国南方航空",
   "China Southern Cargo": "中国南方航空货运",
   "China Southern General Aviation": "中国南航通用航空",
@@ -2269,6 +2271,8 @@ const EN_TO_ZH_LOWERCASE_PHRASES: Record<string, string> = (() => {
 })();
 
 const RANK_TITLE_REPLACE: Array<[RegExp, string]> = [
+  [/\bSenior Captain Instructor\b/g, "资深机长教员"],
+  [/\bCaptain Instructor\b/g, "机长教员"],
   [/\bTrainee Second Officer\b/g, "见习二副"],
   [/\bSenior First Officer\b/g, "高级副驾驶"],
   [/\bSR First Officer\b/g, "资深副驾驶"],
@@ -2361,6 +2365,40 @@ export function translateTextToZh(input: string): string {
   return input;
 }
 
+// Rank names are database content, and some ranks are named in Chinese.
+// The English UI translates them back; longest titles first, so
+// "资深机长教员" isn't caught by "资深机长".
+const ZH_TO_EN_RANK_TITLES: Array<[string, string]> = (
+  [
+    ["资深机长教员", "Senior Captain Instructor"],
+    ["机长教员", "Captain Instructor"],
+    ["机队总机长", "Fleet Captain"],
+    ["资深机长", "SR Captain"],
+    ["责任机长", "Captain"],
+    ["资深副驾驶", "SR First Officer"],
+    ["高级副驾驶", "Senior First Officer"],
+    ["第一副驾驶", "First Officer"],
+    ["二副驾驶", "Second Officer"],
+    ["见习二副", "Trainee Second Officer"],
+  ] as Array<[string, string]>
+).sort(([a], [b]) => b.length - a.length);
+
+const HAS_CHINESE = /[㐀-鿿]/;
+
+export function translateTextToEn(input: string): string {
+  if (!HAS_CHINESE.test(input)) return input;
+
+  let result = input;
+  for (const [zh, en] of ZH_TO_EN_RANK_TITLES) {
+    result = result.split(zh).join(en);
+  }
+  return result;
+}
+
+function translateForLocale(input: string, locale: Locale) {
+  return locale === "zh" ? translateTextToZh(input) : translateTextToEn(input);
+}
+
 type I18nContextValue = {
   locale: Locale;
   setLocale: (next: Locale) => void;
@@ -2383,7 +2421,7 @@ type TextTranslationRecord = {
 const originalTextMap = new WeakMap<Text, TextTranslationRecord>();
 const originalAttrMap = new WeakMap<Element, Map<string, TextTranslationRecord>>();
 
-function applyDomTranslation(root: HTMLElement, locale: Locale) {
+export function applyDomTranslation(root: HTMLElement, locale: Locale) {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
       const parent = node.parentElement;
@@ -2403,21 +2441,20 @@ function applyDomTranslation(root: HTMLElement, locale: Locale) {
   while (currentNode) {
     const currentValue = currentNode.nodeValue || "";
     const record = originalTextMap.get(currentNode);
+    // If React updated the text node in place, `currentValue` will differ from `record.translated`
+    const baseText =
+      record && currentValue === record.translated
+        ? record.original
+        : currentValue;
+    const translated = translateForLocale(baseText, locale);
 
-    if (locale === "zh") {
-      // If React updated the text node in place, `currentValue` will differ from `record.translated`
-      const baseText =
-        record && currentValue === record.translated
-          ? record.original
-          : currentValue;
-      const translated = translateTextToZh(baseText);
-      if (translated !== baseText) {
-        originalTextMap.set(currentNode, { original: baseText, translated });
-        if (currentNode.nodeValue !== translated) {
-          currentNode.nodeValue = translated;
-        }
+    if (translated !== baseText) {
+      originalTextMap.set(currentNode, { original: baseText, translated });
+      if (currentNode.nodeValue !== translated) {
+        currentNode.nodeValue = translated;
       }
     } else if (record) {
+      // Nothing to translate in this locale: put the original text back.
       if (currentValue === record.translated) {
         currentNode.nodeValue = record.original;
       }
@@ -2438,16 +2475,14 @@ function applyDomTranslation(root: HTMLElement, locale: Locale) {
         originalAttrMap.set(el, attrStore);
       }
       const record = attrStore.get(attr);
+      const baseVal =
+        record && val === record.translated ? record.original : val;
+      const translated = translateForLocale(baseVal, locale);
 
-      if (locale === "zh") {
-        const baseVal =
-          record && val === record.translated ? record.original : val;
-        const translated = translateTextToZh(baseVal);
-        if (translated !== baseVal) {
-          attrStore.set(attr, { original: baseVal, translated });
-          if (val !== translated) {
-            el.setAttribute(attr, translated);
-          }
+      if (translated !== baseVal) {
+        attrStore.set(attr, { original: baseVal, translated });
+        if (val !== translated) {
+          el.setAttribute(attr, translated);
         }
       } else if (record) {
         if (val === record.translated) {
@@ -2507,8 +2542,8 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
 
     applyDomTranslation(document.body, locale);
 
-    if (locale !== "zh") return;
-
+    // Data loads after the first paint in both languages: Chinese needs the
+    // UI text translated, English needs Chinese rank names translated back.
     let rafId: number | null = null;
     const observer = new MutationObserver(() => {
       if (rafId !== null) return;
