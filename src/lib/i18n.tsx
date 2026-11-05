@@ -367,16 +367,16 @@ export const EN_TO_ZH_PHRASES: Record<string, string> = {
   // ============================================================================
   // 2. Pilot Ranks, Airlines & Civil Aviation Terminology
   // ============================================================================
-  "Trainee Second Officer": "见习二副",
-  Trainee: "学员",
-  "Second Officer": "二副驾驶",
-  "First Officer": "第一副驾驶",
-  "SR First Officer": "资深副驾驶",
-  "Senior First Officer": "高级副驾驶",
-  Captain: "责任机长",
+  "Trainee Second Officer": "见习第二副驾驶",
+  Trainee: "飞行学员",
+  "Second Officer": "第二副驾驶",
+  "First Officer": "副机长",
+  "SR First Officer": "资深副机长",
+  "Senior First Officer": "资深副机长",
+  Captain: "机长",
   "Senior Captain": "资深机长",
   "SR Captain": "资深机长",
-  "Fleet Captain": "机队总机长",
+  "Fleet Captain": "机队机长",
   "Captain Instructor": "机长教员",
   "SR Captain Instructor": "资深机长教员",
   "Senior Captain Instructor": "资深机长教员",
@@ -490,7 +490,7 @@ export const EN_TO_ZH_PHRASES: Record<string, string> = {
   "Explore fleet": "查看机队详情",
   "Pilot ranks": "飞行员技术职级",
   "Clear hour milestones and shoulder-board insignia from Trainee Second Officer to Fleet Captain.":
-    "从见习二副到机队总机长的清晰飞行小时晋升阶梯与肩章标识。",
+    "从见习第二副驾驶到机队机长的清晰飞行小时晋升阶梯与肩章标识。",
   "Explore ranks": "查看职级体系",
   "Route database": "航线网络数据库",
   "Searchable timetable of domestic, regional, and intercontinental passenger and cargo routes.":
@@ -513,7 +513,7 @@ export const EN_TO_ZH_PHRASES: Record<string, string> = {
   "Entry Level": "初始准入机型",
   "Award Required": "需特定资质勋章",
   "Pilot Ranks": "飞行员技术职级",
-  "Progression from Trainee Second Officer to Fleet Captain": "从见习二副到机队总机长的职业晋升之路",
+  "Progression from Trainee Second Officer to Fleet Captain": "从见习第二副驾驶到机队机长的职业晋升之路",
   "Every approved PIREP adds to your credited flight hours, unlocking higher ranks and additional aircraft across the CZVG fleet.":
     "每一份经签派审核批准的飞行报告 (PIREP) 都将计入您的有效飞行经历时间，逐步晋升技术职级并解锁更高规格的机队机型。",
   "Failed to load ranks": "加载职级数据失败",
@@ -1134,7 +1134,7 @@ export const EN_TO_ZH_PHRASES: Record<string, string> = {
   "Join our virtual airline group today and experience flying these amazing aircraft.": "立即加入虚拟南航，亲身体验驾驶这些卓越航空器的乐趣。",
   "Explore Routes": "探索航线",
   "Progress through the fleet as your flight time grows.": "随着有效飞行小时累积，稳步晋升并解锁更高级别机队。",
-  "Use this rank guide to see flight-hour requirements, aircraft unlocks, Fleet Captain status, and CEO rewards.": "查阅技术职级指南，了解晋升所需小时数、解锁机型、机队总机长准入及总裁特别奖项。",
+  "Use this rank guide to see flight-hour requirements, aircraft unlocks, Fleet Captain status, and CEO rewards.": "查阅技术职级指南，了解晋升所需小时数、解锁机型、机队机长准入及总裁特别奖项。",
   "Rank ladder": "职级晋升阶梯",
   "Aircraft unlocks by rank.": "各职级准入与解锁机型一览",
   "Each tier lists the flight-time range and primary aircraft available at that rank.": "阶梯列明了各职级所需飞行时间区间及可执飞的主力机型。",
@@ -2274,15 +2274,14 @@ const EN_TO_ZH_LOWERCASE_PHRASES: Record<string, string> = (() => {
 const RANK_TITLE_REPLACE: Array<[RegExp, string]> = [
   [/\b(?:SR|Senior) Captain Instructor\b/g, "资深机长教员"],
   [/\bCaptain Instructor\b/g, "机长教员"],
-  [/\bTrainee Second Officer\b/g, "见习二副"],
-  [/\bSenior First Officer\b/g, "高级副驾驶"],
-  [/\bSR First Officer\b/g, "资深副驾驶"],
-  [/\bFirst Officer\b/g, "第一副驾驶"],
-  [/\bSecond Officer\b/g, "二副驾驶"],
+  [/\bTrainee Second Officer\b/g, "见习第二副驾驶"],
+  [/\b(?:SR|Senior) First Officer\b/g, "资深副机长"],
+  [/\bFirst Officer\b/g, "副机长"],
+  [/\bSecond Officer\b/g, "第二副驾驶"],
   [/\b(?:SR|Senior) Captain\b/g, "资深机长"],
-  [/\bFleet Captain\b/g, "机队总机长"],
-  [/\bCaptain\b/g, "责任机长"],
-  [/\bTrainee\b/g, "学员"],
+  [/\bFleet Captain\b/g, "机队机长"],
+  [/\bCaptain\b/g, "机长"],
+  [/\bTrainee\b/g, "飞行学员"],
 ];
 
 function applyInlineRankTitles(input: string): string {
@@ -2366,35 +2365,51 @@ export function translateTextToZh(input: string): string {
   return input;
 }
 
-// Rank names are database content, and some ranks are named in Chinese.
-// The English UI shows them under the names used on the public ranks page
-// (/operations/ranks); the two instructor ranks above Fleet Captain follow
-// its "SR" style. Longest titles first, so "资深机长教员" isn't caught by
-// "资深机长".
-const ZH_TO_EN_RANK_TITLES: Array<[string, string]> = (
-  [
-    ["见习二副", "Trainee Second Officer"],
-    ["二副驾驶", "Second Officer"],
-    ["第一副驾驶", "First Officer"],
-    ["资深副驾驶", "SR First Officer"],
-    ["责任机长", "Captain"],
-    ["资深机长", "SR Captain"],
-    ["机队总机长", "Fleet Captain"],
-    ["机长教员", "Captain Instructor"],
-    ["资深机长教员", "SR Captain Instructor"],
-  ] as Array<[string, string]>
-).sort(([a], [b]) => b.length - a.length);
+// Rank names are database content, saved in Chinese or English. Each rank
+// has one agreed name per language; EN_TO_ZH_PHRASES and RANK_TITLE_REPLACE
+// give the Chinese names below for the English ones.
+const ZH_TO_EN_RANK_TITLES = new Map<string, string>([
+  ["飞行学员", "Trainee"],
+  ["见习第二副驾驶", "Trainee Second Officer"],
+  ["第二副驾驶", "Second Officer"],
+  ["副机长", "First Officer"],
+  ["资深副机长", "Senior First Officer"],
+  ["机长", "Captain"],
+  ["资深机长", "SR Captain"],
+  ["机队机长", "Fleet Captain"],
+  ["机长教员", "Captain Instructor"],
+  ["资深机长教员", "SR Captain Instructor"],
+  // Chinese names the site used before, still read for ranks saved that way.
+  ["见习二副", "Trainee Second Officer"],
+  ["二副驾驶", "Second Officer"],
+  ["第一副驾驶", "First Officer"],
+  ["资深副驾驶", "Senior First Officer"],
+  ["高级副驾驶", "Senior First Officer"],
+  ["责任机长", "Captain"],
+  ["机队总机长", "Fleet Captain"],
+]);
+
+// Longest titles first, so "资深机长教员" isn't read as "资深机长" + "教员".
+const ZH_RANK_TITLE_PATTERN = new RegExp(
+  Array.from(ZH_TO_EN_RANK_TITLES.keys())
+    .sort((a, b) => b.length - a.length)
+    .join("|"),
+  "g",
+);
 
 const HAS_CHINESE = /[㐀-鿿]/;
 
 export function translateTextToEn(input: string): string {
   if (!HAS_CHINESE.test(input)) return input;
 
-  let result = input;
-  for (const [zh, en] of ZH_TO_EN_RANK_TITLES) {
-    result = result.split(zh).join(en);
-  }
-  return result;
+  return input.replace(ZH_RANK_TITLE_PATTERN, (title: string, offset: number) => {
+    // Only whole titles: a listed title inside a longer Chinese name leaves
+    // the name as it is, so "见习第一副驾驶" doesn't become "见习First Officer".
+    const before = input.charAt(offset - 1);
+    const after = input.charAt(offset + title.length);
+    if (HAS_CHINESE.test(before) || HAS_CHINESE.test(after)) return title;
+    return ZH_TO_EN_RANK_TITLES.get(title) ?? title;
+  });
 }
 
 function translateForLocale(input: string, locale: Locale) {

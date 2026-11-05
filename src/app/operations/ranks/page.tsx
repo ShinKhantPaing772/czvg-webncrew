@@ -62,7 +62,7 @@ const ranks: PublicRank[] = [
   },
   {
     id: 4,
-    name: "SR First Officer",
+    name: "Senior First Officer",
     timereq: 140 * 60 * 60,
     imageurl:
       "https://global.discourse-cdn.com/infiniteflight/original/4X/7/e/7/7e774e9d23860935ce53d0d8f8ca8624a9f5d214.png",
