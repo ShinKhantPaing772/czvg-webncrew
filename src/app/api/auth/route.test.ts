@@ -1,21 +1,46 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
-const mocks = vi.hoisted(() => ({
-  after: vi.fn(),
-  findPilot: vi.fn(),
-  createPilot: vi.fn(),
-  createApplication: vi.fn(),
-  createToken: vi.fn(),
-  comparePassword: vi.fn(),
-  hashPassword: vi.fn(),
-  signToken: vi.fn(),
-  sendEmail: vi.fn(),
-}));
+const mocks = vi.hoisted(() => {
+  class InfiniteFlightApiError extends Error {
+    constructor(
+      message: string,
+      readonly status = 502,
+    ) {
+      super(message);
+    }
+  }
+
+  return {
+    after: vi.fn(),
+    findPilot: vi.fn(),
+    createPilot: vi.fn(),
+    createApplication: vi.fn(),
+    createToken: vi.fn(),
+    comparePassword: vi.fn(),
+    hashPassword: vi.fn(),
+    signToken: vi.fn(),
+    sendEmail: vi.fn(),
+    isIfcLookupRateLimited: vi.fn(),
+    getInfiniteFlightUser: vi.fn(),
+    findInfiniteFlightUser: vi.fn(),
+    InfiniteFlightApiError,
+  };
+});
 
 vi.mock("next/server", async (importOriginal) => ({
   ...(await importOriginal<typeof import("next/server")>()),
   after: mocks.after,
+}));
+
+vi.mock("@/lib/infinite-flight-api", () => ({
+  getInfiniteFlightUser: mocks.getInfiniteFlightUser,
+  findInfiniteFlightUser: mocks.findInfiniteFlightUser,
+  InfiniteFlightApiError: mocks.InfiniteFlightApiError,
+}));
+
+vi.mock("@/lib/infinite-flight/lookup-rate-limit", () => ({
+  isIfcLookupRateLimited: mocks.isIfcLookupRateLimited,
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -154,11 +179,17 @@ describe("POST /api/auth login status routing", () => {
   });
 });
 
-describe("POST /api/auth signup follow-up work", () => {
+describe("POST /api/auth signup", () => {
   const webhookUrl = "https://discord.test/admin-webhook";
+  const ifUser = {
+    userId: "2a11e620-1cc1-4ac6-90d1-18c4ed9cb913",
+    discourseUsername: "NewPilot",
+    grade: 2,
+    violations: 7,
+  };
   let consoleError: ReturnType<typeof vi.spyOn>;
 
-  function signupRequest() {
+  function signupRequest(overrides: Record<string, unknown> = {}) {
     return new NextRequest("http://localhost/api/auth", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -167,10 +198,8 @@ describe("POST /api/auth signup follow-up work", () => {
         email: " New.Pilot@Example.com ",
         password: "a-long-password",
         name: "New Pilot",
-        ifc: "newpilot",
-        ifUserId: "if-user-1",
-        ifGrade: 3,
-        ifViolations: 0,
+        ifc: " newpilot ",
+        ...overrides,
       }),
     });
   }
@@ -192,6 +221,12 @@ describe("POST /api/auth signup follow-up work", () => {
     mocks.createToken.mockReset().mockResolvedValue({});
     mocks.signToken.mockReset().mockReturnValue("signed-token");
     mocks.sendEmail.mockReset().mockResolvedValue(true);
+    mocks.isIfcLookupRateLimited.mockReset().mockResolvedValue(false);
+    mocks.getInfiniteFlightUser.mockReset().mockResolvedValue({
+      data: { errorCode: 0, result: [ifUser] },
+      cacheStatus: "HIT",
+    });
+    mocks.findInfiniteFlightUser.mockReset().mockReturnValue(ifUser);
     consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
@@ -248,5 +283,75 @@ describe("POST /api/auth signup follow-up work", () => {
       "[Signup] Failed to send application received email:",
       expect.any(Error),
     );
+  });
+
+  it("stores the IF identity the server looked up, not what the browser sent", async () => {
+    const response = await POST(
+      signupRequest({ ifUserId: "spoofed-id", ifGrade: 5, ifViolations: 0 }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(mocks.getInfiniteFlightUser).toHaveBeenCalledWith("newpilot");
+    expect(mocks.createPilot).toHaveBeenCalledWith(
+      expect.objectContaining({ ifc: "newpilot", ifuserid: ifUser.userId }),
+    );
+    expect(mocks.createApplication).toHaveBeenCalledWith(
+      expect.objectContaining({ if_grade: 2, if_violations: 7 }),
+    );
+  });
+
+  it("rejects an IFC username Infinite Flight doesn't know", async () => {
+    mocks.findInfiniteFlightUser.mockReturnValue(null);
+
+    const response = await POST(signupRequest());
+
+    expect(response.status).toBe(400);
+    expect(mocks.createPilot).not.toHaveBeenCalled();
+  });
+
+  it("treats Infinite Flight's user-not-found error as an invalid username", async () => {
+    mocks.getInfiniteFlightUser.mockRejectedValue(
+      new mocks.InfiniteFlightApiError("Infinite Flight returned error code 1", 404),
+    );
+
+    const response = await POST(signupRequest());
+
+    expect(response.status).toBe(400);
+    expect(mocks.createPilot).not.toHaveBeenCalled();
+  });
+
+  it("asks the applicant to retry when Infinite Flight is unreachable", async () => {
+    mocks.getInfiniteFlightUser.mockRejectedValue(
+      new mocks.InfiniteFlightApiError("Infinite Flight API is unavailable", 502),
+    );
+
+    const response = await POST(signupRequest());
+
+    expect(response.status).toBe(503);
+    expect(mocks.createPilot).not.toHaveBeenCalled();
+  });
+
+  it("counts its lookup against the IFC lookup limit", async () => {
+    mocks.isIfcLookupRateLimited.mockResolvedValue(true);
+
+    const response = await POST(signupRequest());
+
+    expect(response.status).toBe(429);
+    expect(mocks.getInfiniteFlightUser).not.toHaveBeenCalled();
+    expect(mocks.createPilot).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["a short password", { password: "short" }, /at least 8 characters/],
+    ["an invalid email", { email: "not-an-email" }, /valid email/],
+    ["a missing IFC username", { ifc: "  " }, /IFC username/],
+  ])("rejects %s before creating anything", async (_case, overrides, error) => {
+    const response = await POST(signupRequest(overrides));
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toMatch(error);
+    expect(mocks.getInfiniteFlightUser).not.toHaveBeenCalled();
+    expect(mocks.createPilot).not.toHaveBeenCalled();
   });
 });
