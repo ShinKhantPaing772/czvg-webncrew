@@ -15,6 +15,8 @@ import {
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+const MAX_TRANSFER_VALUE = 100_000;
+
 function normalizeNullableNumber(value: unknown) {
   if (value === null || value === undefined || value === "") return null;
 
@@ -82,7 +84,17 @@ export async function PUT(request: Request) {
     if (!auth.ok) return auth.response;
 
     const body = await request.json();
-    const { id, name, email, callsign, status, notes, application } = body;
+    const {
+      id,
+      name,
+      email,
+      callsign,
+      status,
+      notes,
+      transhours,
+      transflights,
+      application,
+    } = body;
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const callsignPattern = /^China Southern \d{3}VG$/;
 
@@ -169,6 +181,27 @@ export async function PUT(request: Request) {
 
     if (notes !== undefined) {
       updateFields.notes = typeof notes === "string" ? notes : "";
+    }
+
+    // Hours and flights carried over from a pilot's previous VA. Transfer
+    // hours count toward rank, aircraft unlocks and multiplier access.
+    const transferFields = [
+      ["transhours", transhours, "Transfer hours"],
+      ["transflights", transflights, "Transfer flights"],
+    ] as const;
+    for (const [field, value, label] of transferFields) {
+      if (value === undefined) continue;
+      const count = Number(value);
+      if (!Number.isInteger(count) || count < 0 || count > MAX_TRANSFER_VALUE) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: `${label} must be a whole number from 0 to ${MAX_TRANSFER_VALUE}`,
+          },
+          { status: 400 },
+        );
+      }
+      updateFields[field] = count;
     }
 
     const applicationUpdates: Record<string, string | number | Date | null> =
