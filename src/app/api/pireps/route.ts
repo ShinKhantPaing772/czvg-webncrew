@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { Op } from "sequelize";
 import { models } from "@/lib/models";
 import sequelize from "@/lib/database";
 import { requireCrewAuth } from "@/lib/server-auth";
 import { canPilotUseAircraft } from "@/lib/aircraft-eligibility";
+import { postDiscordWebhook } from "@/lib/discord-webhook";
 
 function normalizeIcao(value: unknown) {
   return typeof value === "string" ? value.trim().toUpperCase() : "";
@@ -298,11 +299,9 @@ export async function POST(request: NextRequest) {
         ],
       };
 
-      await fetch(webhookUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(discordPayload),
-      });
+      // The PIREP is already saved, so post after responding: a Discord
+      // outage must not turn a successful submission into an error.
+      after(() => postDiscordWebhook(webhookUrl, discordPayload, "[PIREP]"));
     }
 
     return NextResponse.json({ pirep });

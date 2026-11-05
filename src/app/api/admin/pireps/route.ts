@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { Op } from "sequelize";
 import type { Includeable } from "sequelize";
 import { models } from "@/lib/models";
@@ -342,9 +342,13 @@ export async function PUT(request: Request) {
     const updatedPirep = await serializePirep(Number(id));
 
     if (updates.status === 1 && updatedPirep?.pilot?.id) {
-      evaluateAndGrantAwards(Number(updatedPirep.pilot.id)).catch((evalErr) => {
-        console.error("[PIREP Approval] Milestone evaluation error:", evalErr);
-      });
+      const pilotId = Number(updatedPirep.pilot.id);
+      // `after` keeps the serverless function alive until awards are granted.
+      after(() =>
+        evaluateAndGrantAwards(pilotId).catch((evalErr) => {
+          console.error("[PIREP Approval] Milestone evaluation error:", evalErr);
+        }),
+      );
     }
 
     return NextResponse.json({

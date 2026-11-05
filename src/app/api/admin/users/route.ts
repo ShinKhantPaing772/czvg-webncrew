@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { models } from "@/lib/models";
 import sequelize from "@/lib/database";
 import { requirePermission } from "@/lib/server-auth";
@@ -245,20 +245,23 @@ export async function PUT(request: Request) {
       Number(status) === 1 &&
       previousStatus !== 1
     ) {
-      sendEmail({
-        to: {
-          email: String(pilot.get("email")),
-          name: String(pilot.get("name") || "Pilot"),
-        },
-        subject: "Your CZVG application has been approved",
-        htmlContent: pilotApprovedEmail({
-          name: String(pilot.get("name") || "Pilot"),
-          callsign: String(pilot.get("callsign") || ""),
-          crewCenterUrl: getCrewCenterUrl(),
+      // `after` keeps the serverless function alive until the email is sent.
+      after(() =>
+        sendEmail({
+          to: {
+            email: String(pilot.get("email")),
+            name: String(pilot.get("name") || "Pilot"),
+          },
+          subject: "Your CZVG application has been approved",
+          htmlContent: pilotApprovedEmail({
+            name: String(pilot.get("name") || "Pilot"),
+            callsign: String(pilot.get("callsign") || ""),
+            crewCenterUrl: getCrewCenterUrl(),
+          }),
+        }).catch((error) => {
+          console.error("[Admin Users] Failed to send approval email:", error);
         }),
-      }).catch((error) => {
-        console.error("[Admin Users] Failed to send approval email:", error);
-      });
+      );
     }
 
     if (Object.keys(applicationUpdates).length > 0) {
@@ -285,25 +288,28 @@ export async function PUT(request: Request) {
         nextExamScore !== null &&
         previousExamScore !== nextExamScore
       ) {
-        sendEmail({
-          to: {
-            email: String(pilot.get("email")),
-            name: String(pilot.get("name") || "Pilot"),
-          },
-          subject:
-            previousExamScore === null
-              ? "Your CZVG entrance examination grade is available"
-              : "Your CZVG entrance examination grade has been updated",
-          htmlContent: examGradeEmail({
-            name: String(pilot.get("name") || "Pilot"),
-            score: nextExamScore,
-            requiresReplay: nextExamScore < 80,
-            portalUrl,
-            isUpdate: previousExamScore !== null,
+        const score = nextExamScore;
+        after(() =>
+          sendEmail({
+            to: {
+              email: String(pilot.get("email")),
+              name: String(pilot.get("name") || "Pilot"),
+            },
+            subject:
+              previousExamScore === null
+                ? "Your CZVG entrance examination grade is available"
+                : "Your CZVG entrance examination grade has been updated",
+            htmlContent: examGradeEmail({
+              name: String(pilot.get("name") || "Pilot"),
+              score,
+              requiresReplay: score < 80,
+              portalUrl,
+              isUpdate: previousExamScore !== null,
+            }),
+          }).catch((error) => {
+            console.error("[Admin Users] Failed to send grade email:", error);
           }),
-        }).catch((error) => {
-          console.error("[Admin Users] Failed to send grade email:", error);
-        });
+        );
       }
 
       if (
@@ -311,23 +317,26 @@ export async function PUT(request: Request) {
         nextDiscordInviteUrl &&
         previousDiscordInviteUrl !== nextDiscordInviteUrl
       ) {
-        sendEmail({
-          to: {
-            email: String(pilot.get("email")),
-            name: String(pilot.get("name") || "Pilot"),
-          },
-          subject: "Your CZVG Discord invite is available",
-          htmlContent: discordInviteEmail({
-            name: String(pilot.get("name") || "Pilot"),
-            inviteUrl: nextDiscordInviteUrl,
-            portalUrl,
+        const inviteUrl = nextDiscordInviteUrl;
+        after(() =>
+          sendEmail({
+            to: {
+              email: String(pilot.get("email")),
+              name: String(pilot.get("name") || "Pilot"),
+            },
+            subject: "Your CZVG Discord invite is available",
+            htmlContent: discordInviteEmail({
+              name: String(pilot.get("name") || "Pilot"),
+              inviteUrl,
+              portalUrl,
+            }),
+          }).catch((error) => {
+            console.error(
+              "[Admin Users] Failed to send Discord invite email:",
+              error,
+            );
           }),
-        }).catch((error) => {
-          console.error(
-            "[Admin Users] Failed to send Discord invite email:",
-            error,
-          );
-        });
+        );
       }
     }
 
