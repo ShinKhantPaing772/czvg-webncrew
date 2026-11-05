@@ -1,6 +1,11 @@
 import { Op, Transaction } from "sequelize";
 import sequelize from "@/lib/database";
 import { models } from "@/lib/models";
+import {
+  AWARD_GRANTED_SUBJECT,
+  AWARD_NOTIFICATION_ICON,
+  awardGrantedContent,
+} from "@/lib/notifications";
 import { getSafeAwards } from "./columns";
 import { MASTER_BADGES } from "./catalog";
 
@@ -524,11 +529,13 @@ export async function evaluateAndGrantAwards(
           pilotid: pilotId,
           dateawarded: now,
         });
+        // Language-neutral: the inbox shows the award name in the reader's
+        // language, and the id always fits `content` (VARCHAR(60)).
         notificationsToInsert.push({
           pilotid: pilotId,
-          icon: "award",
-          subject: "获得新勋章",
-          content: `祝贺你解锁了成就勋章【${award.name}】！`,
+          icon: AWARD_NOTIFICATION_ICON,
+          subject: AWARD_GRANTED_SUBJECT,
+          content: awardGrantedContent(awardId),
           datetime: now,
         });
       }
