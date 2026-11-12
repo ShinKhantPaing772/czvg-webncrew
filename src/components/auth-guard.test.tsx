@@ -63,6 +63,12 @@ async function respond(index: number, status = 200, userStatus = 1, permissions:
   });
 }
 
+async function maintenance(index: number) {
+  await act(async () => {
+    pending[index].resolve(Response.json({ error: "Crew Center is under maintenance", code: "CREW_LOGIN_DISABLED" }, { status: 503 }));
+  });
+}
+
 async function focus() {
   await act(async () => { window.dispatchEvent(new Event("focus")); });
 }
@@ -333,5 +339,58 @@ describe("AuthGuard session revalidation", () => {
     await respond(0, 200, 0);
     expect(session.router.push).not.toHaveBeenCalled();
     expect(session.mounted).not.toHaveBeenCalled();
+  });
+});
+
+describe("AuthGuard maintenance access", () => {
+  it("redirects an initial maintenance response without revealing protected content or signing out", async () => {
+    await renderGuard();
+    await maintenance(0);
+    expect(input()).toBeNull();
+    expect(session.mounted).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("Loading...");
+    expect(session.router.push.mock.calls).toEqual([["/maintenance"]]);
+    expect(session.token).toBe("token-a");
+  });
+
+  it("hides an already verified page when maintenance is detected without redirecting through login", async () => {
+    await verifiedDraft();
+    await focus();
+    await maintenance(1);
+    expect(input()).toBeNull();
+    expect(session.unmounted).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain("Loading...");
+    expect(session.router.push.mock.calls).toEqual([["/maintenance"]]);
+    expect(session.token).toBe("token-a");
+  });
+
+  it("ignores a maintenance response from a superseded account check", async () => {
+    await verifiedDraft();
+    await focus();
+    session.token = "token-b";
+    await focus();
+    expect(pending[1].signal?.aborted).toBe(true);
+    await maintenance(1);
+    expect(session.router.push).not.toHaveBeenCalled();
+    await respond(2);
+    expect(input()).not.toBeNull();
+    expect(session.token).toBe("token-b");
+  });
+
+  it("checks request ownership again after reading a delayed maintenance body", async () => {
+    await verifiedDraft();
+    await focus();
+    let finishBody!: (value: { code: string }) => void;
+    await act(async () => {
+      pending[1].resolve({ ok: false, status: 503, json: () => new Promise(resolve => { finishBody = resolve; }) } as Response);
+    });
+    session.token = "token-b";
+    await focus();
+    await act(async () => { finishBody({ code: "CREW_LOGIN_DISABLED" }); });
+    expect(input()).toBeNull();
+    expect(session.router.push).not.toHaveBeenCalled();
+    await respond(2);
+    expect(input()).not.toBeNull();
+    expect(session.router.push).not.toHaveBeenCalled();
   });
 });

@@ -20,6 +20,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
   const [canAccessLiveScheduling, setCanAccessLiveScheduling] = useState(false);
   const [userStatus, setUserStatus] = useState<number | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [isMaintenance, setIsMaintenance] = useState(false);
   const verifiedToken = useRef<string | null>(null);
   const pendingCheck = useRef<{
     token: string;
@@ -102,6 +103,14 @@ export function AuthGuard({ children }: AuthGuardProps) {
       if (!isCurrentRequest()) return;
 
       if (!res.ok) {
+        if (res.status === 503) {
+          const failure = await res.json().catch(() => null);
+          if (!isCurrentRequest()) return;
+          if (failure?.code === "CREW_LOGIN_DISABLED") {
+            setIsMaintenance(true);
+            return;
+          }
+        }
         // Temporary outages do not invalidate an already verified session.
         // The API remains authoritative for each protected operation.
         if (!keepCurrentPage || [400, 401, 403, 404].includes(res.status)) {
@@ -115,6 +124,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
 
       verifiedToken.current = currentToken;
       lastVerifiedAt.current = Date.now();
+      setIsMaintenance(false);
       setPermissions(
         user?.Permissions?.map((p: { name: string }) => p.name) || [],
       );
@@ -151,6 +161,10 @@ export function AuthGuard({ children }: AuthGuardProps) {
   }, [checkSession, pathname]);
 
   useEffect(() => {
+    if (isMaintenance) {
+      router.push("/maintenance");
+      return;
+    }
     if (isAuthenticated === null) return;
 
     const isLoginPage =
@@ -198,6 +212,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
     isApplicantPortalUser,
     isAuthenticated,
     isLiveSchedulingPage,
+    isMaintenance,
     pathname,
     router,
     userStatus,
@@ -215,7 +230,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
       (isLiveSchedulingPage && !canAccessLiveScheduling) ||
       (isAdminPage && !hasAdminAccess));
 
-  if (isAuthenticated === null || isRedirectingToApplicantPortal || isWaitingForRestrictedAccess) {
+  if (isMaintenance || isAuthenticated === null || isRedirectingToApplicantPortal || isWaitingForRestrictedAccess) {
     return (
       <div className="flex h-screen w-full items-center justify-center">
         <p className="text-gray-500">Loading...</p>

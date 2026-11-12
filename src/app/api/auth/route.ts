@@ -17,6 +17,10 @@ import { isIfcLookupRateLimited } from "@/lib/infinite-flight/lookup-rate-limit"
 import { extractInfiniteFlightMetrics } from "@/lib/infinite-flight/user-metrics";
 import { canPilotLogIn, getCrewLandingPath } from "@/lib/pilot-status";
 import { isValidSignupName } from "@/lib/utils/signup-name";
+import {
+  CREW_LOGIN_DISABLED_MESSAGE,
+  isCrewLoginDisabled,
+} from "@/lib/login-maintenance";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -25,6 +29,13 @@ const INVALID_IFC_MESSAGE =
   "IFC username entered is not valid, please enter a valid IFC username.";
 
 export async function POST(request: NextRequest) {
+  if (isCrewLoginDisabled()) {
+    return NextResponse.json(
+      { code: "CREW_LOGIN_DISABLED", error: CREW_LOGIN_DISABLED_MESSAGE },
+      { status: 503, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+
   try {
     if (!models?.Pilot) {
       console.error("[Auth] Error: Database connection not established");
