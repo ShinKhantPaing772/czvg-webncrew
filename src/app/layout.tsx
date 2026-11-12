@@ -2,6 +2,7 @@ import type React from "react";
 import "@/app/globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { NavigationProgress } from "@/components/navigation-progress";
+import { MaintenanceNotice } from "@/components/maintenance-notice";
 
 export const metadata = {
   title: "China Southern Virtual Group IF",
@@ -30,6 +31,7 @@ export default function RootLayout({
       <body suppressHydrationWarning>
         <ThemeProvider>
           <NavigationProgress />
+          <MaintenanceNotice />
           {children}
         </ThemeProvider>
       </body>
