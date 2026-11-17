@@ -59,7 +59,10 @@ function FlightList({ flights, aircraft, onSelect }: { flights: ScheduledFlight[
         flightnum={flight.callsign || tail?.registration || "Flight"}
         liveryname={tail?.liveryname}
         badge={<StatusBadge flight={flight} />}
-        subtitle={tail?.registration || tail?.name || "Live aircraft"}
+        subtitle={<>
+          <span className="block">{tail?.registration || tail?.name || "Live aircraft"}</span>
+          <span className="mt-1 block whitespace-normal font-mono tabular-nums">Requested {formatRequestTime(flight.created_at)}</span>
+        </>}
         departure={flight.departure}
         arrival={flight.arrival}
         routeMeta={formatUtc(flight.scheduled_departure)}
@@ -191,6 +194,7 @@ export function SchedulingWorkspace({ admin = false }: { admin?: boolean }) {
         {(admin ? ["approvals"] : ["flights", "mine"]).map((flightTab) => <TabsContent key={flightTab} value={flightTab} className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-[1fr_auto_auto]"><Input aria-label="Search flights" placeholder="Search" value={query} onChange={(event) => setQuery(event.target.value)} /><select aria-label="Filter aircraft" className="h-8 rounded-[8px] border-0 bg-[var(--v2-background-bg-layer-02,#eef0f3)] px-2.5 text-[13px] outline-none" value={aircraftFilter} onChange={(event) => setAircraftFilter(event.target.value)}><option value="all">All aircraft</option>{data.aircraft.map((item) => <option key={item.id} value={item.id}>{item.registration}</option>)}</select><select aria-label="Filter flight status" className="h-8 rounded-[8px] border-0 bg-[var(--v2-background-bg-layer-02,#eef0f3)] px-2.5 text-[13px] outline-none" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>{admin && <option value="attention">Awaiting review</option>}<option value="upcoming">Upcoming and in flight</option><option value="all">All flights</option><option value="history">History</option>{Object.entries(statusLabels).filter(([value]) => admin || !["rejected", "cancelled"].includes(value)).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></div>
           <p className="text-[12px] text-[var(--v2-text-text-faint,#737373)]">Times in UTC · 1 captain + up to 2 crew</p>
+          {admin && ["attention", "pending"].includes(statusFilter) && <p className="text-[12px] text-[var(--v2-text-text-faint,#737373)]">Oldest flight requests first. Check conflicts before approving.</p>}
           {!admin && flightTab === "flights" && ["upcoming", "all"].includes(statusFilter) && unscheduledAircraft.length > 0 && <section aria-label="Unscheduled aircraft">
             <LiveFleet aircraft={unscheduledAircraft} admin={false} title="Unscheduled aircraft" description="These active aircraft have no pending requests, approved flights, or flights in progress in Crew Center. Request a flight from their confirmed airport." onAdd={() => setAircraftEditor({})} onEdit={aircraft => setAircraftEditor({ aircraft })} onRequest={aircraft => setFlightForm({ aircraftId: aircraft.id })} onSchedules={aircraft => setScheduleAircraftId(aircraft.id)} />
           </section>}
