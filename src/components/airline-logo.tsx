@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { getAirlineLogoForFlight } from "@/lib/group-airlines";
+import { getAirlineLogoForFlight, type AirlineLogoResult } from "@/lib/group-airlines";
 
 export interface AirlineLogoProps {
   flightnum?: string | null;
@@ -23,11 +23,31 @@ export function AirlineLogo({
   alt = "",
 }: AirlineLogoProps) {
   const result = getAirlineLogoForFlight(flightnum, liveryname);
+  if (!result) return null;
+
+  return (
+    <AirlineLogoImages
+      key={`${result.logo}\n${result.logoDark}`}
+      {...result}
+      className={className}
+      alt={alt}
+    />
+  );
+}
+
+// A new image source gets a fresh error state. A failed earlier source must
+// not hide another airline when an editable flight number or livery changes.
+function AirlineLogoImages({
+  logo,
+  logoDark,
+  name,
+  className,
+  alt,
+}: AirlineLogoResult & { className: string; alt: string }) {
   const [failed, setFailed] = useState(false);
 
-  if (!result || failed) return null;
+  if (failed) return null;
 
-  const { logo, logoDark, name } = result;
   const sameAsset = logo === logoDark;
 
   return (
