@@ -71,8 +71,7 @@ Optional:
 | `DB_SSL_CA` | Provider CA certificate (`\n` escapes allowed); TLS certificate checks are enabled by default |
 | `DB_SSL` | Set `false` only for an explicitly configured local database without TLS |
 | `DB_SSL_REJECT_UNAUTHORIZED` | Explicit `false` disables certificate verification; retain the secure default for hosted databases |
-| `DB_POOL_MAX` | Connections per application process; default `2`, minimum `2`; does not cap total Vercel connections |
-| `DB_IDLE_SESSION_TIMEOUT_MS` | PostgreSQL closes sessions idle outside a transaction after this many milliseconds; default `10000`, requires PostgreSQL 14+ |
+| `DB_POOL_MAX` | Connections per application process; default `3`, minimum `2`; does not cap total Vercel connections |
 | `DISCORD_WEBHOOK` | New-PIREP and award announcements |
 | `DISCORD_WEBHOOK_ADMIN` | New-application alerts for staff |
 | `BREVO_API_KEY` | Application, approval and password-reset emails |
@@ -100,16 +99,7 @@ The Aiven free PostgreSQL service's 20 connections are shared by all Vercel
 processes, previews, scripts and operator sessions. Keep capacity available
 for scheduling's separate short transactions; test the combined connection
 usage before cutover. Database sessions use UTC and statements have a
-15-second timeout. The app shares one Sequelize pool per process and sets a
-server-side idle-session timeout because Vercel can suspend the process before
-JavaScript's pool cleanup timer runs. This timeout does not interrupt an open
-transaction. Existing connections only receive the setting after reconnecting.
-
-The pool limit applies separately to each Vercel process. If concurrent
-instances still exceed the database's available slots, use a provider connection
-pooler or more database capacity; increasing `DB_POOL_MAX` makes that pressure
-worse. Aiven's managed PgBouncer requires a Startup plan or higher. Keep previews
-on a separate database when possible.
+15-second timeout.
 
 Infinite Flight's terms allow Live API data only in short-lived caches. See
 [.github/llms.txt](./.github/llms.txt) before storing anything from it.
@@ -130,11 +120,6 @@ Infinite Flight's terms allow Live API data only in short-lived caches. See
 Vercel installs with `pnpm install --frozen-lockfile`, so commit
 `pnpm-lock.yaml` whenever dependencies change (`pnpm add` and `pnpm remove`
 keep it in sync). Apply new migrations before deploying code that needs them.
-
-The production Content Security Policy intentionally blocks Vercel's feedback
-script. Disable **Vercel Toolbar → Production Deployments** in the project's
-General settings to avoid the blocked-script warning; the setting takes effect
-on the next deployment.
 
 ## More docs
 

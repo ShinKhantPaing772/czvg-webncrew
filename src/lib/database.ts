@@ -1,11 +1,8 @@
 import { Sequelize, type Options } from "sequelize";
 import { postgresDatabaseConfiguration } from "./database-config.mjs";
 
-// Route bundles and development reloads in one process must share one pool.
-const databaseGlobal = globalThis as typeof globalThis & {
-  webncrewDatabase?: Sequelize;
-};
-const sequelize = databaseGlobal.webncrewDatabase ??= new Sequelize({
+// Database connection configuration
+const sequelize = new Sequelize({
   ...postgresDatabaseConfiguration() as Options,
   dialectModule: require("pg"),
 });

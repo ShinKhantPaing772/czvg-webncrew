@@ -6,11 +6,8 @@ describe("PostgreSQL connection configuration", () => {
     const configuration = postgresDatabaseConfiguration({});
     expect(configuration).toMatchObject({
       dialect: "postgres", port: 5432, timezone: "+00:00",
-      dialectOptions: {
-        ssl: { rejectUnauthorized: true }, statement_timeout: 15000,
-        options: "-c idle_session_timeout=10000",
-      },
-      pool: { max: 2, min: 0 },
+      dialectOptions: { ssl: { rejectUnauthorized: true }, statement_timeout: 15000 },
+      pool: { max: 3, min: 0 },
     });
   });
 
@@ -23,16 +20,6 @@ describe("PostgreSQL connection configuration", () => {
 
   it("requires an explicit choice to disable TLS for a local database", () => {
     expect(postgresDatabaseConfiguration({ DB_SSL: "false" }).dialectOptions.ssl).toBe(false);
-  });
-
-  it("allows an explicit server-side idle timeout without changing transaction timeouts", () => {
-    const configuration = postgresDatabaseConfiguration({ DB_IDLE_SESSION_TIMEOUT_MS: "20000" });
-    expect(configuration.dialectOptions.options).toBe("-c idle_session_timeout=20000");
-    expect(configuration.dialectOptions).not.toHaveProperty("idle_in_transaction_session_timeout");
-  });
-
-  it.each(["0", "-1", "2.5", "invalid"])("rejects invalid idle session timeout %s", value => {
-    expect(() => postgresDatabaseConfiguration({ DB_IDLE_SESSION_TIMEOUT_MS: value })).toThrow("DB_IDLE_SESSION_TIMEOUT_MS");
   });
 
   it.each(["0", "1", "-1", "2.5", "invalid"])("rejects pool size %s which cannot support the scheduling connection budget", value => {
