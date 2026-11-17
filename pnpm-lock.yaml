@@ -10,6 +10,14 @@ overrides:
   recharts>react-is: 19.1.10
   '@typescript-eslint/typescript-estree>minimatch': ^11.0.1
 
+patchedDependencies:
+  picomatch@2.3.2:
+    hash: 54f070f2a28115b28bcecb5f344d2f24f2d2eb5a88db6275733f40fa5162e1f2
+    path: patches/picomatch@2.3.2.patch
+  picomatch@4.0.7:
+    hash: 19076c77ae6edf03e4da50b912b5887daf9cc27262ba1d18e52f5f775ac74cd4
+    path: patches/picomatch@4.0.7.patch
+
 importers:
 
   .:
@@ -5808,7 +5816,7 @@ snapshots:
   anymatch@3.1.3:
     dependencies:
       normalize-path: 3.0.0
-      picomatch: 2.3.2
+      picomatch: 2.3.2(patch_hash=54f070f2a28115b28bcecb5f344d2f24f2d2eb5a88db6275733f40fa5162e1f2)
 
   arg@5.0.2: {}
 
@@ -6533,9 +6541,9 @@ snapshots:
     dependencies:
       reusify: 1.1.0
 
-  fdir@6.5.0(picomatch@4.0.7):
+  fdir@6.5.0(picomatch@4.0.7(patch_hash=19076c77ae6edf03e4da50b912b5887daf9cc27262ba1d18e52f5f775ac74cd4)):
     optionalDependencies:
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=19076c77ae6edf03e4da50b912b5887daf9cc27262ba1d18e52f5f775ac74cd4)
 
   file-entry-cache@8.0.0:
     dependencies:
@@ -7043,7 +7051,7 @@ snapshots:
   micromatch@4.0.8:
     dependencies:
       braces: 3.0.3
-      picomatch: 2.3.2
+      picomatch: 2.3.2(patch_hash=54f070f2a28115b28bcecb5f344d2f24f2d2eb5a88db6275733f40fa5162e1f2)
 
   mime-db@1.52.0: {}
 
@@ -7262,9 +7270,9 @@ snapshots:
 
   picocolors@1.1.1: {}
 
-  picomatch@2.3.2: {}
+  picomatch@2.3.2(patch_hash=54f070f2a28115b28bcecb5f344d2f24f2d2eb5a88db6275733f40fa5162e1f2): {}
 
-  picomatch@4.0.7: {}
+  picomatch@4.0.7(patch_hash=19076c77ae6edf03e4da50b912b5887daf9cc27262ba1d18e52f5f775ac74cd4): {}
 
   pify@2.3.0: {}
 
@@ -7406,7 +7414,7 @@ snapshots:
 
   readdirp@3.6.0:
     dependencies:
-      picomatch: 2.3.2
+      picomatch: 2.3.2(patch_hash=54f070f2a28115b28bcecb5f344d2f24f2d2eb5a88db6275733f40fa5162e1f2)
 
   recharts-scale@0.4.5:
     dependencies:
@@ -7826,8 +7834,8 @@ snapshots:
 
   tinyglobby@0.2.17:
     dependencies:
-      fdir: 6.5.0(picomatch@4.0.7)
-      picomatch: 4.0.7
+      fdir: 6.5.0(picomatch@4.0.7(patch_hash=19076c77ae6edf03e4da50b912b5887daf9cc27262ba1d18e52f5f775ac74cd4))
+      picomatch: 4.0.7(patch_hash=19076c77ae6edf03e4da50b912b5887daf9cc27262ba1d18e52f5f775ac74cd4)
 
   tinyrainbow@3.2.0: {}
 
@@ -8002,7 +8010,7 @@ snapshots:
   vite@8.3.5(@types/node@20.19.35)(jiti@1.21.7)(terser@5.46.0):
     dependencies:
       lightningcss: 1.33.0
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=19076c77ae6edf03e4da50b912b5887daf9cc27262ba1d18e52f5f775ac74cd4)
       postcss: 8.5.32
       rolldown: 1.2.16
       tinyglobby: 0.2.17
@@ -8026,7 +8034,7 @@ snapshots:
       magic-string: 0.30.21
       obug: 2.2.1
       pathe: 2.0.3
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=19076c77ae6edf03e4da50b912b5887daf9cc27262ba1d18e52f5f775ac74cd4)
       std-env: 4.3.0
       tinybench: 2.9.0
       tinyexec: 1.3.1

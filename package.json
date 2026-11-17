@@ -92,6 +92,10 @@
       "uuid": "11.1.1",
       "recharts>react-is": "19.1.10",
       "@typescript-eslint/typescript-estree>minimatch": "^11.0.1"
+    },
+    "patchedDependencies": {
+      "picomatch@2.3.2": "patches/picomatch@2.3.2.patch",
+      "picomatch@4.0.7": "patches/picomatch@4.0.7.patch"
     }
   }
 }
