@@ -138,4 +138,21 @@ describe("real Sequelize scheduling model field mappings", () => {
       await expect(LiveFlight.build({ flight_type: value }).validate({ fields: ["flight_type"] })).rejects.toMatchObject({ name: "SequelizeValidationError" });
     }
   });
+
+  it("can reload model associations while retaining the same process-wide database", async () => {
+    const database = crewModels.Pilot.sequelize!;
+    vi.doMock("@/lib/database", () => ({ default: database }));
+    vi.resetModules();
+
+    const reloadedCrew = (await import("@/lib/models")).models;
+    const reloadedScheduling = await import("./models");
+
+    expect(reloadedCrew.Pilot.sequelize).toBe(database);
+    expect(reloadedScheduling.LiveAircraft.sequelize).toBe(database);
+    expect(reloadedCrew.Pirep.associations.Aircraft.target).toBe(reloadedCrew.Aircraft);
+    expect(crewModels.Pirep.associations.Aircraft.target).toBe(crewModels.Aircraft);
+    expect(networkAttempts.query).not.toHaveBeenCalled();
+    expect(networkAttempts.authenticate).not.toHaveBeenCalled();
+    vi.doUnmock("@/lib/database");
+  });
 });

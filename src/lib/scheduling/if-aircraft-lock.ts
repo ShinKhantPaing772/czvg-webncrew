@@ -5,7 +5,12 @@ import { databasePoolMax } from "@/lib/database-config.mjs";
 // A separate two-integer advisory-lock namespace avoids collisions with other
 // application locks. All publishing, editing, matching and local mutations use it.
 export const IF_AIRCRAFT_LOCK_NAMESPACE = 0x574e43;
-let leases = 0;
+const leaseStateKey = Symbol.for("webncrew.if-aircraft-lock-leases");
+// Route bundles sharing a connection pool must also share its lease budget.
+const sharedPool = sequelize as typeof sequelize & {
+  [leaseStateKey]?: { count: number };
+};
+const leases = sharedPool[leaseStateKey] ??= { count: 0 };
 
 export async function tryIfAircraftTransactionLock(aircraftId: number, transaction: Transaction) {
   const rows = await sequelize.query<{ acquired: boolean }>(
@@ -32,14 +37,14 @@ export function ifAircraftLockAvailableSql(aircraftIdExpression: string) {
  */
 export async function acquireIfAircraftLock(aircraftId: number) {
   const maximum = databasePoolMax();
-  if (leases >= maximum - 1) return null;
-  leases += 1;
+  if (leases.count >= maximum - 1) return null;
+  leases.count += 1;
   let transaction: Transaction | undefined;
   try {
     transaction = await sequelize.transaction();
     if (!await tryIfAircraftTransactionLock(aircraftId, transaction)) {
       await transaction.commit();
-      leases -= 1;
+      leases.count -= 1;
       return null;
     }
     const held = transaction;
@@ -49,12 +54,12 @@ export async function acquireIfAircraftLock(aircraftId: number) {
         if (released) return;
         released = true;
         try { await held.commit(); }
-        finally { leases -= 1; }
+        finally { leases.count -= 1; }
       },
     };
   } catch (error) {
     try { if (transaction) await transaction.rollback().catch(() => undefined); }
-    finally { leases -= 1; }
+    finally { leases.count -= 1; }
     throw error;
   }
 }
