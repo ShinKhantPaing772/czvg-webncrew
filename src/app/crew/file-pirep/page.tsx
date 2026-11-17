@@ -736,6 +736,12 @@ export default function FilePirep() {
                           <div className="sticky top-0 z-10 bg-white p-1">
                             <Input
                               placeholder="Filter"
+                              onKeyDown={(event) => {
+                                // Keep typing and caret movement out of Select's typeahead.
+                                if (!["ArrowUp", "ArrowDown", "Escape", "Tab"].includes(event.key)) {
+                                  event.stopPropagation();
+                                }
+                              }}
                               onChange={(e) => {
                                 const searchTerm =
                                   e.target.value.toLowerCase();
