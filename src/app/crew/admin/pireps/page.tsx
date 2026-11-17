@@ -14,6 +14,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { CrewHeader } from "@/components/crew-header";
+import { CrewPageHeader } from "@/components/crew-ui";
 import { Button } from "@/components/ui/button";
 import {
   MAX_PIREP_COMMENTS,
@@ -590,9 +591,10 @@ export default function AdminPireps() {
     <CrewHeader>
       <main className="flex-1">
         <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <h1 className="text-2xl font-bold">PIREP Management</h1>
-          </div>
+          <CrewPageHeader
+            title="PIREP Management"
+            meta={<p className="mt-2 text-[13px] text-[var(--v2-text-text-muted,#525252)]">Review, approve, and comment on pilot reports</p>}
+          />
 
           <Tabs
             defaultValue="all"
@@ -639,7 +641,7 @@ export default function AdminPireps() {
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
                       id="search"
-                      placeholder="Search by flight number, pilot name, airport code..."
+                      placeholder="Search"
                       className="pl-8"
                       value={searchQuery}
                       onChange={(e) => {

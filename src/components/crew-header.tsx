@@ -72,6 +72,14 @@ export function CrewHeader({ children }: CrewHeaderProps) {
     window.scrollTo(0, 0);
   }, [pathname]);
 
+  // Keep Staff Console collapsed on pilot pages so the sidebar stays short.
+  useEffect(() => {
+    if (pathname && !pathname.startsWith("/crew/admin")) {
+      persistedAdminExpanded = false;
+      setIsAdminExpanded(false);
+    }
+  }, [pathname]);
+
   const toggleSidebar = (next: boolean) => {
     persistedSidebarOpen = next;
     setIsSidebarOpen(next);
@@ -217,15 +225,15 @@ export function CrewHeader({ children }: CrewHeaderProps) {
   };
 
   return (
-    <div className="flex min-h-screen bg-[var(--v2-background-bg-deep,#f2f6fb)] text-[var(--v2-text-text-base,#0f172a)] font-sans select-none [&_input]:select-text [&_textarea]:select-text">
+    <div className="flex min-h-screen bg-[var(--v2-background-bg-deep,#f3f4f6)] text-[var(--v2-text-text-base,#171717)] font-sans select-none [&_input]:select-text [&_textarea]:select-text">
       {/* Left Sidebar — Pinned to viewport top (`sticky top-0 h-screen`) */}
       <aside
-        style={{ width: isSidebarOpen ? 216 : 52 }}
-        className="sticky top-0 hidden h-screen shrink-0 flex-col justify-between overflow-y-auto py-2.5 pl-2.5 pr-1 transition-[width] duration-150 ease-out md:flex"
+        style={{ width: isSidebarOpen ? 248 : 56 }}
+        className="sticky top-0 hidden h-screen shrink-0 flex-col justify-between overflow-y-auto py-3 pl-3 pr-1 transition-[width] duration-150 ease-out md:flex"
       >
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-4">
           {/* Top Brand Row — Authentic Repository Brand Assets */}
-          <div className="flex h-9 items-center justify-between px-1.5">
+          <div className="flex h-9 items-center justify-between px-1">
             {isSidebarOpen ? (
               <>
                 <Link
@@ -251,7 +259,7 @@ export function CrewHeader({ children }: CrewHeaderProps) {
                   onClick={() => toggleSidebar(false)}
                   aria-label="Collapse sidebar"
                   title="Collapse sidebar"
-                  className="flex size-8 shrink-0 items-center justify-center rounded-[6px] text-[var(--v2-icon-icon-muted,#64748b)] hover:bg-[#0052a5]/[0.06] hover:text-[#0052a5]"
+                  className="flex size-8 shrink-0 items-center justify-center rounded-[8px] text-[var(--v2-icon-icon-muted,#737373)] transition-colors duration-150 hover:bg-[rgba(0,0,0,0.04)] hover:text-[var(--v2-text-text-base,#171717)]"
                 >
                   <PanelLeftClose className="size-3.5" />
                 </button>
@@ -262,7 +270,7 @@ export function CrewHeader({ children }: CrewHeaderProps) {
                 onClick={() => toggleSidebar(true)}
                 aria-label="Expand sidebar"
                 title="Expand sidebar"
-                className="mx-auto flex size-8 items-center justify-center rounded-[6px] hover:bg-[#0052a5]/[0.06]"
+                className="mx-auto flex size-8 items-center justify-center rounded-[8px] transition-colors duration-150 hover:bg-[rgba(0,0,0,0.04)]"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -275,7 +283,7 @@ export function CrewHeader({ children }: CrewHeaderProps) {
           </div>
 
           {/* Navigation Items — Instant client-side `<Link prefetch>` */}
-          <nav aria-label="Crew Center navigation" className="space-y-3">
+          <nav aria-label="Crew Center navigation" className="space-y-6">
             <ul className="flex flex-col gap-0.5">
               {baseNavItems.map((item) => {
                 const isActive = pathname === item.href;
@@ -285,18 +293,19 @@ export function CrewHeader({ children }: CrewHeaderProps) {
                       href={item.href}
                       prefetch
                       title={!isSidebarOpen ? item.title : undefined}
-                      className={`flex h-8 items-center gap-2 rounded-[6px] px-2.5 text-[13px] font-medium transition-colors duration-100 ${
+                      className={`flex h-9 items-center gap-2.5 rounded-[8px] px-2.5 text-[13px] font-medium transition-colors duration-150 ${
                         isActive
                           ? "bg-[#0052a5]/[0.10] text-[#0052a5]"
-                          : "text-[var(--v2-text-text-muted,#475569)] hover:bg-[#0052a5]/[0.05] hover:text-[#003a74]"
+                          : "text-[var(--v2-text-text-muted,#525252)] hover:bg-[rgba(0,0,0,0.04)] hover:text-[var(--v2-text-text-base,#171717)]"
                       }`}
                     >
                       <item.icon
-                        className={`size-3.5 shrink-0 ${
+                        className={`size-4 shrink-0 ${
                           isActive
                             ? "text-[#0052a5]"
-                            : "text-[var(--v2-icon-icon-muted,#64748b)]"
+                            : "text-[var(--v2-icon-icon-muted,#737373)]"
                         } ${!isSidebarOpen ? "mx-auto" : ""}`}
+                        strokeWidth={1.5}
                       />
                       {isSidebarOpen && (
                         <span className="truncate">{item.title}</span>
@@ -307,26 +316,26 @@ export function CrewHeader({ children }: CrewHeaderProps) {
               })}
             </ul>
 
-            {/* Collapsible Staff Console — Unified `h-8` rows */}
+            {/* Collapsible Staff Console — Unified `h-9` rows */}
             {adminNavItems.length > 0 && (
               <div>
                 {isSidebarOpen && (
                   <button
                     type="button"
                     onClick={toggleAdminExpanded}
-                    className="flex h-8 w-full items-center justify-between rounded-[6px] px-2.5 text-[13px] font-medium text-[var(--v2-text-text-faint,#64748b)] hover:bg-[#0052a5]/[0.05] hover:text-[#003a74] transition-colors"
+                    className="mb-2 flex h-8 w-full items-center justify-between rounded-[8px] px-2.5 text-[12px] font-medium text-[var(--v2-text-text-faint,#737373)] transition-colors duration-150 hover:bg-[rgba(0,0,0,0.04)] hover:text-[var(--v2-text-text-base,#171717)]"
                   >
                     <span>{t("Staff Console", "管理后台")}</span>
                     {showAdminItems ? (
-                      <ChevronDown className="size-3.5" />
+                      <ChevronDown className="size-3.5" strokeWidth={1.5} />
                     ) : (
-                      <ChevronRight className="size-3.5" />
+                      <ChevronRight className="size-3.5" strokeWidth={1.5} />
                     )}
                   </button>
                 )}
 
                 {(showAdminItems || !isSidebarOpen) && (
-                  <ul className="mt-0.5 flex flex-col gap-0.5">
+                  <ul className="flex flex-col gap-0.5">
                     {adminNavItems.map((item) => {
                       const isActive = pathname === item.href;
                       return (
@@ -335,18 +344,19 @@ export function CrewHeader({ children }: CrewHeaderProps) {
                             href={item.href}
                             prefetch
                             title={!isSidebarOpen ? item.title : undefined}
-                            className={`flex h-8 items-center gap-2 rounded-[6px] px-2.5 text-[13px] font-medium transition-colors duration-100 ${
+                            className={`flex h-9 items-center gap-2.5 rounded-[8px] px-2.5 text-[13px] font-medium transition-colors duration-150 ${
                               isActive
                                 ? "bg-[#0052a5]/[0.10] text-[#0052a5]"
-                                : "text-[var(--v2-text-text-muted,#475569)] hover:bg-[#0052a5]/[0.05] hover:text-[#003a74]"
+                                : "text-[var(--v2-text-text-muted,#525252)] hover:bg-[rgba(0,0,0,0.04)] hover:text-[var(--v2-text-text-base,#171717)]"
                             }`}
                           >
                             <item.icon
-                              className={`size-3.5 shrink-0 ${
+                              className={`size-4 shrink-0 ${
                                 isActive
                                   ? "text-[#0052a5]"
-                                  : "text-[var(--v2-icon-icon-muted,#64748b)]"
+                                  : "text-[var(--v2-icon-icon-muted,#737373)]"
                               } ${!isSidebarOpen ? "mx-auto" : ""}`}
+                              strokeWidth={1.5}
                             />
                             {isSidebarOpen && (
                               <span className="truncate">{item.title}</span>
@@ -362,16 +372,16 @@ export function CrewHeader({ children }: CrewHeaderProps) {
           </nav>
         </div>
 
-        {/* Bottom Controls: Language Switcher + User Row — Unified `h-8` benchmark */}
+        {/* Bottom Controls: Language Switcher + User Row */}
         {isSidebarOpen ? (
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-1 px-1">
               <LanguageSwitcher className="flex-1 justify-center" />
               <NotificationBell inbox={inbox} />
             </div>
-            <div className="flex h-8 items-center justify-between gap-2 rounded-[6px] px-2.5">
-              <span className="truncate text-[13px] font-medium text-[var(--v2-text-text-muted,#475569)]">
-                {user?.name || "CZVG Pilot"}
+            <div className="flex h-9 items-center justify-between gap-2 rounded-[8px] px-2.5">
+              <span className="truncate font-mono text-[12px] text-[var(--v2-text-text-muted,#525252)]">
+                {user?.callsign || user?.name || "CZVG Pilot"}
               </span>
               <button
                 type="button"
@@ -379,9 +389,9 @@ export function CrewHeader({ children }: CrewHeaderProps) {
                 disabled={isLoggingOut}
                 title={t("Sign out", "退出登录")}
                 aria-label={t("Sign out", "退出登录")}
-                className="flex size-8 shrink-0 items-center justify-center rounded-[6px] text-[var(--v2-icon-icon-muted,#64748b)] hover:bg-[#0052a5]/[0.06] hover:text-[#0052a5]"
+                className="flex size-8 shrink-0 items-center justify-center rounded-[8px] text-[var(--v2-icon-icon-muted,#737373)] transition-colors duration-150 hover:bg-[rgba(0,0,0,0.04)] hover:text-[var(--v2-text-text-base,#171717)]"
               >
-                <LogOut className="size-3.5" />
+                <LogOut className="size-3.5" strokeWidth={1.5} />
               </button>
             </div>
           </div>
@@ -395,9 +405,9 @@ export function CrewHeader({ children }: CrewHeaderProps) {
               disabled={isLoggingOut}
               title={t("Sign out", "退出登录")}
               aria-label={t("Sign out", "退出登录")}
-              className="mx-auto flex size-8 items-center justify-center rounded-[6px] text-[var(--v2-icon-icon-muted,#64748b)] hover:bg-[#0052a5]/[0.06] hover:text-[#0052a5]"
+              className="mx-auto flex size-8 items-center justify-center rounded-[8px] text-[var(--v2-icon-icon-muted,#737373)] transition-colors duration-150 hover:bg-[rgba(0,0,0,0.04)] hover:text-[var(--v2-text-text-base,#171717)]"
             >
-              <LogOut className="size-3.5" />
+              <LogOut className="size-3.5" strokeWidth={1.5} />
             </button>
           </div>
         )}
@@ -409,10 +419,10 @@ export function CrewHeader({ children }: CrewHeaderProps) {
           <SheetTrigger asChild>
             <button
               type="button"
-              className="flex h-8 items-center gap-2 rounded-[6px] bg-[#0052a5] px-2.5 text-[13px] font-medium text-white shadow-[var(--v2-elevation-floating)]"
+              className="flex h-9 items-center gap-2 rounded-[8px] bg-[#0052a5] px-3 text-[13px] font-medium text-white"
               aria-label="Open crew center sidebar"
             >
-              <Menu className="size-3.5" />
+              <Menu className="size-4" strokeWidth={1.5} />
               <span>{t("Menu", "菜单")}</span>
             </button>
           </SheetTrigger>
@@ -426,7 +436,7 @@ export function CrewHeader({ children }: CrewHeaderProps) {
         </div>
         <SheetContent
           side="left"
-          className="w-60 gap-0 border-0 bg-[#f2f6fb] p-3"
+          className="w-64 gap-0 border-0 bg-[var(--v2-background-bg-deep,#f3f4f6)] p-4"
         >
           <div className="mb-3 flex h-9 items-center justify-between gap-2 px-2">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -455,13 +465,13 @@ export function CrewHeader({ children }: CrewHeaderProps) {
                     <Link
                       href={item.href}
                       prefetch
-                      className={`flex h-8 items-center gap-2 rounded-[6px] px-2.5 text-[13px] font-medium transition-colors ${
+                      className={`flex h-9 items-center gap-2.5 rounded-[8px] px-2.5 text-[13px] font-medium transition-colors duration-150 ${
                         isActive
                           ? "bg-[#0052a5]/[0.10] text-[#0052a5]"
-                          : "text-[var(--v2-text-text-muted,#475569)] hover:bg-[#0052a5]/[0.05] hover:text-[#003a74]"
+                          : "text-[var(--v2-text-text-muted,#525252)] hover:bg-[rgba(0,0,0,0.04)] hover:text-[var(--v2-text-text-base,#171717)]"
                       }`}
                     >
-                      <item.icon className="size-3.5 shrink-0" />
+                      <item.icon className="size-4 shrink-0" strokeWidth={1.5} />
                       <span>{item.title}</span>
                     </Link>
                   </li>
@@ -475,9 +485,9 @@ export function CrewHeader({ children }: CrewHeaderProps) {
       {/* Main Panel */}
       <div
         data-slot="home-panel"
-        className="m-1.5 md:m-2 flex min-h-[calc(100vh-16px)] min-w-0 flex-1 flex-col rounded-[10px] bg-[var(--v2-background-bg-base,#ffffff)] shadow-[var(--v2-elevation-raised)]"
+        className="m-2 flex min-h-[calc(100vh-16px)] min-w-0 flex-1 flex-col rounded-[16px] bg-[var(--v2-background-bg-base,#ffffff)] shadow-[var(--v2-elevation-raised)]"
       >
-        <div className="mx-auto w-full max-w-[1440px] flex-1 px-5 py-6 md:px-7 md:py-7">
+        <div className="mx-auto w-full max-w-[1440px] flex-1 px-6 py-6 md:px-8 md:py-8">
           {children}
         </div>
       </div>

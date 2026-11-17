@@ -1,22 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect } from "react";
 import {
-  FileText,
   CheckCircle2,
   XCircle,
   AlertCircle,
   Loader2,
-  ArrowRight,
-  CalendarClock,
   Plus,
 } from "lucide-react";
 import { CrewHeader } from "@/components/crew-header";
+import {
+  CrewEmpty,
+  CrewFlightRow,
+  CrewPageHeader,
+  CrewStat,
+} from "@/components/crew-ui";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -37,7 +39,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useSession } from "@/hooks/use-session";
-import { AirlineLogo } from "@/components/airline-logo";
+import { useI18n } from "@/lib/i18n";
 import {
   MAX_PIREP_COMMENTS,
   PIREP_COMMENT_LIMIT_MESSAGE,
@@ -94,27 +96,15 @@ interface PirepsResponse {
 }
 
 function SummaryCard({
-  icon,
   label,
   count,
+  accent = false,
 }: {
-  icon: ReactNode;
   label: string;
   count: number | string;
+  accent?: boolean;
 }) {
-  return (
-    <Card>
-      <CardContent className="flex items-center gap-3 p-3 sm:p-4">
-        <span className="hidden rounded-md bg-[#eef4fb] p-2 text-[#0052a5] sm:block">
-          {icon}
-        </span>
-        <div>
-          <p className="text-xl font-semibold sm:text-2xl">{count}</p>
-          <p className="text-xs text-muted-foreground">{label}</p>
-        </div>
-      </CardContent>
-    </Card>
-  );
+  return <CrewStat label={label} value={count} accent={accent} />;
 }
 
 function StatusBadge({ status }: { status: number }) {
@@ -129,6 +119,9 @@ function StatusBadge({ status }: { status: number }) {
 
 export default function ViewPireps() {
   const { user } = useSession();
+  const { t } = useI18n();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [selectedPirep, setSelectedPirep] = useState<Pirep | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -148,8 +141,15 @@ export default function ViewPireps() {
   const [submittingCommentId, setSubmittingCommentId] = useState<number | null>(
     null,
   );
+  const [showSubmittedNotice, setShowSubmittedNotice] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState("");
+
+  useEffect(() => {
+    if (searchParams.get("submitted") !== "1") return;
+    setShowSubmittedNotice(true);
+    router.replace("/crew/view-pireps", { scroll: false });
+  }, [router, searchParams]);
 
   useEffect(() => {
     const fetchPireps = async () => {
@@ -292,37 +292,59 @@ export default function ViewPireps() {
     <CrewHeader>
       <main className="flex-1 space-y-5 pb-24 md:pb-6">
         {/* Top Header — Matches `Live aircraft scheduling` */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">My PIREPs</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Review your submitted pilot reports, check approval status, and
-              discuss with staff.
-            </p>
+        <CrewPageHeader
+          title="My PIREPs"
+          meta={<p className="mt-2 text-[13px] text-[var(--v2-text-text-muted,#525252)]">Submitted reports and staff comments</p>}
+          actions={
+            <Button asChild>
+              <Link href="/crew/file-pirep">
+                <Plus className="h-4 w-4" strokeWidth={1.5} />
+                File PIREP
+              </Link>
+            </Button>
+          }
+        />
+
+        {showSubmittedNotice ? (
+          <div
+            role="status"
+            className="flex items-start gap-2.5 rounded-[14px] bg-[var(--v2-state-bg-success,#e3fae1)] px-4 py-3 text-[13px] text-[var(--v2-state-fg-success,#196b2b)]"
+          >
+            <CheckCircle2
+              className="mt-0.5 size-4 shrink-0"
+              strokeWidth={1.5}
+            />
+            <div className="min-w-0 flex-1 space-y-1">
+              <p className="font-medium">
+                {t("PIREP submitted", "飞行报告已提交")}
+              </p>
+              <p className="text-[12px] opacity-90">
+                {t(
+                  "Review usually takes about 48 hours. Keep flying and file more PIREPs while you wait — no need to pause.",
+                  "审核通常约需 48 小时。期间可照常飞行并继续提交飞行报告，无需等待。",
+                )}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="shrink-0 text-[12px] underline-offset-2 hover:underline"
+              onClick={() => setShowSubmittedNotice(false)}
+            >
+              {t("Dismiss", "知道了")}
+            </button>
           </div>
-          <Button asChild>
-            <Link href="/crew/file-pirep">
-              <Plus className="mr-1 h-4 w-4" />
-              File PIREP
-            </Link>
-          </Button>
-        </div>
+        ) : null}
 
         {/* Summary Row — Matches `Live aircraft scheduling` */}
-        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        <div className="grid grid-cols-3 gap-3">
+          <SummaryCard label="Submitted" count={pagination.total} />
           <SummaryCard
-            icon={<FileText className="h-4 w-4" />}
-            label="Total submitted"
-            count={pagination.total}
-          />
-          <SummaryCard
-            icon={<CheckCircle2 className="h-4 w-4" />}
-            label="Approved on page"
+            label="Approved"
             count={pirepsData.filter((item) => item.status === 1).length}
+            accent
           />
           <SummaryCard
-            icon={<CalendarClock className="h-4 w-4" />}
-            label="Awaiting review"
+            label="Awaiting"
             count={pirepsData.filter((item) => item.status === 0).length}
           />
         </div>
@@ -332,7 +354,7 @@ export default function ViewPireps() {
           <Input
             id="pirep-search"
             aria-label="Search PIREPs"
-            placeholder="Search route, flight number, or aircraft"
+            placeholder="Search"
             value={searchTerm}
             onChange={(e) => {
               setSearchTerm(e.target.value);
@@ -341,7 +363,7 @@ export default function ViewPireps() {
           />
           <select
             aria-label="Filter status"
-            className="h-8 rounded-[6px] border-0 bg-[#eef4fb] px-2.5 text-[13px] outline-none"
+            className="h-8 rounded-[8px] border-0 bg-[var(--v2-background-bg-layer-02,#eef0f3)] px-2.5 text-[13px] outline-none"
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value)}
           >
@@ -352,7 +374,7 @@ export default function ViewPireps() {
           </select>
           <select
             aria-label="Items per page"
-            className="h-8 rounded-[6px] border-0 bg-[#eef4fb] px-2.5 text-[13px] outline-none"
+            className="h-8 rounded-[8px] border-0 bg-[var(--v2-background-bg-layer-02,#eef0f3)] px-2.5 text-[13px] outline-none"
             value={String(itemsPerPage)}
             onChange={(event) => {
               setItemsPerPage(Number(event.target.value));
@@ -383,79 +405,39 @@ export default function ViewPireps() {
             {error}
           </div>
         ) : visiblePireps.length === 0 ? (
-          <div className="rounded-[6px] bg-[var(--v2-background-bg-layer-01,#fafafa)] px-6 py-10 text-center">
-            <FileText className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
-            <p className="text-[13px] font-medium">No PIREPs to show</p>
-            <p className="mt-1 text-[12px] text-muted-foreground">
-              Try another filter, or file a new pilot report.
-            </p>
-          </div>
+          <CrewEmpty
+            title="No PIREPs to show"
+            description="Try another filter, or file a new pilot report"
+            action={
+              <Button asChild>
+                <Link href="/crew/file-pirep">File PIREP</Link>
+              </Button>
+            }
+          />
         ) : (
           <div className="space-y-1.5">
             {visiblePireps.map((pirep) => (
-              <Card key={pirep.id}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedPirep(pirep);
-                    setNewComment("");
-                    setCommentError(null);
-                  }}
-                  className="grid w-full gap-4 rounded-[6px] bg-[var(--v2-background-bg-layer-01,#fafafa)] px-4 py-3.5 text-left transition-colors hover:bg-[var(--v2-background-bg-layer-02,#f2f2f2)] focus-visible:outline-none md:grid-cols-[1fr_1.3fr_1fr]"
-                >
-                  <div>
-                    <div className="mb-2 flex flex-wrap items-center gap-2">
-                      <AirlineLogo
-                        flightnum={pirep.flightnum}
-                        liveryname={pirep.Aircraft?.liveryname}
-                        className="h-4 w-auto max-w-[54px] shrink-0 object-contain"
-                      />
-                      <span className="font-semibold">{pirep.flightnum}</span>
-                      <StatusBadge status={pirep.status} />
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      {pirep.Aircraft?.name || "Fleet aircraft"}
-                      {pirep.Aircraft?.liveryname
-                        ? ` · ${pirep.Aircraft.liveryname}`
-                        : ""}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Logged {pirep.date}
-                    </p>
-                  </div>
-
-                  <div>
-                    <div className="flex items-center gap-3 text-xl font-semibold tracking-tight">
-                      <span>{pirep.departure}</span>
-                      <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                      <span>{pirep.arrival}</span>
-                    </div>
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      Block duration {pirep.flighttime}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Fuel {Number(pirep.fuelused || 0).toLocaleString()} kg ·
-                      Multiplier {formatMultiplierLabel(pirep.multi)}
-                    </p>
-                  </div>
-
-                  <div className="space-y-2 md:text-right">
-                    <p className="text-sm">
-                      {user?.name || "Pilot"}
-                      <span className="ml-1 text-xs text-muted-foreground">
-                        {user?.callsign}
-                      </span>
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {pirep.Comments?.length || 0} comment
-                      {(pirep.Comments?.length || 0) === 1 ? "" : "s"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Click to inspect &amp; comment
-                    </p>
-                  </div>
-                </button>
-              </Card>
+              <CrewFlightRow
+                key={pirep.id}
+                flightnum={pirep.flightnum}
+                liveryname={pirep.Aircraft?.liveryname}
+                badge={<StatusBadge status={pirep.status} />}
+                subtitle={pirep.Aircraft?.name || "Fleet aircraft"}
+                departure={pirep.departure}
+                arrival={pirep.arrival}
+                duration={pirep.flighttime}
+                routeMeta={pirep.date}
+                onClick={() => {
+                  setSelectedPirep(pirep);
+                  setNewComment("");
+                  setCommentError(null);
+                }}
+                trailing={
+                  <span className="text-[12px] text-[var(--v2-text-text-faint,#737373)]">
+                    {pirep.Comments?.length || 0} comments
+                  </span>
+                }
+              />
             ))}
           </div>
         )}

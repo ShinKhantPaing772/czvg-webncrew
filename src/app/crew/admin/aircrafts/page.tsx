@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Edit, Loader2, Plus, Trash2 } from "lucide-react";
 
 import { CrewHeader } from "@/components/crew-header";
+import { CrewPageHeader } from "@/components/crew-ui";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -530,27 +531,32 @@ export default function AircraftPage() {
     <CrewHeader>
       <main className="flex-1">
         <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h1 className="text-2xl font-bold">Aircraft</h1>
-              <p className="text-sm text-muted-foreground">
-                Manage fleet records and pilot access requirements.
-              </p>
-              {!mappingLoading && !mappingError &&
-                (mappingSummary.invalid > 0 || mappingSummary.stale > 0) && (
-                  <p className="mt-1 text-xs text-amber-700">
-                    {mappingSummary.invalid} invalid mapping
-                    {mappingSummary.invalid === 1 ? "" : "s"} and{" "}
-                    {mappingSummary.stale} record
-                    {mappingSummary.stale === 1 ? "" : "s"} with outdated
-                    names need attention.
-                  </p>
-                )}
-            </div>
-            <Button onClick={openAddDialog} disabled={loading}>
-              <Plus className="mr-2 h-4 w-4" /> Add Aircraft
-            </Button>
-          </div>
+          <CrewPageHeader
+            title="Aircraft"
+            meta={
+              <>
+                <p className="mt-2 text-[13px] text-[var(--v2-text-text-muted,#525252)]">
+                  Fleet catalog, liveries, and unlock requirements
+                </p>
+                {!mappingLoading &&
+                  !mappingError &&
+                  (mappingSummary.invalid > 0 || mappingSummary.stale > 0) && (
+                    <p className="mt-1 text-[12px] text-amber-700">
+                      {mappingSummary.invalid} invalid mapping
+                      {mappingSummary.invalid === 1 ? "" : "s"} and{" "}
+                      {mappingSummary.stale} record
+                      {mappingSummary.stale === 1 ? "" : "s"} with outdated
+                      names need attention.
+                    </p>
+                  )}
+              </>
+            }
+            actions={
+              <Button onClick={openAddDialog} disabled={loading}>
+                <Plus className="h-4 w-4" strokeWidth={1.5} /> Add Aircraft
+              </Button>
+            }
+          />
 
           {error && (
             <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">

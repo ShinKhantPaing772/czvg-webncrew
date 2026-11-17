@@ -55,7 +55,7 @@ function NavigationProgressInner() {
         setIsVisible(false);
         setProgress(0);
       }, 250);
-    }, 9000);
+    }, 3000);
   }, [clearAllTimers]);
 
   const completeProgress = useCallback(() => {
@@ -180,40 +180,39 @@ function NavigationProgressInner() {
 
   return (
     <>
-      {/* ── Top Glowing Progress Line ── */}
+      {/* Top progress line — solid accent, no glow */}
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed top-0 left-0 right-0 z-[99999] h-[3px] overflow-hidden"
+        className="pointer-events-none fixed top-0 left-0 right-0 z-[99999] h-0.5 overflow-hidden"
         style={{
           opacity: isVisible ? 1 : 0,
-          transition: "opacity 0.25s ease-out",
+          transition: "opacity 150ms cubic-bezier(0.22, 1, 0.36, 1)",
         }}
       >
         <div
-          className="h-full bg-gradient-to-r from-sky-500 via-[#0052a5] to-[#00a3e0] shadow-[0_0_10px_rgba(0,82,165,0.8)] transition-all duration-200 ease-out"
+          className="h-full bg-[#0052a5] transition-[width] duration-200 ease-out"
           style={{
             width: `${progress}%`,
           }}
         />
       </div>
 
-      {/* ── Floating Rotating Spinner Badge (旋转指示进度条) ── */}
+      {/* Quiet loading chip */}
       <div
         aria-hidden={!isVisible}
         role="status"
         aria-live="polite"
-        className={`pointer-events-none fixed top-3 right-4 z-[99999] flex items-center gap-2 rounded-full border border-slate-200/80 bg-white/95 px-3 py-1.5 text-xs font-semibold text-slate-800 shadow-[0_4px_20px_rgba(0,0,0,0.12)] backdrop-blur-md transition-all duration-200 select-none dark:border-slate-800 dark:bg-slate-900/95 dark:text-slate-100 ${
+        className={`pointer-events-none fixed top-3 right-4 z-[99999] flex items-center gap-2 rounded-[8px] bg-[var(--v2-background-bg-base,#ffffff)] px-2.5 py-1.5 text-[12px] font-medium text-[var(--v2-text-text-muted,#525252)] shadow-[var(--v2-elevation-floating)] transition-[opacity,transform] duration-200 ease-out select-none ${
           isVisible
-            ? "translate-y-0 opacity-100 scale-100"
-            : "-translate-y-2 opacity-0 scale-95"
+            ? "translate-y-0 opacity-100"
+            : "-translate-y-1 opacity-0"
         }`}
       >
         <Loader2
           className="size-3.5 shrink-0 animate-spin text-[#0052a5]"
+          strokeWidth={1.5}
         />
-        <span className="tracking-wide">
-          {t("Loading...", "加载中...")}
-        </span>
+        <span>{t("Loading...", "加载中...")}</span>
       </div>
     </>
   );

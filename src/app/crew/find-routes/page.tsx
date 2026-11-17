@@ -1,23 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowRight,
-  CheckCircle2,
-  Compass,
   Loader2,
-  Plane,
   PlaneTakeoff,
   Save,
   X,
 } from "lucide-react";
 
 import { CrewHeader } from "@/components/crew-header";
-import { Badge } from "@/components/ui/badge";
+import {
+  CrewEmpty,
+  CrewFlightRow,
+  CrewPageHeader,
+  CrewStat,
+} from "@/components/crew-ui";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
@@ -30,7 +29,6 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { useSession } from "@/hooks/use-session";
-import { AirlineLogo } from "@/components/airline-logo";
 import { authFetch } from "@/lib/utils/api";
 import { formatFlightTime } from "@/lib/utils/time";
 
@@ -83,27 +81,15 @@ type PilotDashboard = {
 };
 
 function SummaryCard({
-  icon,
   label,
   count,
+  accent = false,
 }: {
-  icon: ReactNode;
   label: string;
   count: number | string;
+  accent?: boolean;
 }) {
-  return (
-    <Card>
-      <CardContent className="flex items-center gap-3 p-3 sm:p-4">
-        <span className="hidden rounded-md bg-[#eef4fb] p-2 text-[#0052a5] sm:block">
-          {icon}
-        </span>
-        <div>
-          <p className="text-xl font-semibold sm:text-2xl">{count}</p>
-          <p className="text-xs text-muted-foreground">{label}</p>
-        </div>
-      </CardContent>
-    </Card>
-  );
+  return <CrewStat label={label} value={count} accent={accent} />;
 }
 
 function readStorage<T>(key: string, fallback: T): T {
@@ -380,60 +366,41 @@ export default function FindRoutes() {
     <CrewHeader>
       <main className="flex-1 space-y-5 pb-24 md:pb-6">
         {/* Top Header — Matches `Live aircraft scheduling` */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">Find routes</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Search active commercial and partner routes, filter by aircraft or
-              duration, and dispatch a PIREP.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={saveCurrentFilter}
-            >
-              <Save className="h-4 w-4" />
-              Save filter
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setCurrentPage(1);
-                setFilters({
-                  searchQuery: "",
-                  departureFilter: "",
-                  arrivalFilter: "",
-                  aircraftFilter: "all",
-                  durationRange: "",
-                  eligibleOnly: false,
-                });
-              }}
-            >
-              Clear
-            </Button>
-          </div>
-        </div>
+        <CrewPageHeader
+          title="Find routes"
+          meta={<p className="mt-2 text-[13px] text-[var(--v2-text-text-muted,#525252)]">Search the CZVG network and open a PIREP</p>}
+          actions={
+            <>
+              <Button type="button" variant="outline" onClick={saveCurrentFilter}>
+                <Save className="h-4 w-4" strokeWidth={1.5} />
+                Save filter
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setCurrentPage(1);
+                  setFilters({
+                    searchQuery: "",
+                    departureFilter: "",
+                    arrivalFilter: "",
+                    aircraftFilter: "all",
+                    durationRange: "",
+                    eligibleOnly: false,
+                  });
+                }}
+              >
+                Clear
+              </Button>
+            </>
+          }
+        />
 
         {/* Summary Row — Matches `Live aircraft scheduling` */}
-        <div className="grid grid-cols-3 gap-2 sm:gap-3">
-          <SummaryCard
-            icon={<Compass className="h-4 w-4" />}
-            label="Matching routes"
-            count={filteredRoutes.length}
-          />
-          <SummaryCard
-            icon={<CheckCircle2 className="h-4 w-4" />}
-            label="Eligible routes"
-            count={eligibleRoutesCount}
-          />
-          <SummaryCard
-            icon={<Plane className="h-4 w-4" />}
-            label="Unlocked aircraft"
-            count={unlockedFleetCount}
-          />
+        <div className="grid grid-cols-3 gap-3">
+          <SummaryCard label="Matching" count={filteredRoutes.length} accent />
+          <SummaryCard label="Eligible" count={eligibleRoutesCount} />
+          <SummaryCard label="Unlocked fleet" count={unlockedFleetCount} />
         </div>
 
         {/* Filter Bar — Matches `Live aircraft scheduling` */}
@@ -441,7 +408,7 @@ export default function FindRoutes() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1.4fr_110px_110px_auto_auto]">
             <Input
               aria-label="Search flight number"
-              placeholder="Search flight number (e.g. CSN327, CXA801)"
+              placeholder="Flight number"
               value={filters.searchQuery}
               onChange={(event) =>
                 updateFilters({ searchQuery: event.target.value })
@@ -471,7 +438,7 @@ export default function FindRoutes() {
             />
             <select
               aria-label="Filter aircraft"
-              className="h-8 rounded-[6px] border-0 bg-[#eef4fb] px-2.5 text-[13px] outline-none"
+              className="h-8 rounded-[8px] border-0 bg-[var(--v2-background-bg-layer-02,#eef0f3)] px-2.5 text-[13px] outline-none"
               value={filters.aircraftFilter}
               onChange={(event) =>
                 updateFilters({ aircraftFilter: event.target.value })
@@ -492,7 +459,7 @@ export default function FindRoutes() {
             </select>
             <select
               aria-label="Filter duration"
-              className="h-8 rounded-[6px] border-0 bg-[#eef4fb] px-2.5 text-[13px] outline-none"
+              className="h-8 rounded-[8px] border-0 bg-[var(--v2-background-bg-layer-02,#eef0f3)] px-2.5 text-[13px] outline-none"
               value={filters.durationRange || "all"}
               onChange={(event) =>
                 updateFilters({
@@ -562,13 +529,10 @@ export default function FindRoutes() {
             {error}
           </div>
         ) : paginatedRoutes.length === 0 ? (
-          <div className="rounded-[6px] bg-[var(--v2-background-bg-layer-01,#fafafa)] px-6 py-10 text-center">
-            <Compass className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
-            <p className="text-[13px] font-medium">No routes to show</p>
-            <p className="mt-1 text-[12px] text-muted-foreground">
-              Try another filter or clear the search criteria.
-            </p>
-          </div>
+          <CrewEmpty
+            title="No routes to show"
+            description="Try another filter or clear the search criteria"
+          />
         ) : (
           <div className="space-y-1.5">
             {paginatedRoutes.map((route) => {
@@ -579,65 +543,55 @@ export default function FindRoutes() {
               const extraCount = Math.max(0, route.aircraft.length - 1);
 
               return (
-                <Card key={route.id}>
-                  <div className="grid w-full items-center gap-4 rounded-[6px] bg-[var(--v2-background-bg-layer-01,#fafafa)] px-4 py-3.5 transition-colors hover:bg-[var(--v2-background-bg-layer-02,#f2f2f2)] md:grid-cols-[1fr_1.3fr_1fr]">
-                    <div>
-                      <div className="mb-2 flex flex-wrap items-center gap-2">
-                        <AirlineLogo
-                          flightnum={route.fltnum}
-                          liveryname={primaryAc?.liveryname}
-                          className="h-4 w-auto max-w-[54px] shrink-0 object-contain"
-                        />
-                        <span className="font-semibold">{route.fltnum}</span>
-                        <Badge variant={canFly ? "default" : "secondary"}>
-                          {canFly ? "Eligible" : "Locked"}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {primaryAc
-                          ? `${primaryAc.name}${primaryAc.liveryname ? ` · ${primaryAc.liveryname}` : ""}`
-                          : "No aircraft assigned"}
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {extraCount > 0
-                          ? `+${extraCount} additional aircraft on route`
-                          : route.notes || "Direct scheduled sector"}
-                      </p>
-                    </div>
-
-                    <div>
-                      <div className="flex items-center gap-3 text-xl font-semibold tracking-tight">
-                        <span>{route.dep}</span>
-                        <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                        <span>{route.arr}</span>
-                      </div>
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        Scheduled duration {route.duration}
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {unlockedForRoute.length}/{route.aircraft.length}{" "}
-                        aircraft unlocked for your rank
-                      </p>
-                    </div>
-
-                    <div className="flex flex-col items-start justify-between gap-2 md:items-end">
-                      <p className="text-xs text-muted-foreground">
-                        {route.notes || "Standard dispatch"}
-                      </p>
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm" asChild>
-                          <Link href={`/crew/route/${route.id}`}>Details</Link>
-                        </Button>
+                <CrewFlightRow
+                  key={route.id}
+                  flightnum={route.fltnum}
+                  liveryname={primaryAc?.liveryname}
+                  badge={
+                    <span
+                      className={
+                        canFly
+                          ? "text-[11px] text-[#0052a5]"
+                          : "text-[11px] text-[var(--v2-text-text-faint,#737373)]"
+                      }
+                    >
+                      {canFly ? "Eligible" : "Locked"}
+                    </span>
+                  }
+                  subtitle={
+                    primaryAc
+                      ? [
+                          primaryAc.name,
+                          extraCount > 0 ? `+${extraCount}` : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")
+                      : "No aircraft"
+                  }
+                  departure={route.dep}
+                  arrival={route.arr}
+                  duration={route.duration}
+                  trailing={
+                    <>
+                      <Button variant="ghost" size="sm" asChild>
+                        <Link href={`/crew/route/${route.id}`}>Details</Link>
+                      </Button>
+                      {canFly ? (
                         <Button size="sm" asChild>
                           <Link href={filePirepHref(route)}>
-                            <PlaneTakeoff className="h-3.5 w-3.5" />
+                            <PlaneTakeoff className="h-3.5 w-3.5" strokeWidth={1.5} />
                             File PIREP
                           </Link>
                         </Button>
-                      </div>
-                    </div>
-                  </div>
-                </Card>
+                      ) : (
+                        <Button size="sm" disabled>
+                          <PlaneTakeoff className="h-3.5 w-3.5" strokeWidth={1.5} />
+                          File PIREP
+                        </Button>
+                      )}
+                    </>
+                  }
+                />
               );
             })}
           </div>

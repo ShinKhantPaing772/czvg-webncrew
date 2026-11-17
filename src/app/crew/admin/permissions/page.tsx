@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Edit, Search, Trash, UserPlus } from "lucide-react";
 import { CrewHeader } from "@/components/crew-header";
+import { CrewPageHeader } from "@/components/crew-ui";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -367,16 +368,21 @@ export default function AdminPermissions() {
   return (
     <CrewHeader>
       <main className="flex-1">
-        <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
-          <h1 className="text-2xl font-bold">Admin Permissions</h1>
-
+        <CrewPageHeader
+          title="Admin Permissions"
+          meta={
+            <p className="mt-2 text-[13px] text-[var(--v2-text-text-muted,#525252)]">
+              Who can manage each Crew Center module
+            </p>
+          }
+          actions={
           <Dialog
             open={showAddAdminDialog}
             onOpenChange={setShowAddAdminDialog}
           >
             <DialogTrigger asChild>
               <Button>
-                <UserPlus className="mr-2 h-4 w-4" />
+                <UserPlus className="h-4 w-4" strokeWidth={1.5} />
                 <span>Add Admin</span>
               </Button>
             </DialogTrigger>
@@ -432,7 +438,8 @@ export default function AdminPermissions() {
               </form>
             </DialogContent>
           </Dialog>
-        </div>
+          }
+        />
 
         {(message || error) && (
           <div
@@ -454,7 +461,7 @@ export default function AdminPermissions() {
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   id="search"
-                  placeholder="Search by name, email, callsign, role..."
+                  placeholder="Search"
                   className="pl-8"
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}

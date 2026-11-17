@@ -29,6 +29,7 @@ import {
   TrendChart,
 } from "@/components/admin/dashboard-charts";
 import { CrewHeader } from "@/components/crew-header";
+import { CrewPageHeader } from "@/components/crew-ui";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -157,17 +158,15 @@ export default function AdminDashboard() {
   return (
     <CrewHeader>
       <main className="flex flex-1 flex-col gap-6">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-bold">Admin Analytics</h1>
-            </div>
-            <p className="mt-1 text-sm text-muted-foreground">
+        <CrewPageHeader
+          title="Admin Analytics"
+          meta={
+            <p className="mt-2 text-[13px] text-[var(--v2-text-text-muted,#525252)]">
               Showing operational metrics for{" "}
-              {format(range.from, "LLL dd, y")} to {format(range.to, "LLL dd, y")}.
+              {format(range.from, "LLL dd, y")} to {format(range.to, "LLL dd, y")}
             </p>
-          </div>
-
+          }
+          actions={
           <div className="flex flex-wrap gap-2">
             {[
               ["7 days", presetRange(7)],
@@ -234,7 +233,8 @@ export default function AdminDashboard() {
               </PopoverContent>
             </Popover>
           </div>
-        </div>
+          }
+        />
 
         {loading ? (
           <div className="flex min-h-[360px] items-center justify-center rounded-md border bg-white text-sm text-muted-foreground">

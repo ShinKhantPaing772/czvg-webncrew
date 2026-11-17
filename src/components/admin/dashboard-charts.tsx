@@ -46,13 +46,20 @@ export function StatCard({
 }) {
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        <Icon className="h-4 w-4 text-muted-foreground" />
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
-        <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
+      <CardContent className="rounded-[12px] bg-[var(--v2-background-bg-layer-01,#f7f8fa)] px-4 py-4">
+        <p className="text-[12px] text-[var(--v2-text-text-muted,#525252)]">
+          {title}
+        </p>
+        <p className="mt-2 font-mono text-[28px] font-medium tabular-nums leading-none text-[var(--v2-text-text-base,#171717)]">
+          {value}
+        </p>
+        <p className="mt-2 text-[12px] text-[var(--v2-text-text-faint,#737373)]">
+          {detail}
+        </p>
+        {/* Icon kept in signature for callers; chrome stays quiet. */}
+        <span className="sr-only">
+          <Icon />
+        </span>
       </CardContent>
     </Card>
   );
@@ -70,13 +77,19 @@ export function MetricTile({
   icon: ElementType;
 }) {
   return (
-    <div className="rounded-md border bg-slate-50 p-4">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-medium text-slate-700">{title}</p>
-        <Icon className="h-4 w-4 text-muted-foreground" />
-      </div>
-      <p className="mt-3 text-2xl font-bold text-slate-950">{value}</p>
-      <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
+    <div className="rounded-[12px] bg-[var(--v2-background-bg-layer-01,#f7f8fa)] px-4 py-4">
+      <p className="text-[12px] text-[var(--v2-text-text-muted,#525252)]">
+        {title}
+      </p>
+      <p className="mt-2 font-mono text-[28px] font-medium tabular-nums leading-none text-[var(--v2-text-text-base,#171717)]">
+        {value}
+      </p>
+      <p className="mt-2 text-[12px] text-[var(--v2-text-text-faint,#737373)]">
+        {detail}
+      </p>
+      <span className="sr-only">
+        <Icon />
+      </span>
     </div>
   );
 }

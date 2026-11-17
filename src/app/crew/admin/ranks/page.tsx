@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Edit, Loader2, Plus, Trash2 } from "lucide-react";
 
 import { CrewHeader } from "@/components/crew-header";
+import { CrewPageHeader } from "@/components/crew-ui";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -173,13 +174,20 @@ export default function AdminRanksPage() {
   return (
     <CrewHeader>
       <main className="flex-1 space-y-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">Ranks</h1>
-            <p className="text-sm text-muted-foreground">Manage pilot progression and the public rank ladder.</p>
-          </div>
-          <Button onClick={openAdd} disabled={loading}><Plus className="mr-2 h-4 w-4" />Add Rank</Button>
-        </div>
+        <CrewPageHeader
+          title="Ranks"
+          meta={
+            <p className="mt-2 text-[13px] text-[var(--v2-text-text-muted,#525252)]">
+              Pilot rank ladder and flight-time requirements
+            </p>
+          }
+          actions={
+            <Button onClick={openAdd} disabled={loading}>
+              <Plus className="h-4 w-4" strokeWidth={1.5} />
+              Add Rank
+            </Button>
+          }
+        />
 
         {error ? <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</div> : null}
 

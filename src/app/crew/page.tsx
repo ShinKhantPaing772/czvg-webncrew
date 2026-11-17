@@ -27,40 +27,40 @@ export default function Home() {
       <div className="flex min-h-[calc(100vh-3.5rem)] flex-col items-center px-4 py-10">
         <div
           className={cn(
-            "my-auto w-full rounded-[10px] bg-[var(--v2-background-bg-base,#ffffff)] p-6 sm:p-8 shadow-[var(--v2-elevation-raised)]",
+            "my-auto w-full rounded-[16px] bg-[var(--v2-background-bg-base,#ffffff)] p-6 sm:p-8 shadow-[var(--v2-elevation-raised)]",
             isLogin ? "max-w-md" : "max-w-4xl",
           )}
         >
           {isLogin ? (
             <div className="w-full space-y-6">
               <div className="space-y-1">
-                <h2 className="text-[20px] font-semibold tracking-tight text-[var(--v2-text-text-base,#161616)]">
-                  Welcome Back
+                <h2 className="text-[28px] font-medium text-[var(--v2-text-text-base,#171717)]">
+                  Sign in
                 </h2>
-                <p className="text-[13px] text-[var(--v2-text-text-muted,#5c5c5c)]">
-                  Sign in to access your dashboard
+                <p className="text-[13px] text-[var(--v2-text-text-muted,#525252)]">
+                  Access your CZVG crew dashboard
                 </p>
               </div>
               <LoginForm />
-              <div className="flex items-center justify-center gap-2 text-center text-[13px] text-[var(--v2-text-text-muted,#5c5c5c)]">
-                <span>Apply today to be a part of CZVG!</span>
+              <div className="flex items-center justify-center gap-2 text-center text-[13px] text-[var(--v2-text-text-muted,#525252)]">
+                <span>New to CZVG</span>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => setIsLogin(false)}
                 >
-                  Sign Up
+                  Apply
                 </Button>
               </div>
             </div>
           ) : (
             <div className="space-y-6">
               <div className="space-y-1">
-                <h2 className="text-[20px] font-semibold tracking-tight text-[var(--v2-text-text-base,#161616)]">
-                  Join CZVG Today!
+                <h2 className="text-[28px] font-medium text-[var(--v2-text-text-base,#171717)]">
+                  Apply to CZVG
                 </h2>
-                <p className="text-[13px] text-[var(--v2-text-text-muted,#5c5c5c)]">
-                  Fill in the application form to get started
+                <p className="text-[13px] text-[var(--v2-text-text-muted,#525252)]">
+                  Submit your Infinite Flight application
                 </p>
               </div>
               <div className="grid gap-8 lg:grid-cols-[minmax(0,1.25fr)_minmax(260px,0.75fr)]">
