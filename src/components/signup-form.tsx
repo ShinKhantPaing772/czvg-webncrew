@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import SimpleField from "@/components/system/SimpleField";
 import { CheckCircle2, AlertCircle, Loader2, XCircle } from "lucide-react";
 import { setToken } from "@/lib/utils/auth";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useI18n } from "@/lib/i18n";
 import {
   isValidSignupName,
   sanitizeSignupName,
@@ -17,6 +19,8 @@ import {
 
 export function SignupForm() {
   const router = useRouter();
+  const { t } = useI18n();
+  const [ageEligible, setAgeEligible] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingIFC, setLoadingIFC] = useState(false);
   const [validIFC, setValidIFC] = useState(false);
@@ -40,7 +44,7 @@ export function SignupForm() {
 
   useEffect(() => {
     const username = formData.ifc.trim();
-    if (!username) {
+    if (!ageEligible || !username) {
       setValidIFC(false);
       setLoadingIFC(false);
       return;
@@ -83,7 +87,7 @@ export function SignupForm() {
       clearTimeout(timeout);
       controller.abort();
     };
-  }, [formData.ifc]);
+  }, [ageEligible, formData.ifc]);
 
   function validatePassword() {
     if (formData.password.length < 8) {
@@ -102,6 +106,17 @@ export function SignupForm() {
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (!ageEligible) {
+      setMessage({
+        type: "error",
+        text: t(
+          "Confirm that you are at least 13 years old, or at least 14 if you are located in mainland China.",
+          "请确认您已年满 13 周岁；如果您位于中国大陆，则须年满 14 周岁。",
+        ),
+      });
+      return;
+    }
 
     if (!isValidSignupName(formData.name)) {
       setMessage({
@@ -139,6 +154,7 @@ export function SignupForm() {
           password: formData.password,
           name: formData.name,
           ifc: formData.ifc,
+          ageEligible,
         }),
       });
 
@@ -237,7 +253,7 @@ export function SignupForm() {
               {!loadingIFC && formData.ifc && validIFC && (
                 <CheckCircle2 className="h-4 w-4 text-green-500" />
               )}
-              {!loadingIFC && formData.ifc && !validIFC && (
+              {ageEligible && !loadingIFC && formData.ifc && !validIFC && (
                 <XCircle className="h-4 w-4 text-red-500" />
               )}
             </span>
@@ -297,10 +313,27 @@ export function SignupForm() {
           )}
       </SimpleField>
 
+      <label htmlFor="age-eligible" className="flex cursor-pointer items-start gap-3 text-[13px] leading-5 text-[var(--v2-text-text-base,#171717)]">
+        <Checkbox
+          id="age-eligible"
+          name="ageEligible"
+          checked={ageEligible}
+          onCheckedChange={(checked) => setAgeEligible(checked === true)}
+          required
+          className="mt-0.5"
+        />
+        <span>
+          {t(
+            "I am at least 13 years old, or at least 14 if I am located in mainland China.",
+            "我已年满 13 周岁；如果我位于中国大陆，则已年满 14 周岁。",
+          )}
+        </span>
+      </label>
+
       <ThemedButton
         type="submit"
         className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-        disabled={isLoading}
+        disabled={isLoading || !ageEligible}
       >
         {isLoading ? "Sending application..." : "Apply"}
       </ThemedButton>

@@ -135,6 +135,7 @@ type DashboardData = {
     overview?: BadgesOverview;
   };
   recentPireps: RecentPirep[];
+  topAircraft: { label: string; value: number }[];
 };
 
 function SummaryCard({
@@ -142,13 +143,28 @@ function SummaryCard({
   value,
   hint,
   accent = false,
+  textValue = false,
 }: {
   label: string;
   value: string | number;
   hint?: string;
   accent?: boolean;
+  textValue?: boolean;
 }) {
-  return <CrewStat label={label} value={value} hint={hint} accent={accent} />;
+  return (
+    <CrewStat
+      label={label}
+      value={value}
+      hint={hint}
+      accent={accent}
+      className="min-w-0 p-3 sm:p-4"
+      valueClassName={
+        textValue
+          ? "font-sans text-[17px] leading-snug sm:text-[20px]"
+          : "text-[24px] sm:text-[28px]"
+      }
+    />
+  );
 }
 
 function StatusBadge({ status }: { status: number }) {
@@ -177,19 +193,6 @@ function formatUtcDate(dateStr: string) {
     year: "numeric",
     timeZone: "UTC",
   });
-}
-
-function buildReflyHref(flight: RecentPirep) {
-  const params = new URLSearchParams({
-    flightnum: flight.flightnum,
-    departure: flight.departure,
-    arrival: flight.arrival,
-    flightTime: flight.flightTimeInput || flight.flighttime,
-  });
-  if (flight.aircraft?.id) {
-    params.set("aircraftId", String(flight.aircraft.id));
-  }
-  return `/crew/file-pirep?${params}`;
 }
 
 function displayImageUrl(value: unknown) {
@@ -305,12 +308,6 @@ export default function UserDashboard() {
   const chartMetrics = useMemo(() => {
     if (!dashboard) return null;
 
-    const statusData = [
-      { label: "Approved", value: dashboard.statistics.approvedPireps },
-      { label: "Pending", value: dashboard.statistics.pendingPireps },
-      { label: "Rejected", value: dashboard.statistics.rejectedPireps },
-    ];
-
     const chronological = [...dashboard.recentPireps].reverse();
     const trendData = chronological.map((flight) => ({
       date: flight.date,
@@ -320,38 +317,15 @@ export default function UserDashboard() {
       pilots: 1,
     }));
 
-    // Aircraft / airport bars are based on the latest 10 sectors only — not career totals.
-    const latestSectors = dashboard.recentPireps.slice(0, 10);
-    const depCounts = new Map<string, number>();
-    const arrCounts = new Map<string, number>();
-    const aircraftCounts = new Map<string, number>();
-
-    for (const flight of latestSectors) {
-      depCounts.set(flight.departure, (depCounts.get(flight.departure) || 0) + 1);
-      arrCounts.set(flight.arrival, (arrCounts.get(flight.arrival) || 0) + 1);
-      const acName = flight.aircraft?.name || "Unknown";
-      aircraftCounts.set(acName, (aircraftCounts.get(acName) || 0) + 1);
-    }
-
-    const toCountPoints = (map: Map<string, number>) =>
-      Array.from(map.entries())
-        .map(([label, value]) => ({ label, value }))
-        .sort((a, b) => b.value - a.value)
-        .slice(0, 4);
-
     return {
-      statusData,
       trendData,
-      latestSectorCount: latestSectors.length,
-      topDepartures: toCountPoints(depCounts),
-      topArrivals: toCountPoints(arrCounts),
-      topAircraft: toCountPoints(aircraftCounts),
+      topAircraft: dashboard.topAircraft,
     };
   }, [dashboard]);
 
   return (
     <CrewHeader>
-      <main className="flex-1 space-y-6 pb-24 md:pb-6">
+      <main className="min-w-0 flex-1 space-y-5 pb-6 sm:space-y-6">
         {(sessionLoading || loading) && (
           <div
             role="status"
@@ -374,41 +348,42 @@ export default function UserDashboard() {
 
         {!sessionLoading && !loading && user && dashboard && (
           <>
-            <CrewPageHeader
-              title={t("Dashboard", "飞行员主页")}
-              meta={
-                <CrewMeta
-                  items={[
-                    <CrewCallsign key="cs">{user.callsign}</CrewCallsign>,
-                    user.name,
-                    dashboard.rank.next
-                      ? `${dashboard.rank.current.name} · ${dashboard.rank.next.remainingFormatted} to ${dashboard.rank.next.name}`
-                      : `${dashboard.rank.current.name} · Top rank`,
-                  ]}
-                />
-              }
-              actions={
-                <>
-                  <Button
-                    variant="outline"
-                    onClick={() => void fetchDashboard(true)}
-                    disabled={refreshing}
-                    aria-label="Refresh dashboard"
-                  >
-                    <RefreshCw
-                      className={"h-4 w-4 " + (refreshing ? "animate-spin" : "")}
-                      strokeWidth={1.5}
-                    />
-                  </Button>
-                  <Button asChild>
-                    <Link href="/crew/file-pirep">
-                      <Plus className="h-4 w-4" strokeWidth={1.5} />
-                      File PIREP
-                    </Link>
-                  </Button>
-                </>
-              }
-            />
+            <div>
+              <CrewPageHeader
+                className="flex-row items-center justify-between gap-2 [&_h1]:text-[20px] min-[375px]:[&_h1]:text-[24px] sm:items-center sm:gap-4 sm:[&_h1]:text-[28px] md:[&_h1]:text-[32px]"
+                title={t("Dashboard", "飞行员主页")}
+                actions={
+                  <div className="flex items-center gap-1 sm:gap-2">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="size-11 sm:size-8"
+                      onClick={() => void fetchDashboard(true)}
+                      disabled={refreshing}
+                      aria-label="Refresh dashboard"
+                    >
+                      <RefreshCw
+                        className={"h-4 w-4 " + (refreshing ? "animate-spin" : "")}
+                        strokeWidth={1.5}
+                      />
+                    </Button>
+                    <Button asChild className="h-11 gap-1.5 px-2.5 text-[12px] sm:h-8 sm:gap-2 sm:px-3 sm:text-[13px]">
+                      <Link href="/crew/file-pirep">
+                        <Plus className="h-4 w-4" strokeWidth={1.5} />
+                        File PIREP
+                      </Link>
+                    </Button>
+                  </div>
+                }
+              />
+              <CrewMeta
+                className="text-[12px] sm:text-[13px]"
+                items={[
+                  <CrewCallsign key="cs">{user.callsign}</CrewCallsign>,
+                  user.name,
+                ]}
+              />
+            </div>
 
             {dashboard.statistics.recentRejectedPireps > 0 && (
               <div
@@ -426,7 +401,7 @@ export default function UserDashboard() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
               <SummaryCard
                 label="Total flight time"
                 value={dashboard.statistics.totalFlightTime}
@@ -455,24 +430,25 @@ export default function UserDashboard() {
                     : "Pilot rank"
                 }
                 value={dashboard.rank.current.name}
+                textValue
               />
             </div>
 
             <Tabs value={tab} onValueChange={setTab}>
-              <TabsList className="mb-4 grid w-full grid-cols-2 sm:w-auto sm:inline-flex">
-                <TabsTrigger value="overview">
+              <TabsList className="mb-3 grid h-auto min-h-11 w-full grid-cols-2 sm:mb-4 sm:inline-flex sm:h-9 sm:min-h-0 sm:w-auto">
+                <TabsTrigger value="overview" className="min-w-0 whitespace-normal px-2 text-[12px] leading-4 sm:whitespace-nowrap sm:px-3 sm:text-[13px]">
                   {t("Flights & analytics", "飞行数据与分析")}
                 </TabsTrigger>
-                <TabsTrigger value="awards">
+                <TabsTrigger value="awards" className="min-w-0 whitespace-normal px-2 text-[12px] leading-4 sm:whitespace-nowrap sm:px-3 sm:text-[13px]">
                   {t("Awards & rank", "技术职级与荣誉勋章")}
                 </TabsTrigger>
               </TabsList>
 
               {/* Tab 1: Fused Analytics + Recent Flights (Clean 2-Column Row + Flight List) */}
-              <TabsContent value="overview" className="space-y-6">
+              <TabsContent value="overview" className="min-w-0 space-y-5 sm:space-y-6">
                 {chartMetrics && (
                   <div className="grid items-stretch gap-4 lg:grid-cols-[1.4fr_1fr]">
-                    <div className="rounded-[16px] bg-[var(--v2-background-bg-layer-01,#f7f8fa)] p-5">
+                    <div className="min-w-0 rounded-[16px] bg-[var(--v2-background-bg-layer-01,#f7f8fa)] p-4 sm:p-5">
                       <div className="mb-4 flex items-center justify-between">
                         <h2 className="text-[13px] font-medium text-[var(--v2-text-text-muted,#525252)]">
                           Recent flight time
@@ -484,17 +460,18 @@ export default function UserDashboard() {
                       <TrendChart
                         data={chartMetrics.trendData}
                         dataKey="hours"
-                        className="h-[200px]"
+                        className="h-[180px] sm:h-[200px]"
+                        yAxisWidth={46}
                       />
                     </div>
 
-                    <div className="rounded-[16px] bg-[var(--v2-background-bg-layer-01,#f7f8fa)] p-5">
+                    <div className="min-w-0 rounded-[16px] bg-[var(--v2-background-bg-layer-01,#f7f8fa)] p-4 sm:p-5">
                       <div className="mb-4 flex items-center justify-between">
                         <h2 className="text-[13px] font-medium text-[var(--v2-text-text-muted,#525252)]">
-                          Most flown aircraft
+                          {t("Most flown aircraft", "最常执飞机型")}
                         </h2>
                         <span className="font-mono text-[12px] tabular-nums text-[var(--v2-text-text-faint,#737373)]">
-                          {`Latest ${chartMetrics.latestSectorCount}`}
+                          {t("Overall", "全部历史")}
                         </span>
                       </div>
                       <BarList data={chartMetrics.topAircraft} />
@@ -525,7 +502,7 @@ export default function UserDashboard() {
                       {visibleFlights.map((flight) => (
                         <CrewFlightRow
                           key={flight.id}
-                          href={buildReflyHref(flight)}
+                          href={`/crew/view-pireps?pirepId=${flight.id}`}
                           flightnum={flight.flightnum}
                           liveryname={flight.aircraft?.liveryname}
                           badge={<StatusBadge status={flight.status} />}
@@ -536,7 +513,7 @@ export default function UserDashboard() {
                           routeMeta={formatUtcDate(flight.date)}
                           trailing={
                             <span className="text-[12px] text-[#0052a5]">
-                              File again
+                              {t("View PIREP", "查看飞行报告")}
                             </span>
                           }
                         />

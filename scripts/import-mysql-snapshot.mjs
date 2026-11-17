@@ -140,10 +140,11 @@ function validateTargetConfiguration(value) {
   if (["host", "user", "database"].some(key => typeof value[key] !== "string" || !value[key].trim()) || typeof value.password !== "string") throw new ImportFailure("Target connection fields are missing.");
   const port = Number(value.port);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new ImportFailure("Invalid target port.");
-  if (!value.ssl || value.ssl.rejectUnauthorized !== true || Object.keys(value.ssl).some(key => !["ca", "rejectUnauthorized"].includes(key))
-    || (value.ssl.ca !== undefined && typeof value.ssl.ca !== "string")) throw new ImportFailure("Target TLS must explicitly verify its certificate.");
+  const localPlaintext = value.ssl === false && ["localhost", "127.0.0.1", "::1"].includes(value.host);
+  if (!localPlaintext && (!value.ssl || value.ssl.rejectUnauthorized !== true || Object.keys(value.ssl).some(key => !["ca", "rejectUnauthorized"].includes(key))
+    || (value.ssl.ca !== undefined && typeof value.ssl.ca !== "string"))) throw new ImportFailure("Target TLS must explicitly verify its certificate; ssl: false is allowed only for a local database.");
   return { host: value.host, port, user: value.user, password: value.password, database: value.database,
-    ssl: { rejectUnauthorized: true, ...(value.ssl.ca ? { ca: value.ssl.ca } : {}) }, application_name: "webncrew_migration", connectionTimeoutMillis: 15000 };
+    ssl: localPlaintext ? false : { rejectUnauthorized: true, ...(value.ssl.ca ? { ca: value.ssl.ca } : {}) }, application_name: "webncrew_migration", connectionTimeoutMillis: 15000 };
 }
 
 async function readJson(filename, label) {

@@ -268,14 +268,26 @@ async function handleSignup(
     password,
     name,
     ifc,
+    ageEligible,
   }: {
     email?: unknown;
     password?: unknown;
     name?: unknown;
     ifc?: unknown;
+    ageEligible?: unknown;
   },
   request: Request,
 ) {
+  if (ageEligible !== true) {
+    return NextResponse.json(
+      {
+        error:
+          "Confirm that you are at least 13 years old, or at least 14 if you are located in mainland China.",
+      },
+      { status: 400 },
+    );
+  }
+
   if (!isValidSignupName(name)) {
     return NextResponse.json(
       {

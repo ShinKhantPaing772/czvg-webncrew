@@ -10,7 +10,7 @@ export const metadata: Metadata = {
     "How China Southern Virtual Group collects, uses, and protects information for applicants, pilots, and crew center users.",
 };
 
-const effectiveDate = "July 26, 2026";
+const effectiveDate = "November 17, 2026";
 
 const sections = [
   {
@@ -40,8 +40,8 @@ const sections = [
   {
     title: "Authentication, Browser Storage, and Technical Data",
     body: [
-      "After sign-in or application, the browser stores an authentication token in localStorage under the site's origin. The signed token represents your pilot ID and email address. The server accepts it for up to seven days, while the browser copy can remain until you log out or clear site data.",
-      "If you save filters in the route finder, the browser stores the filter name and selected search, airport, aircraft, duration, and eligibility settings in localStorage. Those saved filters remain on that browser until you remove them or clear site data.",
+      "After sign-in or application, the browser stores an authentication token in localStorage under the name auth_token. The signed token represents your pilot ID and email address. The server accepts it for up to seven days. The browser copy has no automatic storage expiration and may remain until you log out or clear site data.",
+      "The browser remembers the site's theme in localStorage as czvg_theme and your selected language as czvg:locale. If you save filters in the route finder, czvg.routeSavedFilters stores the filter name and selected search, airport, aircraft, duration, and eligibility settings. These preferences have no automatic expiration and remain until replaced, removed through available controls, or cleared through your browser's site-data settings.",
       "Password-reset records include your email address, a bcrypt hash of the one-time passcode, its expiration time, and temporary request or verification counters used for rate limiting. Standard application, hosting, database, and security logs may also include IP address, browser or device details, referrer, requested page or endpoint, response status, error details, and timestamps.",
     ],
   },
@@ -72,11 +72,14 @@ const sections = [
     ],
   },
   {
+    id: "browser-storage",
     title: "Browser Storage, Cookies, and Tracking",
     body: [
-      "The current CZVG codebase does not set its own advertising cookies or install dedicated advertising, behavioral analytics, or cross-site tracking pixels. It uses localStorage for the authentication token and optional saved route filters described above.",
-      "Third-party embeds, remote content, and linked sites may set or read their own cookies or use similar technologies. Their behavior is controlled by those providers and your browser or provider settings, not by CZVG.",
-      "Because CZVG does not currently operate cross-site behavioral tracking, browser Do Not Track signals do not change the site's own behavior. You can clear CZVG localStorage through logout, the route-filter controls, or your browser's site-data settings.",
+      "CZVG uses browser storage to keep you signed in and remember your theme, selected language, and saved route filters, as described above. The current website does not set its own advertising cookies or install dedicated advertising, behavioral analytics, or cross-site tracking pixels.",
+      "When an authorized administrator starts connecting an Infinite Flight organization account, CZVG sets a temporary security cookie named wnc_if_oauth_state. It contains encrypted information that verifies the authorization request and links it to the administrator's signed-in session. The cookie expires after 10 minutes and is cleared when the authorization callback is processed. It is used for this connection flow, not for ordinary pilot sign-in.",
+      "Third-party embeds, remote content, and linked sites may set or read their own cookies or use similar technologies. CZVG chooses which resources to embed, and those resources may load when you visit a page that includes them. Their cookie and storage behavior depends on the provider and your browser or provider settings.",
+      "Logging out removes auth_token from this browser; it does not remove your theme, selected language, or saved route filters. You can remove saved filters in the route finder or clear stored preferences through your browser's site-data settings. Blocking or clearing browser storage may sign you out or prevent preferences from being remembered.",
+      "Because CZVG does not currently operate cross-site behavioral tracking, browser Do Not Track signals do not change the site's own behavior.",
     ],
   },
   {
@@ -84,9 +87,9 @@ const sections = [
     body: [
       "The current application has no automatic deletion schedule for core account, application, PIREP, comment, rank, award, permission, or operational history. CZVG keeps those records while they are needed to run the group, maintain reliable virtual airline history and statistics, resolve disputes, enforce standards, or meet legal obligations.",
       "Authentication tokens are valid for seven days. Logging out deletes the current server token when the logout request succeeds, and a later verification request removes expired server-token records. A local browser copy may remain until logout or site data is cleared, but the server will not accept it after expiration.",
-      "Password-reset passcodes expire after 10 minutes. Their hashed records are removed after a successful reset, when a later check detects expiration, or when a replacement code is requested. Temporary in-memory rate-limit counters generally reset after 15 minutes or when the relevant reset flow succeeds.",
+      "Password-reset passcodes expire after 10 minutes. Their hashed records are removed after a successful reset, when a later check detects expiration, or when a replacement code is requested. Request and verification counters are stored in the database under keys derived from a hash of the email address, with a 15-minute rate-limit window. They are removed during later expiry cleanup or when cleared during the reset flow.",
       "Infinite Flight API responses are cached for approximately 15 seconds to one hour depending on the endpoint: live flights and flight plans use the shortest period, user lookups use about five minutes, sessions use about 10 minutes, and aircraft or livery reference data uses about one hour. Expired cache rows are removed during later cache maintenance.",
-      "Saved route filters remain only in that browser until removed or site data is cleared. Hosting, database, email, Discord, Google, and other third-party providers retain information under their own operational settings and policies.",
+      "Theme, language, and saved route-filter preferences remain in that browser until replaced, removed through available controls, or cleared with site data. Logout does not remove these preferences. The administrator connection cookie described above expires after 10 minutes or is cleared when the authorization callback is processed. Hosting, database, email, Discord, Google, and other third-party providers retain information under their own operational settings and policies.",
       "If you ask us to close an account or delete information, we will review the request and remove or anonymize information where reasonably possible. We may retain limited records when needed for security, anti-abuse, audit, dispute resolution, legal obligations, or legitimate virtual airline recordkeeping.",
     ],
   },
@@ -109,8 +112,8 @@ const sections = [
   {
     title: "Children and Teens",
     body: [
-      "CZVG is not intended for children under 13, and applicants must represent that they are at least 13 years old. The current signup flow does not collect a date of birth or perform automated age verification. Users under the age of majority where they live should use the service only with permission from a parent or guardian.",
-      "If we learn that an applicant or account holder is under 13, we will take reasonable steps to close the account and delete or anonymize the associated personal information, subject to limited security or legal retention needs.",
+      "Applicants must be at least 13 years old. Applicants located in mainland China must be at least 14 years old. During signup, applicants confirm that they meet the minimum age for their location. The signup flow does not collect a date of birth or independently verify age or location. Users under the age of majority where they live should use the service only with permission from a parent or guardian.",
+      "If we learn that an applicant or account holder is below the minimum age that applies to their location, we will take reasonable steps to close the account and delete or anonymize the associated personal information, subject to limited security or legal retention needs.",
     ],
   },
   {
@@ -175,7 +178,8 @@ export default function PrivacyPolicyPage() {
                 {sections.map((section) => (
                   <section
                     key={section.title}
-                    className="border-b border-slate-200 pb-8 last:border-b-0 last:pb-0"
+                    id={section.id}
+                    className="scroll-mt-24 border-b border-slate-200 pb-8 last:border-b-0 last:pb-0"
                   >
                     <h2 className="text-2xl font-bold tracking-normal text-slate-950">
                       {section.title}

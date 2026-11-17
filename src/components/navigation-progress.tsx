@@ -13,11 +13,16 @@ function NavigationProgressInner() {
   const [isVisible, setIsVisible] = useState(false);
   const [progress, setProgress] = useState(0);
 
+  const startTimer = useRef<number | null>(null);
   const trickleTimer = useRef<number | null>(null);
   const finishTimer = useRef<number | null>(null);
   const safetyTimer = useRef<number | null>(null);
 
   const clearAllTimers = useCallback(() => {
+    if (startTimer.current !== null) {
+      window.clearTimeout(startTimer.current);
+      startTimer.current = null;
+    }
     if (trickleTimer.current !== null) {
       window.clearInterval(trickleTimer.current);
       trickleTimer.current = null;
@@ -57,6 +62,17 @@ function NavigationProgressInner() {
       }, 250);
     }, 3000);
   }, [clearAllTimers]);
+
+  const scheduleProgress = useCallback(() => {
+    if (startTimer.current !== null) window.clearTimeout(startTimer.current);
+    // Next commits browser history inside useInsertionEffect, where React
+    // state updates are forbidden. Defer the start; route completion cancels
+    // it if that history change already represents a finished navigation.
+    startTimer.current = window.setTimeout(() => {
+      startTimer.current = null;
+      startProgress();
+    }, 0);
+  }, [startProgress]);
 
   const completeProgress = useCallback(() => {
     clearAllTimers();
@@ -124,7 +140,7 @@ function NavigationProgressInner() {
       startProgress();
     };
 
-    // Patch history pushState and replaceState to catch programmatic router.push calls
+    // Observe programmatic history changes without updating React during a commit.
     const originalPushState = window.history.pushState.bind(window.history);
     const originalReplaceState = window.history.replaceState.bind(window.history);
 
@@ -138,7 +154,7 @@ function NavigationProgressInner() {
             targetUrl.pathname !== currentUrl.pathname ||
             targetUrl.search !== currentUrl.search
           ) {
-            startProgress();
+            scheduleProgress();
           }
         }
       } catch {
@@ -157,7 +173,7 @@ function NavigationProgressInner() {
             targetUrl.pathname !== currentUrl.pathname ||
             targetUrl.search !== currentUrl.search
           ) {
-            startProgress();
+            scheduleProgress();
           }
         }
       } catch {
@@ -176,7 +192,7 @@ function NavigationProgressInner() {
       window.history.replaceState = originalReplaceState;
       clearAllTimers();
     };
-  }, [clearAllTimers, startProgress]);
+  }, [clearAllTimers, startProgress, scheduleProgress]);
 
   return (
     <>

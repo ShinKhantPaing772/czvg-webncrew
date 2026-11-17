@@ -96,12 +96,14 @@ export function CrewStat({
   hint,
   accent = false,
   className,
+  valueClassName,
 }: {
   label: string;
   value: ReactNode;
   hint?: ReactNode;
   accent?: boolean;
   className?: string;
+  valueClassName?: string;
 }) {
   return (
     <div
@@ -119,6 +121,7 @@ export function CrewStat({
           accent
             ? "text-[#0052a5]"
             : "text-[var(--v2-text-text-base,#171717)]",
+          valueClassName,
         )}
       >
         {value}
@@ -383,10 +386,10 @@ export function CrewSectorInline({
           <span className="size-1 shrink-0 rounded-full bg-[#0052a5]" />
         </div>
         {centerLine.length > 0 ? (
-          <p className="flex items-center gap-1.5 font-mono text-[11px] tabular-nums text-[var(--v2-text-text-faint,#737373)]">
+          <p className="flex flex-col items-center gap-0.5 font-mono text-[11px] tabular-nums text-[var(--v2-text-text-faint,#737373)] md:flex-row md:gap-1.5">
             {centerLine.map((item, index) => (
               <span key={index} className="inline-flex items-center gap-1.5">
-                {index > 0 ? <span aria-hidden>·</span> : null}
+                {index > 0 ? <span aria-hidden className="hidden md:inline">·</span> : null}
                 <span>{item}</span>
               </span>
             ))}
@@ -478,7 +481,7 @@ export function CrewFlightRow({
       />
 
       {trailing ? (
-        <div className="flex shrink-0 items-center gap-2 md:justify-end">
+        <div className="flex shrink-0 items-center justify-end gap-2">
           {trailing}
         </div>
       ) : null}

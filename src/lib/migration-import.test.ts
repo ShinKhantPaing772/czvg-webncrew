@@ -174,6 +174,27 @@ describe("snapshot import conversion and explicit modes", () => {
 });
 
 describe("offline snapshot import and full-row verification", () => {
+  it.each(["localhost", "127.0.0.1", "::1"])("allows explicitly disabled TLS for local target %s", async host => {
+    const fixture = await snapshot();
+    await writeFile(fixture.targetFile, JSON.stringify({ ...target, host, ssl: false }));
+    const client = fakeClient(fixture.tables);
+    const createClient = vi.fn(() => client);
+
+    const result = await runSnapshotImport(options(fixture), { createClient });
+
+    expect(result.mode).toBe("rehearsed-and-rolled-back");
+    expect(createClient).toHaveBeenCalledWith(expect.objectContaining({ host, ssl: false }));
+  });
+
+  it.each(["target.invalid", "localhost.example.com", "192.168.1.10"])("rejects disabled TLS for non-loopback target %s", async host => {
+    const fixture = await snapshot();
+    await writeFile(fixture.targetFile, JSON.stringify({ ...target, host, ssl: false }));
+    const createClient = vi.fn();
+
+    await expect(runSnapshotImport(options(fixture), { createClient })).rejects.toThrow(/TLS/);
+    expect(createClient).not.toHaveBeenCalled();
+  });
+
   it("checks full backup hashes and retains literal Unicode line separators while filtering only expired cache", async () => {
     const fixture = await snapshot();
     const plan = await readSnapshot(fixture.root, true);

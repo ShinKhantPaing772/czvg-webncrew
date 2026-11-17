@@ -225,7 +225,7 @@ export function CrewHeader({ children }: CrewHeaderProps) {
   };
 
   return (
-    <div className="flex min-h-screen bg-[var(--v2-background-bg-deep,#f3f4f6)] text-[var(--v2-text-text-base,#171717)] font-sans select-none [&_input]:select-text [&_textarea]:select-text">
+    <div className="flex min-h-screen flex-col bg-[var(--v2-background-bg-deep,#f3f4f6)] text-[var(--v2-text-text-base,#171717)] font-sans select-none md:flex-row [&_input]:select-text [&_textarea]:select-text">
       {/* Left Sidebar — Pinned to viewport top (`sticky top-0 h-screen`) */}
       <aside
         style={{ width: isSidebarOpen ? 248 : 56 }}
@@ -379,8 +379,8 @@ export function CrewHeader({ children }: CrewHeaderProps) {
               <LanguageSwitcher className="flex-1 justify-center" />
               <NotificationBell inbox={inbox} />
             </div>
-            <div className="flex h-9 items-center justify-between gap-2 rounded-[8px] px-2.5">
-              <span className="truncate font-mono text-[12px] text-[var(--v2-text-text-muted,#525252)]">
+            <div className="flex items-center justify-between gap-2 px-1">
+              <span className="min-w-0 truncate px-2.5 font-mono text-[12px] text-[var(--v2-text-text-muted,#525252)]">
                 {user?.callsign || user?.name || "CZVG Pilot"}
               </span>
               <button
@@ -389,9 +389,9 @@ export function CrewHeader({ children }: CrewHeaderProps) {
                 disabled={isLoggingOut}
                 title={t("Sign out", "退出登录")}
                 aria-label={t("Sign out", "退出登录")}
-                className="flex size-8 shrink-0 items-center justify-center rounded-[8px] text-[var(--v2-icon-icon-muted,#737373)] transition-colors duration-150 hover:bg-[rgba(0,0,0,0.04)] hover:text-[var(--v2-text-text-base,#171717)]"
+                className="flex size-9 shrink-0 items-center justify-center rounded-[8px] bg-[var(--v2-background-bg-base,#ffffff)] text-[var(--v2-text-text-muted,#525252)] transition-colors duration-150 hover:bg-[rgba(0,0,0,0.04)] hover:text-[var(--v2-text-text-base,#171717)] disabled:opacity-50"
               >
-                <LogOut className="size-3.5" strokeWidth={1.5} />
+                <LogOut className="size-4" strokeWidth={1.5} />
               </button>
             </div>
           </div>
@@ -405,9 +405,9 @@ export function CrewHeader({ children }: CrewHeaderProps) {
               disabled={isLoggingOut}
               title={t("Sign out", "退出登录")}
               aria-label={t("Sign out", "退出登录")}
-              className="mx-auto flex size-8 items-center justify-center rounded-[8px] text-[var(--v2-icon-icon-muted,#737373)] transition-colors duration-150 hover:bg-[rgba(0,0,0,0.04)] hover:text-[var(--v2-text-text-base,#171717)]"
+              className="mx-auto flex size-9 items-center justify-center rounded-[8px] bg-[var(--v2-background-bg-base,#ffffff)] text-[var(--v2-text-text-muted,#525252)] transition-colors duration-150 hover:bg-[rgba(0,0,0,0.04)] hover:text-[var(--v2-text-text-base,#171717)] disabled:opacity-50"
             >
-              <LogOut className="size-3.5" strokeWidth={1.5} />
+              <LogOut className="size-4" strokeWidth={1.5} />
             </button>
           </div>
         )}
@@ -415,28 +415,36 @@ export function CrewHeader({ children }: CrewHeaderProps) {
 
       {/* Mobile Drawer */}
       <Sheet>
-        <div className="fixed bottom-4 left-4 z-50 flex items-center gap-2 md:hidden">
-          <SheetTrigger asChild>
-            <button
-              type="button"
-              className="flex h-9 items-center gap-2 rounded-[8px] bg-[#0052a5] px-3 text-[13px] font-medium text-white"
-              aria-label="Open crew center sidebar"
-            >
-              <Menu className="size-4" strokeWidth={1.5} />
-              <span>{t("Menu", "菜单")}</span>
-            </button>
-          </SheetTrigger>
-          {/* Outside the drawer: a popover inside the Sheet's scroll lock could not scroll. */}
-          <NotificationBell
-            inbox={inbox}
-            side="top"
-            align="start"
-            className="bg-[var(--v2-background-bg-base,#ffffff)] shadow-[var(--v2-elevation-floating)]"
-          />
+        <div className="sticky top-0 z-40 flex h-16 shrink-0 items-center justify-between gap-3 bg-[var(--v2-background-bg-deep,#f3f4f6)] px-4 md:hidden">
+          <Link href="/crew/home" aria-label={t("Dashboard", "飞行员主页")} className="min-w-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={brandLogoSrc} alt="China Southern Virtual Group" className="brand-logo-light h-7 w-auto max-w-[130px] object-contain" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={brandLogoWhiteSrc} alt="China Southern Virtual Group" className="brand-logo-dark h-7 w-auto max-w-[130px] object-contain" />
+          </Link>
+          <div className="flex shrink-0 items-center gap-2">
+            <SheetTrigger asChild>
+              <button
+                type="button"
+                className="flex h-11 items-center gap-2 rounded-[10px] bg-[var(--v2-background-bg-base,#ffffff)] px-3 text-[13px] font-medium text-[var(--v2-text-text-base,#171717)]"
+                aria-label={t("Open crew center sidebar", "打开机组中心菜单")}
+              >
+                <Menu className="size-4" strokeWidth={1.5} />
+                <span>{t("Menu", "菜单")}</span>
+              </button>
+            </SheetTrigger>
+            {/* Outside the drawer: a popover inside the Sheet's scroll lock could not scroll. */}
+            <NotificationBell
+              inbox={inbox}
+              side="bottom"
+              align="end"
+              className="size-11 rounded-[10px] bg-[var(--v2-background-bg-base,#ffffff)]"
+            />
+          </div>
         </div>
         <SheetContent
           side="left"
-          className="w-64 gap-0 border-0 bg-[var(--v2-background-bg-deep,#f3f4f6)] p-4"
+          className="w-[min(320px,calc(100%-2rem))] gap-0 border-0 bg-[var(--v2-background-bg-deep,#f3f4f6)] p-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
         >
           <div className="mb-3 flex h-9 items-center justify-between gap-2 px-2">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -451,12 +459,9 @@ export function CrewHeader({ children }: CrewHeaderProps) {
               alt="China Southern Virtual Group"
               className="brand-logo-dark h-7 w-auto max-w-[140px] object-contain"
             />
-            <div className="flex items-center gap-1">
-              <LanguageSwitcher compact className="size-8 p-0" />
-            </div>
             <SheetTitle className="sr-only">CZVG Crew</SheetTitle>
           </div>
-          <nav aria-label="Mobile Crew Center navigation">
+          <nav aria-label="Mobile Crew Center navigation" className="min-h-0 flex-1 overflow-y-auto">
             <ul className="space-y-0.5">
               {navItems.map((item) => {
                 const isActive = pathname === item.href;
@@ -465,7 +470,7 @@ export function CrewHeader({ children }: CrewHeaderProps) {
                     <Link
                       href={item.href}
                       prefetch
-                      className={`flex h-9 items-center gap-2.5 rounded-[8px] px-2.5 text-[13px] font-medium transition-colors duration-150 ${
+                      className={`flex min-h-11 items-center gap-2.5 rounded-[8px] px-2.5 py-2 text-[13px] font-medium transition-colors duration-150 ${
                         isActive
                           ? "bg-[#0052a5]/[0.10] text-[#0052a5]"
                           : "text-[var(--v2-text-text-muted,#525252)] hover:bg-[rgba(0,0,0,0.04)] hover:text-[var(--v2-text-text-base,#171717)]"
@@ -479,15 +484,34 @@ export function CrewHeader({ children }: CrewHeaderProps) {
               })}
             </ul>
           </nav>
+          <div className="mt-4 shrink-0 border-t border-black/[0.06] pt-4">
+            <div className="flex items-center gap-2 px-1">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[13px] font-medium">{user?.name || "CZVG Pilot"}</p>
+                <p className="mt-1 truncate font-mono text-[11px] text-[var(--v2-text-text-muted,#525252)]">{user?.callsign}</p>
+              </div>
+              <LanguageSwitcher compact className="size-11 shrink-0 p-0" />
+              <button
+                type="button"
+                onClick={handleLogout}
+                disabled={isLoggingOut}
+                title={t("Sign out", "退出登录")}
+                aria-label={t("Sign out", "退出登录")}
+                className="flex size-11 shrink-0 items-center justify-center rounded-[10px] bg-[var(--v2-background-bg-base,#ffffff)] text-[var(--v2-text-text-muted,#525252)] transition-colors hover:bg-black/[0.04] disabled:opacity-50"
+              >
+                <LogOut className="size-4" strokeWidth={1.5} />
+              </button>
+            </div>
+          </div>
         </SheetContent>
       </Sheet>
 
       {/* Main Panel */}
       <div
         data-slot="home-panel"
-        className="m-2 flex min-h-[calc(100vh-16px)] min-w-0 flex-1 flex-col rounded-[16px] bg-[var(--v2-background-bg-base,#ffffff)] shadow-[var(--v2-elevation-raised)]"
+        className="mx-2 mb-2 flex min-w-0 flex-1 flex-col rounded-[16px] bg-[var(--v2-background-bg-base,#ffffff)] shadow-[var(--v2-elevation-raised)] md:m-2 md:min-h-[calc(100vh-16px)]"
       >
-        <div className="mx-auto w-full max-w-[1440px] flex-1 px-6 py-6 md:px-8 md:py-8">
+        <div className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-5 sm:px-6 sm:py-6 md:px-8 md:py-8">
           {children}
         </div>
       </div>

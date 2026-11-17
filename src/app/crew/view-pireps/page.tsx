@@ -11,10 +11,13 @@ import {
   Plus,
 } from "lucide-react";
 import { CrewHeader } from "@/components/crew-header";
+import { AirlineLogo } from "@/components/airline-logo";
 import {
+  CrewCallsign,
   CrewEmpty,
   CrewFlightRow,
   CrewPageHeader,
+  CrewSector,
   CrewStat,
 } from "@/components/crew-ui";
 import { Button } from "@/components/ui/button";
@@ -122,7 +125,10 @@ export default function ViewPireps() {
   const { t } = useI18n();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const linkedPirepId = searchParams.get("pirepId");
   const [selectedPirep, setSelectedPirep] = useState<Pirep | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [statusFilter, setStatusFilter] = useState("all");
@@ -150,6 +156,50 @@ export default function ViewPireps() {
     setShowSubmittedNotice(true);
     router.replace("/crew/view-pireps", { scroll: false });
   }, [router, searchParams]);
+
+  useEffect(() => {
+    if (!user?.id || linkedPirepId === null) {
+      setDetailLoading(false);
+      setDetailError(null);
+      return;
+    }
+    const pilotId = user.id;
+    const params = new URLSearchParams({ pirepId: linkedPirepId });
+    let cancelled = false;
+
+    async function fetchLinkedPirep() {
+      setDetailLoading(true);
+      setDetailError(null);
+      setSelectedPirep(null);
+      try {
+        const response = await authFetch(
+          `/api/pilots/${pilotId}/pireps?${params}`,
+        );
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to load PIREP details");
+        }
+        if (!cancelled) {
+          setSelectedPirep(data.pirep);
+          setNewComment("");
+          setCommentError(null);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setDetailError(
+            err instanceof Error ? err.message : "Failed to load PIREP details",
+          );
+        }
+      } finally {
+        if (!cancelled) setDetailLoading(false);
+      }
+    }
+
+    void fetchLinkedPirep();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, linkedPirepId]);
 
   useEffect(() => {
     const fetchPireps = async () => {
@@ -223,7 +273,10 @@ export default function ViewPireps() {
       return;
     }
 
-    const pirep = pirepsData.find((item) => item.id === pirepId);
+    const pirep =
+      selectedPirep?.id === pirepId
+        ? selectedPirep
+        : pirepsData.find((item) => item.id === pirepId);
     if ((pirep?.Comments?.length ?? 0) >= MAX_PIREP_COMMENTS) {
       setCommentError(PIREP_COMMENT_LIMIT_MESSAGE);
       return;
@@ -442,93 +495,129 @@ export default function ViewPireps() {
           </div>
         )}
 
+        {detailLoading && (
+          <p role="status" className="text-sm text-muted-foreground">
+            {t("Loading PIREP details…", "正在加载飞行报告详情…")}
+          </p>
+        )}
+        {detailError && (
+          <p role="alert" className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+            {detailError}
+          </p>
+        )}
+
         {/* PIREP Detail Dialog */}
         {selectedPirep && (
           <Dialog
             open={Boolean(selectedPirep)}
             onOpenChange={(open) => {
-              if (!open) setSelectedPirep(null);
+              if (!open) {
+                setSelectedPirep(null);
+                if (linkedPirepId !== null) {
+                  const params = new URLSearchParams(searchParams.toString());
+                  params.delete("pirepId");
+                  const query = params.toString();
+                  router.replace(`/crew/view-pireps${query ? `?${query}` : ""}`, {
+                    scroll: false,
+                  });
+                }
+              }
             }}
           >
-            <DialogContent className="max-h-[90vh] w-full max-w-2xl overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2 tabular-nums">
+            <DialogContent className="max-h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] max-w-none gap-5 overflow-y-auto rounded-[20px] p-3 sm:max-h-[calc(100dvh-3rem)] sm:w-[calc(100%-3rem)] sm:max-w-3xl sm:p-6">
+              <DialogHeader className="px-1 pt-1 pr-10 text-left sm:px-0 sm:pt-0 sm:pr-10">
+                <DialogTitle className="flex flex-wrap items-center gap-2.5 tabular-nums">
                   {getStatusIcon(selectedPirep.status)}
                   <span>PIREP #{selectedPirep.id}</span>
                   <StatusBadge status={selectedPirep.status} />
                 </DialogTitle>
-                <DialogDescription>
+                <DialogDescription className="sr-only">
                   {selectedPirep.flightnum} · {selectedPirep.departure} →{" "}
                   {selectedPirep.arrival}
                 </DialogDescription>
               </DialogHeader>
 
-              <div className="grid gap-4 rounded-lg bg-[var(--v2-background-bg-layer-01,#fafafa)] p-4 sm:grid-cols-2">
-                <div>
-                  <p className="text-xs text-muted-foreground">Flight number</p>
-                  <p className="mt-1 text-sm font-medium">
-                    {selectedPirep.flightnum}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Date</p>
-                  <p className="mt-1 text-sm font-medium">
-                    {selectedPirep.date}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Block duration</p>
-                  <p className="mt-1 text-sm font-medium">
-                    {selectedPirep.flighttime}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Aircraft</p>
-                  <p className="mt-1 text-sm font-medium">
-                    {selectedPirep.Aircraft?.name} (
-                    {selectedPirep.Aircraft?.liveryname})
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Fuel used</p>
-                  <p className="mt-1 text-sm font-medium">
-                    {Number(selectedPirep.fuelused || 0).toLocaleString()} kg
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Multiplier</p>
-                  <p className="mt-1 text-sm font-medium">
-                    {formatMultiplierLabel(selectedPirep.multi)}
-                  </p>
-                </div>
-              </div>
+              <CrewSector
+                departure={selectedPirep.departure}
+                arrival={selectedPirep.arrival}
+                duration={selectedPirep.flighttime}
+                durationHint={t("Block time", "轮挡时间")}
+                className="px-3 sm:px-5 md:px-6"
+                eyebrow={
+                  <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+                      <AirlineLogo
+                        flightnum={selectedPirep.flightnum}
+                        liveryname={selectedPirep.Aircraft?.liveryname}
+                        className="h-5 w-auto max-w-[72px] shrink-0 object-contain"
+                      />
+                      <span className="break-words font-mono text-[15px] font-medium tabular-nums text-[var(--v2-text-text-base,#171717)]">
+                        {selectedPirep.flightnum}
+                      </span>
+                    </div>
+                    <time dateTime={selectedPirep.date} className="font-mono tabular-nums">
+                      {selectedPirep.date}
+                    </time>
+                  </div>
+                }
+                footer={
+                  <div className="flex flex-col gap-3 text-[12px] leading-5 text-[var(--v2-text-text-muted,#525252)] sm:flex-row sm:flex-wrap sm:items-baseline sm:gap-x-5 sm:gap-y-2">
+                    <div className="min-w-0 space-y-1 sm:contents">
+                      <p className="min-w-0 break-words">
+                        {[selectedPirep.Aircraft?.name, selectedPirep.Aircraft?.liveryname]
+                          .filter(Boolean)
+                          .join(" · ") || t("Fleet aircraft", "机队机型")}
+                      </p>
+                      {user?.callsign ? (
+                        <p className="min-w-0 break-words">
+                          <CrewCallsign>{user.callsign}</CrewCallsign>
+                        </p>
+                      ) : null}
+                    </div>
+                    <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:flex sm:flex-wrap sm:gap-x-5">
+                      <div className="min-w-0 sm:flex sm:items-baseline sm:gap-1.5">
+                        <dt>{t("Fuel used", "消耗燃油")}</dt>
+                        <dd className="whitespace-nowrap font-mono tabular-nums text-[var(--v2-text-text-base,#171717)]">
+                          {Number(selectedPirep.fuelused || 0).toLocaleString()} kg
+                        </dd>
+                      </div>
+                      <div className="min-w-0 sm:flex sm:items-baseline sm:gap-1.5">
+                        <dt>{t("Multiplier", "积分倍率")}</dt>
+                        <dd className="break-words font-mono tabular-nums text-[var(--v2-text-text-base,#171717)]">
+                          {formatMultiplierLabel(selectedPirep.multi)}
+                        </dd>
+                      </div>
+                    </dl>
+                  </div>
+                }
+              />
 
-              <div className="space-y-3">
+              <div className="space-y-4 border-t border-black/[0.06] px-1 pt-5 sm:px-0">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold">Comments</h3>
-                  <span className="text-xs text-muted-foreground">
+                  <h3 className="text-[13px] font-medium">Comments</h3>
+                  <span className="font-mono text-[12px] tabular-nums text-muted-foreground">
                     {selectedPirep.Comments?.length ?? 0}/{MAX_PIREP_COMMENTS}
                   </span>
                 </div>
 
                 {selectedPirep.Comments && selectedPirep.Comments.length > 0 ? (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {selectedPirep.Comments.map((comment) => (
                       <div
                         key={comment.id}
-                        className="rounded-md bg-[var(--v2-background-bg-layer-01,#fafafa)] p-3"
+                        className="rounded-[14px] bg-[var(--v2-background-bg-layer-01,#f7f8fa)] p-4"
                       >
-                        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                          <span className="font-medium text-foreground">
+                        <div className="flex flex-col gap-1 text-[12px] text-muted-foreground sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
+                          <span className="min-w-0 break-words font-medium text-foreground">
                             {comment.User
                               ? `${comment.User.name} (${comment.User.callsign})`
                               : `User #${comment.userid}`}
                           </span>
-                          <span>
+                          <time dateTime={comment.dateposted} className="shrink-0 text-[11px] tabular-nums">
                             {new Date(comment.dateposted).toLocaleString()}
-                          </span>
+                          </time>
                         </div>
-                        <p className="mt-1 whitespace-pre-wrap text-sm">
+                        <p className="mt-2 whitespace-pre-wrap text-[13px] leading-relaxed [overflow-wrap:anywhere]">
                           {comment.content}
                         </p>
                       </div>
@@ -562,6 +651,7 @@ export default function ViewPireps() {
                         setCommentError(null);
                       }}
                       placeholder="Write a comment about this PIREP..."
+                      className="min-h-[100px] rounded-[12px] text-[13px]"
                       disabled={submittingCommentId === selectedPirep.id}
                       aria-invalid={Boolean(commentError)}
                     />
@@ -574,6 +664,7 @@ export default function ViewPireps() {
                       <Button
                         type="button"
                         size="sm"
+                        className="w-full sm:w-auto"
                         onClick={() => handleAddComment(selectedPirep.id)}
                         disabled={
                           submittingCommentId === selectedPirep.id ||

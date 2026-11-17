@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { col, fn } from "sequelize";
 
 const mocks = vi.hoisted(() => ({
   findPilot: vi.fn(),
@@ -44,8 +45,8 @@ import { GET } from "./route";
 
 const HOUR = 3600;
 
-describe("GET /api/pilots/[id]/dashboard transfer hours", () => {
-  it("counts transfer hours toward rank, unlocks and total time", async () => {
+describe("GET /api/pilots/[id]/dashboard", () => {
+  beforeEach(() => {
     mocks.findPilot.mockResolvedValue({
       id: 42,
       name: "Test Pilot",
@@ -62,7 +63,9 @@ describe("GET /api/pilots/[id]/dashboard transfer hours", () => {
       { id: 2, name: "First Officer", timereq: 40 * HOUR },
       { id: 3, name: "Captain", timereq: 100 * HOUR },
     ]);
+  });
 
+  it("counts transfer hours toward rank, unlocks and total time", async () => {
     const response = await GET(
       new Request("http://localhost/api/pilots/42/dashboard"),
       { params: Promise.resolve({ id: "42" }) },
@@ -79,5 +82,70 @@ describe("GET /api/pilots/[id]/dashboard transfer hours", () => {
       transferFlights: 12,
       totalFlightTime: "45:00",
     });
+    expect(body.topAircraft).toEqual([]);
+  });
+
+  it("uses whole-history aircraft totals independently of the latest ten sectors", async () => {
+    const recentPireps = Array.from({ length: 10 }, (_, index) => ({
+      id: index + 1,
+      flightnum: `CZ${index + 1}`,
+      date: "2026-11-17",
+      departure: "ZGGG",
+      arrival: "ZPPP",
+      flighttime: HOUR,
+      status: index === 0 ? 2 : 1,
+      Aircraft: { id: 1, name: "Boeing 737-8 MAX", liveryname: "China Southern" },
+    }));
+    mocks.findPireps.mockImplementation(async (options) =>
+      options.group
+        ? [
+            { label: "Airbus A380", value: "31" },
+            { label: "Boeing 737-8 MAX", value: "10" },
+            { label: "Unknown", value: "2" },
+          ]
+        : recentPireps,
+    );
+
+    const response = await GET(
+      new Request("http://localhost/api/pilots/42/dashboard"),
+      { params: Promise.resolve({ id: "42" }) },
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.topAircraft).toEqual([
+      { label: "Airbus A380", value: 31 },
+      { label: "Boeing 737-8 MAX", value: 10 },
+      { label: "Unknown", value: 2 },
+    ]);
+    expect(body.recentPireps).toHaveLength(10);
+    expect(body.statistics.recentRejectedPireps).toBe(1);
+    expect(body.statistics.recentPirepWarningLimit).toBe(10);
+
+    // Aggregate the pilot's complete history by aircraft name, including
+    // missing aircraft and multiple liveries of the same aircraft type.
+    const aggregateQuery = mocks.findPireps.mock.calls.find(
+      ([options]) => options.group,
+    )?.[0];
+    const aircraftName = fn(
+      "COALESCE",
+      fn("NULLIF", col("Aircraft.name"), ""),
+      "Unknown",
+    );
+    const aircraftFlights = fn("COUNT", col("Pirep.id"));
+    expect(aggregateQuery.where).toEqual({ pilotid: 42 });
+    expect(aggregateQuery.attributes).toEqual([
+      [aircraftName, "label"],
+      [aircraftFlights, "value"],
+    ]);
+    expect(aggregateQuery.group).toEqual([aircraftName]);
+    expect(aggregateQuery.include).toEqual([
+      expect.objectContaining({ as: "Aircraft", attributes: [], required: false }),
+    ]);
+    expect(aggregateQuery.order).toEqual([
+      [aircraftFlights, "DESC"],
+      [aircraftName, "ASC"],
+    ]);
+    expect(aggregateQuery.limit).toBe(4);
   });
 });

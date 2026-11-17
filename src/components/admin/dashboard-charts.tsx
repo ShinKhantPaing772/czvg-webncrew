@@ -178,11 +178,13 @@ export function TrendChart({
   dataKey,
   color,
   className = "h-[260px]",
+  yAxisWidth = 60,
 }: {
   data: TrendPoint[];
   dataKey: "flights" | "hours" | "pilots";
   color?: string;
   className?: string;
+  yAxisWidth?: number;
 }) {
   if (!data.length) return <EmptyChart label="No activity in this range" />;
 
@@ -209,6 +211,7 @@ export function TrendChart({
           <CartesianGrid strokeDasharray="3 3" vertical={false} />
           <XAxis dataKey="label" minTickGap={28} tick={{ fontSize: 12 }} />
           <YAxis
+            width={yAxisWidth}
             allowDecimals
             tick={{ fontSize: 12 }}
             tickFormatter={

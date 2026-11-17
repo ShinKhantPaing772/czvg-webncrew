@@ -36,6 +36,19 @@ const pirepInclude: Includeable[] = [
   },
 ];
 
+const pirepAttributes = [
+  "id",
+  "flightnum",
+  "departure",
+  "arrival",
+  "flighttime",
+  "date",
+  "aircraftid",
+  "fuelused",
+  "multi",
+  "status",
+];
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -59,6 +72,29 @@ export async function GET(
     }
 
     const { searchParams } = new URL(request.url);
+    if (searchParams.has("pirepId")) {
+      const pirepId = Number(searchParams.get("pirepId"));
+      if (!Number.isSafeInteger(pirepId) || pirepId <= 0) {
+        return NextResponse.json({ error: "Invalid PIREP id" }, { status: 400 });
+      }
+
+      const pirep = await models.Pirep.findOne({
+        where: { id: pirepId, pilotid: pilotId },
+        include: pirepInclude,
+        attributes: pirepAttributes,
+      });
+      if (!pirep) {
+        return NextResponse.json({ error: "PIREP not found" }, { status: 404 });
+      }
+
+      return NextResponse.json({
+        pirep: {
+          ...pirep.get(),
+          flighttime: formatFlightTime(pirep.flighttime || 0),
+        },
+      });
+    }
+
     const pageParam = Number(searchParams.get("page") ?? "1");
     const limitParam = Number(searchParams.get("limit") ?? "10");
     const searchQuery = searchParams.get("search")?.trim();
@@ -106,18 +142,7 @@ export async function GET(
     const pireps = await models.Pirep.findAll({
       where,
       include: pirepInclude,
-      attributes: [
-        "id",
-        "flightnum",
-        "departure",
-        "arrival",
-        "flighttime",
-        "date",
-        "aircraftid",
-        "fuelused",
-        "multi",
-        "status",
-      ],
+      attributes: pirepAttributes,
       order: [["date", "DESC"]],
       limit,
       offset,

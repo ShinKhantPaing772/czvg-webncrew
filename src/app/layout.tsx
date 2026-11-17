@@ -10,8 +10,12 @@ export const metadata = {
   description:
     "Official website of China Southern Virtual Group - An IFVARB approved virtual airline.",
   icons: {
-    icon: "/icon.png",
-    apple: "/icon.png",
+    icon: {
+      url: "/icon.png?v=ef2c4b3b3747",
+      type: "image/png",
+      sizes: "512x512",
+    },
+    apple: "/brand/czvg-logo-mark.png",
   },
 };
 

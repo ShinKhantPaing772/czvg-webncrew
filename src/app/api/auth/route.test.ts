@@ -200,6 +200,7 @@ describe("POST /api/auth signup", () => {
         password: "a-long-password",
         name: "New Pilot",
         ifc: " newpilot ",
+        ageEligible: true,
         ...overrides,
       }),
     });
@@ -236,6 +237,34 @@ describe("POST /api/auth signup", () => {
     vi.unstubAllGlobals();
     consoleError.mockRestore();
   });
+
+  it.each([undefined, false, null, "true", 1])(
+    "rejects age eligibility %s before lookups or side effects",
+    async (ageEligible) => {
+      process.env.DISCORD_WEBHOOK_ADMIN = webhookUrl;
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
+
+      const response = await POST(signupRequest({ ageEligible }));
+      const body = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(body.error).toBe(
+        "Confirm that you are at least 13 years old, or at least 14 if you are located in mainland China.",
+      );
+      expect(mocks.findPilot).not.toHaveBeenCalled();
+      expect(mocks.isIfcLookupRateLimited).not.toHaveBeenCalled();
+      expect(mocks.getInfiniteFlightUser).not.toHaveBeenCalled();
+      expect(mocks.hashPassword).not.toHaveBeenCalled();
+      expect(mocks.createPilot).not.toHaveBeenCalled();
+      expect(mocks.createApplication).not.toHaveBeenCalled();
+      expect(mocks.signToken).not.toHaveBeenCalled();
+      expect(mocks.createToken).not.toHaveBeenCalled();
+      expect(mocks.after).not.toHaveBeenCalled();
+      expect(mocks.sendEmail).not.toHaveBeenCalled();
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
 
   it("completes the signup when Discord is unreachable", async () => {
     process.env.DISCORD_WEBHOOK_ADMIN = webhookUrl;

@@ -10,7 +10,7 @@ export const metadata: Metadata = {
     "Terms for using the China Southern Virtual Group website, applicant portal, and crew center.",
 };
 
-const effectiveDate = "July 26, 2026";
+const effectiveDate = "November 17, 2026";
 
 const sections = [
   {
@@ -24,7 +24,7 @@ const sections = [
   {
     title: "Eligibility and Applications",
     body: [
-      "You must be at least 13 years old to apply or use an account. If you are under the age of majority where you live, you must have permission from a parent or guardian. The signup flow does not independently verify age, so you are responsible for giving an accurate representation.",
+      "You must be at least 13 years old to apply or use an account, or at least 14 if you are located in mainland China. This requirement depends on your actual location, not your nationality or the apparent location of your internet connection. If you are under the age of majority where you live, you must have permission from a parent or guardian. Signup requires you to confirm that you meet the applicable minimum age. This is a self-declaration, not independent age verification; CZVG does not collect a date of birth or identity document for this confirmation.",
       "Application requirements currently include an active Infinite Flight Pro subscription, an Infinite Flight Community account linked to Infinite Flight, Grade 3 or above, good community standing, no applicable IFVARB blacklist or watchlist issue, the ability to use Discord, and reasonable active participation. Requirements may change with notice on the application page or through staff instructions.",
       "CZVG uses the Infinite Flight public API to verify the submitted Infinite Flight Community username and obtain the linked user ID and available grade or violation metrics. You authorize those checks when you apply and while staff review or maintain your account.",
       "CZVG staff may approve, reject, pause, or close an application based on the stated requirements, submitted records, community standing, safety or security concerns, available capacity, or reasonable operational judgment. An application does not guarantee membership, rank, staff access, or any real-world benefit.",

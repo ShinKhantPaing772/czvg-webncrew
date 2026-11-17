@@ -209,14 +209,14 @@ describe.skipIf(!suppliedUrl)("PostgreSQL Crew Center API queries", () => {
     const random = vi.spyOn(Math, "random").mockReturnValue(0.1);
     try {
       const { POST } = await import("./auth/route");
-      const response = await POST(writeRequest("/api/auth", { action: "signup", email: " New.Pilot@Example.com ", ifc: "NewPilot", name: "New Pilot", password: "signup-password" }));
+      const response = await POST(writeRequest("/api/auth", { action: "signup", email: " New.Pilot@Example.com ", ifc: "NewPilot", name: "New Pilot", password: "signup-password", ageEligible: true }));
       expect(response.status).toBe(201);
       const body = await response.json();
       const pilot = await base.Pilot.findOne({ where: { email: "new.pilot@example.com" } });
       expect(pilot?.id).toBe(2);
       expect(await base.Application.findOne({ where: { pilotid: 2 } })).toMatchObject({ exam_status: 0, if_grade: 3, if_violations: 2 });
       expect(await base.Token.findOne({ where: { token: body.token } })).toMatchObject({ pilotId: 2, isRevoked: false });
-      const duplicate = await POST(writeRequest("/api/auth", { action: "signup", email: "other@example.com", ifc: "mixedpilot", name: "Another Pilot", password: "signup-password" }));
+      const duplicate = await POST(writeRequest("/api/auth", { action: "signup", email: "other@example.com", ifc: "mixedpilot", name: "Another Pilot", password: "signup-password", ageEligible: true }));
       expect(duplicate.status).toBe(400);
       expect((await duplicate.json()).error).toContain("IFC username");
     } finally { random.mockRestore(); }

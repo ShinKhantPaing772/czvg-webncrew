@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { Op } from "sequelize";
+import { col, fn, Op } from "sequelize";
 
 import { models } from "@/lib/models";
 import { formatFlightTime } from "@/lib/utils/time";
@@ -15,6 +15,11 @@ type RankRecord = {
   id: number;
   name: string;
   timereq: number;
+};
+
+type AircraftCount = {
+  label: string;
+  value: number | string;
 };
 
 const RECENT_PIREP_WARNING_LIMIT = 10;
@@ -77,12 +82,20 @@ export async function GET(
       return null;
     });
 
+    const aircraftName = fn(
+      "COALESCE",
+      fn("NULLIF", col("Aircraft.name"), ""),
+      "Unknown",
+    );
+    const aircraftFlights = fn("COUNT", col("Pirep.id"));
+
     const [
       approvedSeconds,
       approvedCount,
       pendingCount,
       rejectedCount,
       recentPireps,
+      topAircraft,
       ranks,
       awardGrants,
     ] = await Promise.all([
@@ -115,6 +128,28 @@ export async function GET(
         ],
         limit: RECENT_PIREP_WARNING_LIMIT,
       }),
+      models.Pirep.findAll({
+        where: { pilotid: pilotId },
+        attributes: [
+          [aircraftName, "label"],
+          [aircraftFlights, "value"],
+        ],
+        include: [
+          {
+            model: models.Aircraft,
+            as: "Aircraft",
+            attributes: [],
+            required: false,
+          },
+        ],
+        group: [aircraftName],
+        order: [
+          [aircraftFlights, "DESC"],
+          [aircraftName, "ASC"],
+        ],
+        limit: 4,
+        raw: true,
+      }) as unknown as Promise<AircraftCount[]>,
       models.Rank.findAll({
         attributes: ["id", "name", "timereq"],
         order: [["timereq", "ASC"]],
@@ -254,6 +289,10 @@ export async function GET(
         recentRejectedPireps: recentRejectedCount,
         recentPirepWarningLimit: RECENT_PIREP_WARNING_LIMIT,
       },
+      topAircraft: topAircraft.map(({ label, value }) => ({
+        label,
+        value: Number(value),
+      })),
       recentPireps: recentPireps.map((pirep: any) => ({
         id: pirep.id,
         flightnum: pirep.flightnum,

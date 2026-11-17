@@ -4,11 +4,14 @@ import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { LoginForm } from "@/components/login-form";
 import { SignupForm } from "@/components/signup-form";
+import { AuthStorageNotice } from "@/components/auth-storage-notice";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 
 export default function Home() {
+  const { t } = useI18n();
   const searchParams = useSearchParams();
   const type = searchParams.get("type");
   const [isLogin, setIsLogin] = useState(true);
@@ -72,7 +75,7 @@ export default function Home() {
                     Application requirements
                   </h3>
                   <ul className="space-y-2.5 list-disc pl-4">
-                    <li>Must be 13 years of age or older</li>
+                    <li>{t("Must be 13 or older (14 or older if located in mainland China)", "须年满 13 周岁（位于中国大陆的申请人须年满 14 周岁）")}</li>
                     <li>Must be Grade 3 or above</li>
                     <li>
                       Must have an IFC account linked to the Infinite Flight App
@@ -101,6 +104,9 @@ export default function Home() {
               </div>
             </div>
           )}
+          <div className="mt-6">
+            <AuthStorageNotice />
+          </div>
         </div>
       </div>
     </div>

@@ -30,6 +30,29 @@ pnpm dev
 Put the environment variables below in a `.env` file, then open
 <http://localhost:3000>.
 
+### Configured local PostgreSQL workspace
+
+Start Docker Desktop, then start the local database and app:
+
+```bash
+docker compose -f compose.postgres.yaml up -d --wait
+pnpm dev
+```
+
+PostgreSQL 17 runs at `127.0.0.1:5432` with data in a persistent Docker volume.
+This workspace's database was imported from the November 17, 2026 backup
+snapshot; it is an independent local copy and does not sync with production.
+The ignored `.env.postgres.local` contains the database credentials.
+The app's ignored `.env.local` overrides `.env` to select this local database
+and disable Infinite Flight, email and Discord integrations for local work.
+Restart `pnpm dev` after changing these settings.
+
+To stop PostgreSQL while preserving its data:
+
+```bash
+docker compose -f compose.postgres.yaml stop
+```
+
 ## Environment variables
 
 Required:
