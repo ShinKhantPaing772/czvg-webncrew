@@ -1,3 +1,4 @@
+import { col, fn, where as sqlWhere } from "sequelize";
 import bcryptjs from "bcryptjs";
 import crypto from "crypto";
 import { NextResponse } from "next/server";
@@ -51,7 +52,7 @@ export async function requestPasswordResetOtp(email: string) {
   }
 
   const user = await models.Pilot.findOne({
-    where: { email },
+    where: sqlWhere(fn("lower", col("email")), email),
     attributes: ["id", "email", "name"],
   });
 
@@ -63,7 +64,7 @@ export async function requestPasswordResetOtp(email: string) {
   const otpHash = await bcryptjs.hash(otp, 10);
 
   try {
-    await models.OTP.destroy({ where: { email } });
+    await models.OTP.destroy({ where: sqlWhere(fn("lower", col("email")), email) });
     await models.OTP.create({
       email,
       otp: otpHash,
@@ -99,7 +100,7 @@ export async function verifyPasswordResetOtp(email: string, otp: unknown) {
     );
   }
 
-  const record = await models.OTP.findOne({ where: { email } });
+  const record = await models.OTP.findOne({ where: sqlWhere(fn("lower", col("email")), email) });
   if (!record) {
     return NextResponse.json(
       { error: "No OTP request found. Please request a new code." },
@@ -135,7 +136,7 @@ export async function resetPassword(
     );
   }
 
-  const otpRecord = await models.OTP.findOne({ where: { email } });
+  const otpRecord = await models.OTP.findOne({ where: sqlWhere(fn("lower", col("email")), email) });
   if (!otpRecord) {
     return NextResponse.json({ error: "No OTP found" }, { status: 400 });
   }
@@ -158,7 +159,7 @@ export async function resetPassword(
 
   const passwordHash = await bcryptjs.hash(password, 10);
   const pilots = await models.Pilot.findAll({
-    where: { email },
+    where: sqlWhere(fn("lower", col("email")), email),
     attributes: ["id"],
   });
   const pilotIds = pilots.map((pilot) => pilot.id);
@@ -168,7 +169,7 @@ export async function resetPassword(
   await sequelize.transaction(async (transaction) => {
     await models.Pilot.update(
       { password: passwordHash },
-      { where: { email }, transaction },
+      { where: sqlWhere(fn("lower", col("email")), email), transaction },
     );
     if (pilotIds.length > 0) {
       await models.Token.destroy({

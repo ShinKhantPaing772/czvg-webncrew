@@ -1,4 +1,5 @@
 import { after, NextResponse } from "next/server";
+import { col, fn, QueryTypes, where as sqlWhere } from "sequelize";
 import { models } from "@/lib/models";
 import sequelize from "@/lib/database";
 import { requirePermission } from "@/lib/server-auth";
@@ -36,40 +37,43 @@ export async function GET(request: Request) {
     const auth = await requirePermission(request, "users");
     if (!auth.ok) return auth.response;
 
-    const [users] = await sequelize.query(`
+    const users = await sequelize.query<Record<string, unknown> & { examScore: number | string | null }>(`
       SELECT
-        p.\`id\`,
-        p.\`name\`,
-        p.\`callsign\`,
-        p.\`ifc\`,
-        p.\`ifuserid\`,
-        p.\`email\`,
-        p.\`joined\`,
-        p.\`status\`,
-        p.\`notes\`,
-        p.\`transhours\`,
-        p.\`transflights\`,
-        a.\`exam_status\` AS examStatus,
-        a.\`exam_score\` AS examScore,
-        a.\`exam_completed_at\` AS examCompletedAt,
-        a.\`exam_result_received_at\` AS examResultReceivedAt,
-        a.\`flight_replay_url\` AS flightReplayUrl,
-        a.\`flight_replay_submitted_at\` AS flightReplaySubmittedAt,
-        a.\`discord_invite_url\` AS discordInviteUrl,
-        a.\`discord_invite_sent_at\` AS discordInviteSentAt,
-        a.\`if_grade\` AS ifGrade,
-        a.\`if_violations\` AS ifViolations,
-        a.\`if_metrics_updated_at\` AS ifMetricsUpdatedAt,
+        p."id",
+        p."name",
+        p."callsign",
+        p."ifc",
+        p."ifuserid",
+        p."email",
+        p."joined",
+        p."status",
+        p."notes",
+        p."transhours",
+        p."transflights",
+        a."exam_status" AS "examStatus",
+        a."exam_score" AS "examScore",
+        a."exam_completed_at" AS "examCompletedAt",
+        a."exam_result_received_at" AS "examResultReceivedAt",
+        a."flight_replay_url" AS "flightReplayUrl",
+        a."flight_replay_submitted_at" AS "flightReplaySubmittedAt",
+        a."discord_invite_url" AS "discordInviteUrl",
+        a."discord_invite_sent_at" AS "discordInviteSentAt",
+        a."if_grade" AS "ifGrade",
+        a."if_violations" AS "ifViolations",
+        a."if_metrics_updated_at" AS "ifMetricsUpdatedAt",
         (
-          SELECT MAX(\`date\`)
-          FROM \`pireps\`
-          WHERE \`pilotid\` = p.\`id\` AND \`status\` = 1
-        ) AS lastActivity
-      FROM \`pilots\` p
-      LEFT JOIN \`applications\` a ON a.\`pilotid\` = p.\`id\`
-    `);
+          SELECT MAX("date")
+          FROM "pireps"
+          WHERE "pilotid" = p."id" AND "status" = 1
+        ) AS "lastActivity"
+      FROM "pilots" p
+      LEFT JOIN "applications" a ON a."pilotid" = p."id"
+    `, { type: QueryTypes.SELECT });
 
-    return NextResponse.json(users);
+    return NextResponse.json(users.map((user) => ({
+      ...user,
+      examScore: user.examScore === null ? null : Number(user.examScore),
+    })));
   } catch (error) {
     console.error("Error fetching admin users", error);
     return NextResponse.json(
@@ -127,7 +131,7 @@ export async function PUT(request: Request) {
           { status: 400 },
         );
       }
-      const nextEmail = email.trim();
+      const nextEmail = email.trim().toLowerCase();
       if (!emailPattern.test(nextEmail)) {
         return NextResponse.json(
           { success: false, message: "Enter a valid email address" },
@@ -155,7 +159,7 @@ export async function PUT(request: Request) {
         );
       }
       const existingPilot = await models.Pilot.findOne({
-        where: { callsign: nextCallsign },
+        where: sqlWhere(fn("lower", col("callsign")), nextCallsign.toLowerCase()),
       });
       if (existingPilot && String(existingPilot.get("id")) !== String(id)) {
         return NextResponse.json(

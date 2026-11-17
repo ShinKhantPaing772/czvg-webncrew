@@ -16,7 +16,8 @@
 
 import process from "node:process";
 import nextEnv from "@next/env";
-import mysql from "mysql2/promise";
+import pg from "pg";
+import { insertAwardGrants } from "./postgres-awards.mjs";
 import { databaseSslOptions } from "../src/lib/database-ssl.mjs";
 import {
   AWARD_GRANTED_SUBJECT,
@@ -44,14 +45,14 @@ function resolveBadgeImageUrl(pathOrFilename) {
 }
 
 function databaseConfiguration() {
-  const port = Number(process.env.DB_PORT || 3306);
+  const port = Number(process.env.DB_PORT || 5432);
   return {
     host: process.env.DB_HOST || "127.0.0.1",
     user: process.env.DB_USER || "crewcenter",
     password: process.env.DB_PASSWORD || "",
     database: process.env.DB_NAME || "crewcenter",
     port,
-    ssl: databaseSslOptions(),
+    ssl: process.env.DB_SSL === "false" ? false : databaseSslOptions(),
   };
 }
 
@@ -150,7 +151,8 @@ async function main() {
   const dbConfig = databaseConfiguration();
   console.log(`Connecting to database at ${dbConfig.host}:${dbConfig.port} (${dbConfig.database})...`);
 
-  const connection = await mysql.createConnection(dbConfig);
+  const connection = new pg.Client(dbConfig);
+  await connection.connect();
 
   try {
     // -----------------------------------------------------------------
@@ -159,43 +161,38 @@ async function main() {
     console.log("\n[Step 1/2] Verifying table schema and columns...");
     let existingColNames = new Set();
     try {
-      const [columns] = await connection.query("SHOW COLUMNS FROM `awards`");
+      const { rows: columns } = await connection.query("SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'awards'");
       existingColNames = new Set(
         columns.map((c) =>
           String(
-            c.Field || c.field || c.COLUMN_NAME || c.column_name || "",
+            c.column_name || "",
           ).toLowerCase(),
         ),
       );
 
       if (!existingColNames.has("name_zh")) {
         await connection
-          .query("ALTER TABLE `awards` ADD COLUMN `name_zh` VARCHAR(255) NULL")
+          .query("ALTER TABLE awards ADD COLUMN IF NOT EXISTS name_zh VARCHAR(255) NULL")
           .then(() => existingColNames.add("name_zh"))
           .catch((e) => console.log("ℹ Note on name_zh column:", e.message || e));
       }
       if (!existingColNames.has("description_zh")) {
         await connection
-          .query("ALTER TABLE `awards` ADD COLUMN `description_zh` TEXT NULL")
+          .query("ALTER TABLE awards ADD COLUMN IF NOT EXISTS description_zh TEXT NULL")
           .then(() => existingColNames.add("description_zh"))
           .catch((e) => console.log("ℹ Note on description_zh column:", e.message || e));
       }
       if (!existingColNames.has("category")) {
         await connection
-          .query("ALTER TABLE `awards` ADD COLUMN `category` VARCHAR(50) NOT NULL DEFAULT 'milestone'")
+          .query("ALTER TABLE awards ADD COLUMN IF NOT EXISTS category VARCHAR(50) NOT NULL DEFAULT 'milestone'")
           .then(() => existingColNames.add("category"))
           .catch((e) => console.log("ℹ Note on category column:", e.message || e));
       }
       if (!existingColNames.has("criteria")) {
         await connection
-          .query("ALTER TABLE `awards` ADD COLUMN `criteria` JSON NULL")
+          .query("ALTER TABLE awards ADD COLUMN IF NOT EXISTS criteria JSONB NULL")
           .then(() => existingColNames.add("criteria"))
-          .catch(async () => {
-            await connection
-              .query("ALTER TABLE `awards` ADD COLUMN `criteria` LONGTEXT NULL")
-              .then(() => existingColNames.add("criteria"))
-              .catch((e) => console.log("ℹ Note on criteria column:", e.message || e));
-          });
+          .catch((e) => console.log("ℹ Note on criteria column:", e.message || e));
       }
       console.log("✓ Awards schema check completed.");
     } catch (schemaErr) {
@@ -206,8 +203,8 @@ async function main() {
     // Step 2: Sync All 102 Badges into Database
     // -----------------------------------------------------------------
     console.log(`\n[Step 2/3] Uploading and synchronizing ${MASTER_BADGES.length} badge definitions...`);
-    const [existingAwards] = await connection.query(`
-      SELECT id, name FROM \`awards\`
+    const { rows: existingAwards } = await connection.query(`
+      SELECT id, name FROM "awards"
     `);
 
     const existingMap = new Map();
@@ -230,15 +227,15 @@ async function main() {
         if (existingColNames.has("name_zh")) {
           await connection.query(
             `
-            UPDATE \`awards\`
-            SET \`name_zh\` = ?,
-                \`description\` = ?,
-                \`description_zh\` = ?,
-                \`imageurl\` = ?,
-                \`category\` = ?,
-                \`criteria\` = ?,
-                \`featured\` = ?
-            WHERE \`id\` = ?
+            UPDATE "awards"
+            SET "name_zh" = $1,
+                "description" = $2,
+                "description_zh" = $3,
+                "imageurl" = $4,
+                "category" = $5,
+                "criteria" = $6,
+                "featured" = $7
+            WHERE "id" = $8
           `,
             [
               badge.nameZh,
@@ -254,11 +251,11 @@ async function main() {
         } else {
           await connection.query(
             `
-            UPDATE \`awards\`
-            SET \`description\` = ?,
-                \`imageurl\` = ?,
-                \`featured\` = ?
-            WHERE \`id\` = ?
+            UPDATE "awards"
+            SET "description" = $1,
+                "imageurl" = $2,
+                "featured" = $3
+            WHERE "id" = $4
           `,
             [
               badge.description,
@@ -271,10 +268,10 @@ async function main() {
         updatedBadges++;
       } else {
         if (existingColNames.has("name_zh")) {
-          const [res] = await connection.query(
+          const { rows: res } = await connection.query(
             `
-            INSERT INTO \`awards\` (\`name\`, \`name_zh\`, \`description\`, \`description_zh\`, \`imageurl\`, \`category\`, \`criteria\`, \`featured\`)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO "awards" ("name", "name_zh", "description", "description_zh", "imageurl", "category", "criteria", "featured")
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id
           `,
             [
               badge.name,
@@ -287,12 +284,12 @@ async function main() {
               badge.featured ?? null,
             ],
           );
-          existingMap.set(key, res.insertId);
+          existingMap.set(key, Number(res[0].id));
         } else {
-          const [res] = await connection.query(
+          const { rows: res } = await connection.query(
             `
-            INSERT INTO \`awards\` (\`name\`, \`description\`, \`imageurl\`, \`featured\`)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO "awards" ("name", "description", "imageurl", "featured")
+            VALUES ($1, $2, $3, $4) RETURNING id
           `,
             [
               badge.name,
@@ -301,7 +298,7 @@ async function main() {
               badge.featured ?? null,
             ],
           );
-          existingMap.set(key, res.insertId);
+          existingMap.set(key, Number(res[0].id));
         }
         insertedBadges++;
       }
@@ -314,15 +311,15 @@ async function main() {
     // -----------------------------------------------------------------
     console.log("\n[Step 3/3] Running retroactive scan across all pilot records...");
 
-    const [pilots] = await connection.query(`
+    const { rows: pilots } = await connection.query(`
       SELECT id, callsign, name, joined
-      FROM \`pilots\`
+      FROM "pilots"
       ORDER BY id ASC
     `);
 
-    const [awards] = await connection.query(`
+    const { rows: awards } = await connection.query(`
       SELECT id, name, category, criteria
-      FROM \`awards\`
+      FROM "awards"
       ORDER BY id ASC
     `);
 
@@ -336,12 +333,12 @@ async function main() {
       const pilotId = Number(pilot.id);
 
       // Fetch approved PIREPs with aircraft name
-      const [pireps] = await connection.query(
+      const { rows: pireps } = await connection.query(
         `
         SELECT p.id, p.departure, p.arrival, p.flighttime, p.date, a.name AS aircraft_name
-        FROM \`pireps\` p
-        LEFT JOIN \`aircraft\` a ON p.aircraftid = a.id
-        WHERE p.pilotid = ? AND p.status = 1
+        FROM "pireps" p
+        LEFT JOIN "aircraft" a ON p.aircraftid = a.id
+        WHERE p.pilotid = $1 AND p.status = 1
       `,
         [pilotId],
       );
@@ -414,8 +411,8 @@ async function main() {
       };
 
       // Already granted awards
-      const [existingGrants] = await connection.query(
-        `SELECT awardid FROM \`awards_granted\` WHERE pilotid = ?`,
+      const { rows: existingGrants } = await connection.query(
+        `SELECT awardid FROM "awards_granted" WHERE pilotid = $1`,
         [pilotId],
       );
       const ownedIds = new Set(existingGrants.map((g) => Number(g.awardid)));
@@ -448,25 +445,12 @@ async function main() {
       }
 
       if (grantsToInsert.length > 0) {
-        affectedPilots++;
-        totalNewGrants += grantsToInsert.length;
-
-        await connection.query(
-          `INSERT IGNORE INTO \`awards_granted\` (awardid, pilotid, dateawarded) VALUES ?`,
-          [grantsToInsert],
-        );
-
-        try {
-          await connection.query(
-            `INSERT INTO \`notifications\` (pilotid, icon, subject, content, datetime) VALUES ?`,
-            [notificationsToInsert],
-          );
-        } catch {
-          // Notifications table fallback
-        }
+        const inserted = await insertAwardGrants(connection, grantsToInsert, notificationsToInsert);
+        if (inserted) affectedPilots++;
+        totalNewGrants += inserted;
 
         console.log(
-          `  🎖️ [${pilot.callsign} - ${pilot.name}] Granted ${grantsToInsert.length} new badges:`,
+          `  🎖️ [${pilot.callsign} - ${pilot.name}] Granted ${inserted} new badges:`,
           newlyAwardedNames.join(", "),
         );
       }

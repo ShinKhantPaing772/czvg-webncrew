@@ -7,7 +7,7 @@ const networkAttempts = vi.hoisted(() => ({ query: vi.fn(), authenticate: vi.fn(
 vi.mock("@/lib/database", async () => {
   const { Sequelize } = await import("sequelize");
   const database = new Sequelize("offline_model_regression", "unused", "unused", {
-    dialect: "mysql", host: "127.0.0.1", logging: false,
+    dialect: "postgres", host: "127.0.0.1", logging: false,
   });
   vi.spyOn(database, "query").mockImplementation(async () => {
     networkAttempts.query();
@@ -24,14 +24,21 @@ vi.mock("@/lib/database", async () => {
 // Sequelize's mutation of reused attribute descriptors, which this test prevents.
 import { IfLiveConnection, IfLiveOutbox, LiveAircraft, LiveFlight, LiveFlightMember, LiveScheduleEvent } from "./models";
 import { DEFAULT_FLIGHT_TYPE, FLIGHT_TYPES } from "./flight-types";
+import { models as crewModels } from "@/lib/models";
 
 const models: ModelStatic<Model>[] = [LiveAircraft, LiveFlight, LiveFlightMember, LiveScheduleEvent, IfLiveConnection, IfLiveOutbox];
 const schemas = [
   { name: "live scheduling migrations", sql: ["20261002_live_scheduling.sql", "20261004_optional_live_flight_times.sql", "20261004_live_flight_types.sql"].map(name => readFileSync(new URL(`../../../migrations/${name}`, import.meta.url), "utf8")).join("\n") },
   { name: "fresh database schema", sql: readFileSync(new URL("../../../crewcenterdb.sql", import.meta.url), "utf8") },
+  { name: "PostgreSQL baseline", sql: readFileSync(new URL("../../../migrations/postgresql/001_baseline.sql", import.meta.url), "utf8") },
 ];
 
 function tableColumns(sql: string, table: string) {
+  const postgres = sql.match(new RegExp(`CREATE TABLE ${table} \\(([\\s\\S]*?)\\n\\);`));
+  if (postgres) {
+    return [...postgres[1].matchAll(/^  (?:"([^"]+)"|([a-z][a-z0-9_]*))\s+/gm)]
+      .map(match => match[1] || match[2]).sort();
+  }
   const create = sql.match(new RegExp(`CREATE TABLE(?: IF NOT EXISTS)? \`${table}\` \\(([\\s\\S]*?)\\) ENGINE=InnoDB;`));
   if (!create) throw new Error(`Expected ${table} in the supplied SQL schema`);
   const columns = [...create[1].matchAll(/^\s*`([^`]+)`\s+/gm)].map(match => match[1]);
@@ -46,7 +53,8 @@ afterAll(async () => { await LiveAircraft.sequelize?.close(); });
 describe("real Sequelize scheduling model field mappings", () => {
   for (const schema of schemas) {
     it(`keeps the allowed flight types aligned with the ${schema.name}`, () => {
-      const check = schema.sql.match(/CONSTRAINT `live_flights_flight_type` CHECK \(CAST\(`flight_type` AS BINARY\) IN \(([^)]+)\)\)/)?.[1];
+      const check = schema.sql.match(/CONSTRAINT `live_flights_flight_type` CHECK \(CAST\(`flight_type` AS BINARY\) IN \(([^)]+)\)\)/)?.[1]
+        ?? schema.sql.match(/CONSTRAINT live_flights_flight_type CHECK \(flight_type IN \(([^)]+)\)\)/)?.[1];
       expect(check).toBeDefined();
       expect([...check!.matchAll(/'([^']+)'/g)].map(match => match[1]).sort()).toEqual(FLIGHT_TYPES.map(type => type.value).sort());
     });
@@ -65,6 +73,41 @@ describe("real Sequelize scheduling model field mappings", () => {
       });
     }
   }
+
+  it("provides every crew model's physical columns in the PostgreSQL baseline", () => {
+    const sql = schemas.find(schema => schema.name === "PostgreSQL baseline")!.sql;
+    for (const model of Object.values(crewModels) as ModelStatic<Model>[]) {
+      const table = model.getTableName();
+      const tableName = typeof table === "string" ? table : table.tableName;
+      const physicalFields = Object.entries(model.getAttributes()).map(([name, attribute]) => attribute.field || name);
+      // Retain these historical source columns even though the app no longer uses them.
+      if (tableName === "pilots") physicalFields.push("violand", "grade");
+      expect(physicalFields.sort(), tableName).toEqual(tableColumns(sql, tableName));
+    }
+  });
+
+  it("keeps calendar dates separate from timestamps and numeric statuses separate from booleans", () => {
+    expect(String(crewModels.Pirep.getAttributes().date.type)).toBe("DATE");
+    expect(String(crewModels.AwardGranted.getAttributes().dateawarded.type)).toBe("DATE");
+    for (const model of [crewModels.Pilot, crewModels.Pirep, crewModels.Aircraft] as ModelStatic<Model>[]) {
+      expect(String(model.getAttributes().status.type)).toBe("INTEGER");
+    }
+    expect(String(crewModels.Application.getAttributes().exam_status.type)).toBe("SMALLINT");
+    expect(String(crewModels.Award.getAttributes().featured.type)).toBe("SMALLINT");
+    expect(String(LiveAircraft.getAttributes().active.type)).toBe("BOOLEAN");
+    expect(String(crewModels.Token.getAttributes().isRevoked.type)).toBe("BOOLEAN");
+  });
+
+  it("preserves the auth column casing and the source token identity", () => {
+    for (const name of ["pilotId", "expiresAt", "createdAt", "updatedAt", "isRevoked"]) {
+      expect(crewModels.Token.getAttributes()[name].field).toBe(name);
+    }
+    expect(crewModels.Token.primaryKeyAttributes).toEqual(["id"]);
+    expect(crewModels.Token.getAttributes().token.unique).toBe(true);
+    for (const name of ["createdAt", "updatedAt"]) {
+      expect(crewModels.OTP.getAttributes()[name].field).toBe(name);
+    }
+  });
 
   it("keeps each nullable timestamp mapped to its own physical column", () => {
     const nullableTimestampModels: Array<[ModelStatic<Model>, string[]]> = [

@@ -1,3 +1,4 @@
+import { acquireIfAircraftLock } from "../if-aircraft-lock";
 import { Op, QueryTypes, type Transaction } from "sequelize";
 import sequelize from "@/lib/database";
 import { models } from "@/lib/models";
@@ -112,14 +113,9 @@ export function editIfAircraftSchedule(actorId: number, value: unknown) {
     if (!aircraft) throw new IfLiveError("Local aircraft not found", "not_found", 404);
     if (!aircraft.active || !isIfUuid(aircraft.if_aircraft_id)) throw new IfLiveError("Select an active local aircraft linked to IF", "binding", 409);
     const remoteAircraftId = aircraft.if_aircraft_id.toLowerCase();
-    const lockName = `wnc_if_aircraft_${aircraft.id}`;
-    // Pin the same advisory lock used by publishing to one connection. The
-    // network requests hold no aircraft, pilot, connection, or mutex row lock.
-    const lockTransaction = await sequelize.transaction(); let acquired = false;
+    const aircraftLock = await acquireIfAircraftLock(aircraft.id);
+    if (!aircraftLock) throw new IfLiveError("This aircraft is publishing or being edited; refresh before editing", "conflict", 409);
     try {
-      const lock = await sequelize.query<{ acquired: number }>("SELECT GET_LOCK(:lockName, 0) AS acquired", { replacements: { lockName }, type: QueryTypes.SELECT, transaction: lockTransaction });
-      acquired = Number(lock[0]?.acquired) === 1;
-      if (!acquired) throw new IfLiveError("This aircraft is publishing or being edited; wait and refresh before retrying", "conflict", 409);
       const authorization = await getIfAuthorizationSnapshot();
       if (!isIfUuid(authorization.organizationId)) throw new IfLiveError("Select a connected IF organization first", "binding", 409);
       const organizationId = authorization.organizationId.toLowerCase();
@@ -160,8 +156,7 @@ export function editIfAircraftSchedule(actorId: number, value: unknown) {
       });
       return { schedule: toIfAircraftScheduleView(updated, localFlights, true) };
     } finally {
-      try { if (acquired) await sequelize.query("SELECT RELEASE_LOCK(:lockName)", { replacements: { lockName }, type: QueryTypes.SELECT, transaction: lockTransaction }); }
-      finally { await lockTransaction.commit(); }
+      await aircraftLock.release();
     }
   });
 }

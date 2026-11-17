@@ -1,5 +1,5 @@
 import { after, NextRequest, NextResponse } from "next/server";
-import { Op } from "sequelize";
+import { col, fn, Op, where as sqlWhere } from "sequelize";
 import { models } from "@/lib/models";
 import sequelize from "@/lib/database";
 import { requireCrewAuth } from "@/lib/server-auth";
@@ -159,8 +159,12 @@ export async function POST(request: NextRequest) {
     // --- Fetch multiplier only if a code is provided ---
     let multiplier = null;
     if (multi && typeof multi === "string" && multi.trim() !== "") {
+      const multiplierCode = Number(multi.trim());
+      if (!Number.isInteger(multiplierCode) || multiplierCode < -2_147_483_648 || multiplierCode > 2_147_483_647) {
+        return NextResponse.json({ error: "Invalid multiplier code" }, { status: 400 });
+      }
       multiplier = await models.Multiplier.findOne({
-        where: { code: multi.trim() },
+        where: { code: multiplierCode },
       });
 
       if (!multiplier) {
@@ -190,23 +194,20 @@ export async function POST(request: NextRequest) {
       .toString()
       .padStart(2, "0")}:${adjustedMinutes.toString().padStart(2, "0")}`;
 
-    const duplicateStart = new Date(parsedDate);
-    duplicateStart.setHours(0, 0, 0, 0);
-    const duplicateEnd = new Date(parsedDate);
-    duplicateEnd.setHours(23, 59, 59, 999);
+    // DATEONLY values must be passed as calendar-date strings. Passing a Date
+    // lets Sequelize format it in the server's local timezone and shift a day.
+    const flightDate = parsedDate.toISOString().slice(0, 10);
     const trimmedFlightnum = String(flightnum || "").trim();
 
     const duplicatePirep = await models.Pirep.findOne({
       where: {
         pilotid: auth.user.id,
-        flightnum: trimmedFlightnum,
+        [Op.and]: [sqlWhere(fn("lower", col("flightnum")), trimmedFlightnum.toLowerCase())],
         departure: normalizedDeparture,
         arrival: normalizedArrival,
         aircraftid: parsedAircraftId,
         flighttime: Math.round(adjustedSeconds),
-        date: {
-          [Op.between]: [duplicateStart, duplicateEnd],
-        },
+        date: flightDate,
       },
       attributes: ["id"],
     });
@@ -232,7 +233,7 @@ export async function POST(request: NextRequest) {
           arrival: normalizedArrival,
           flighttime: Math.round(adjustedSeconds),
           pilotid: auth.user.id,
-          date: parsedDate,
+          date: flightDate,
           aircraftid: parsedAircraftId,
           fuelused: Math.round(parsedFuel),
           multi: multiplier ? multiplier.name : "None",

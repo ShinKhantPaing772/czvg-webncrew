@@ -32,15 +32,15 @@ export async function GET(request: Request) {
     const replacements: Record<string, string | number> = {};
 
     if (fltnum) {
-      whereClauses.push("r.fltnum LIKE :fltnum");
+      whereClauses.push("r.fltnum ILIKE :fltnum");
       replacements.fltnum = `%${fltnum}%`;
     }
     if (dep) {
-      whereClauses.push("r.dep = :dep");
+      whereClauses.push("LOWER(r.dep) = LOWER(:dep)");
       replacements.dep = dep;
     }
     if (arr) {
-      whereClauses.push("r.arr = :arr");
+      whereClauses.push("LOWER(r.arr) = LOWER(:arr)");
       replacements.arr = arr;
     }
     if (minDuration) {
@@ -61,7 +61,7 @@ export async function GET(request: Request) {
       whereClauses.push("a.id = :aircraftId");
       replacements.aircraftId = aircraftId;
     } else if (aircraft) {
-      whereClauses.push("a.name LIKE :aircraft");
+      whereClauses.push("a.name ILIKE :aircraft");
       replacements.aircraft = `%${aircraft}%`;
     }
 
@@ -94,8 +94,8 @@ export async function GET(request: Request) {
         r.duration, 
         r.notes,
         COALESCE(
-          JSON_ARRAYAGG(
-            JSON_OBJECT(
+          JSONB_AGG(
+            JSONB_BUILD_OBJECT(
               'aircraft_id', a.id,
               'aircraft_name', a.name, 
               'livery_name', a.liveryname,
@@ -104,8 +104,8 @@ export async function GET(request: Request) {
               'awardreq', a.awardreq,
               'status', a.status
             )
-          ), 
-          '[]'
+          ) FILTER (WHERE a.id IS NOT NULL),
+          '[]'::jsonb
         ) AS aircrafts
       ${fromAndWhere}
     `;
@@ -125,8 +125,8 @@ export async function GET(request: Request) {
     // Format the routes data
     let formattedRoutes = Array.isArray(routes)
       ? routes.map((route: any) => {
-          // Parse the JSON string to an array of aircraft objects
-          const aircraftArray = JSON.parse(route.aircrafts || "[]");
+          // PostgreSQL returns JSONB aggregates as native arrays.
+          const aircraftArray = route.aircrafts ?? [];
 
           return {
             id: route.id,

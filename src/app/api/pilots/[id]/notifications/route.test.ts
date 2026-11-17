@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { Op } from "sequelize";
+import { col, fn, Op, where as sqlWhere } from "sequelize";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -206,7 +206,7 @@ describe("GET /api/pilots/[id]/notifications", () => {
       where: {
         [Op.or]: [
           { id: { [Op.in]: [7, 102, 999] } },
-          { name: { [Op.in]: ["First Light", "Retired Award"] } },
+          sqlWhere(fn("lower", col("name")), { [Op.in]: ["first light", "retired award"] }),
         ],
       },
       attributes: ["id", "name", "name_zh", "imageurl"],

@@ -499,7 +499,7 @@ export async function evaluateAndGrantAwards(
 
       const { meets } = evaluateCriteria(criteria, stats);
       if (meets) {
-        // If this award doesn't have a real DB record yet, insert base record into MySQL
+        // If this award doesn't have a real DB record yet, insert its base record.
         const dbAward = dbAwards.find(
           (a) => a.name.trim().toLowerCase() === award.name.trim().toLowerCase(),
         );
@@ -507,15 +507,16 @@ export async function evaluateAndGrantAwards(
           awardId = Number(dbAward.id);
         } else {
           try {
-            const created = await models.Award.create(
+            // A failed optional insert must not abort the enclosing PostgreSQL transaction.
+            const created = await sequelize.transaction({ transaction: trx }, savepoint => models.Award.create(
               {
                 name: award.name,
                 description: award.description,
                 imageurl: award.imageurl,
                 featured: award.featured ?? null,
               },
-              { transaction: trx },
-            );
+              { transaction: savepoint },
+            ));
             awardId = Number((created as any).id);
           } catch {
             // Keep awardId
@@ -548,9 +549,11 @@ export async function evaluateAndGrantAwards(
       });
 
       try {
-        await models.Notification.bulkCreate(notificationsToInsert, {
-          transaction: trx,
-        });
+        await sequelize.transaction({ transaction: trx }, savepoint =>
+          models.Notification.bulkCreate(notificationsToInsert, {
+            transaction: savepoint,
+          }),
+        );
       } catch (err) {
         // Notification table fallback if not populated
         console.warn("[Evaluator] Notification write skipped:", err);

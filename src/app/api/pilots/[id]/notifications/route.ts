@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { Op } from "sequelize";
+import { col, fn, Op, where as sqlWhere, type WhereOptions } from "sequelize";
 import { models } from "@/lib/models";
 import { requireCrewAuth } from "@/lib/server-auth";
 import { getSafeAwards } from "@/lib/awards/columns";
@@ -89,9 +89,9 @@ async function lookupAwards(refs: StoredNotificationRef[]): Promise<AwardLookup>
   if (ids.size === 0 && names.size === 0) return lookup;
 
   try {
-    const conditions: Record<string, unknown>[] = [];
+    const conditions: WhereOptions[] = [];
     if (ids.size > 0) conditions.push({ id: { [Op.in]: [...ids] } });
-    if (names.size > 0) conditions.push({ name: { [Op.in]: [...names] } });
+    if (names.size > 0) conditions.push(sqlWhere(fn("lower", col("name")), { [Op.in]: [...names].map(nameKey) }));
 
     const records = await getSafeAwards({
       where: { [Op.or]: conditions },

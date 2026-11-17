@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { Op } from "sequelize";
+import { cast, col, Op, where as sqlWhere } from "sequelize";
 import type { Includeable } from "sequelize";
 import { models } from "@/lib/models";
 import sequelize from "@/lib/database";
@@ -78,14 +78,14 @@ export async function GET(
       if ("rejected".includes(normalizedSearch)) statusSearch.push(2);
 
       where[Op.or] = [
-        { flightnum: { [Op.like]: `%${searchQuery}%` } },
-        { departure: { [Op.like]: `%${searchQuery}%` } },
-        { arrival: { [Op.like]: `%${searchQuery}%` } },
-        { date: { [Op.like]: `%${searchQuery}%` } },
-        { fuelused: { [Op.like]: `%${searchQuery}%` } },
-        { multi: { [Op.like]: `%${searchQuery}%` } },
-        { "$Aircraft.name$": { [Op.like]: `%${searchQuery}%` } },
-        { "$Aircraft.liveryname$": { [Op.like]: `%${searchQuery}%` } },
+        { flightnum: { [Op.iLike]: `%${searchQuery}%` } },
+        { departure: { [Op.iLike]: `%${searchQuery}%` } },
+        { arrival: { [Op.iLike]: `%${searchQuery}%` } },
+        sqlWhere(cast(col("Pirep.date"), "TEXT"), { [Op.iLike]: `%${searchQuery}%` }),
+        sqlWhere(cast(col("Pirep.fuelused"), "TEXT"), { [Op.iLike]: `%${searchQuery}%` }),
+        { multi: { [Op.iLike]: `%${searchQuery}%` } },
+        { "$Aircraft.name$": { [Op.iLike]: `%${searchQuery}%` } },
+        { "$Aircraft.liveryname$": { [Op.iLike]: `%${searchQuery}%` } },
         ...(statusSearch.length > 0 ? [{ status: { [Op.in]: statusSearch } }] : []),
       ];
     }

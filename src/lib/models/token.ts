@@ -2,6 +2,7 @@ import { DataTypes, Model } from "sequelize";
 import sequelize from "../database";
 
 class Token extends Model {
+  declare id: number;
   declare pilotId: number;
   declare token: string;
   declare expiresAt: Date;
@@ -12,6 +13,7 @@ class Token extends Model {
 
 Token.init(
   {
+    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     pilotId: {
       type: DataTypes.INTEGER,
       allowNull: false,
@@ -22,7 +24,6 @@ Token.init(
     },
     token: {
       type: DataTypes.STRING(255),
-      primaryKey: true,
       allowNull: false,
       unique: true,
     },

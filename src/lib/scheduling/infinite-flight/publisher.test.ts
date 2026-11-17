@@ -29,7 +29,7 @@ beforeEach(() => {
   mocks.transaction.mockImplementation(async (callback: any) => callback ? callback(lockTransaction) : lockTransaction);
   mocks.query.mockImplementation(async (query: string, options: any) => query.includes("FROM if_live_outbox AS pending")
     ? options.replacements.attemptedIds.includes(job.id) ? [] : [job]
-    : query.includes("FROM if_live_outbox AS expired") ? [] : query.includes("GET_LOCK") ? [{ acquired: 1 }] : query.includes("RELEASE_LOCK") ? [] : [{ name: "live_scheduling_mutex" }]);
+    : query.includes("FROM if_live_outbox AS expired") ? [] : query.includes("pg_try_advisory_xact_lock") ? [{ acquired: true }] : query.includes("RELEASE_LOCK") ? [] : [{ name: "live_scheduling_mutex" }]);
   mocks.outbox.findAll.mockImplementation(async (options: any) => options.where.state === "processing" ? [] : [job]); mocks.outbox.findByPk.mockResolvedValue(job); mocks.outbox.count.mockResolvedValue(0); mocks.outbox.update.mockResolvedValue([1]);
   mocks.liveFlight.findByPk.mockImplementation(async () => flight); mocks.liveFlight.findAll.mockImplementation(async (options: any) => options.attributes?.[0] === "id" ? [] : typeof options.where.status === "object" ? [flight] : []); mocks.liveFlight.update.mockResolvedValue([1]); mocks.member.findAll.mockResolvedValue([]);
   mocks.aircraft.findByPk.mockResolvedValue({ id: 7, aircraft_id: 1, if_aircraft_id: UUID, active: true }); mocks.connection.findByPk.mockResolvedValue({ organization_id: UUID, state: "connected", connected_by: 9, access_token_encrypted: "test-encrypted" }); mocks.token.mockResolvedValue({ token: "if-access-token", credential: "test-encrypted", owner: 9, organizationId: UUID });
@@ -103,7 +103,7 @@ describe("IF durable publishing", () => {
     mocks.access.mockResolvedValue(false);
     const result = await runIfLivePublisher(); expect(result.states).toEqual({ failed: 1 }); expect(mocks.create).not.toHaveBeenCalled();
     expect(mocks.outbox.update).toHaveBeenCalledWith(expect.objectContaining({ state: "failed" }), expect.anything());
-    expect(mocks.query.mock.calls.some(([query]) => String(query).includes("RELEASE_LOCK"))).toBe(true);
+    expect(lockTransaction.commit).toHaveBeenCalled();
   });
   it("stops crew assignment when the award is revoked after schedule creation", async () => {
     mocks.create.mockImplementation(async () => {
@@ -189,7 +189,9 @@ describe("IF durable publishing", () => {
   it("selects eligible aircraft before limiting the oldest queue window", async () => {
     await runIfLivePublisher();
     const [sql, options] = selectionQueries()[0];
-    expect(sql).toContain("IS_FREE_LOCK(CONCAT('wnc_if_aircraft_', current_flight.live_aircraft_id)) = 1");
+    expect(sql).toContain("FROM pg_locks AS aircraft_lock");
+    expect(sql).toContain("aircraft_lock.objid = current_flight.live_aircraft_id");
+    expect(sql).not.toContain("pg_try_advisory");
     expect(sql).toContain("earlier_flight.queue_order < current_flight.queue_order");
     expect(sql).toContain("earlier_job.state <> 'done'");
     expect(String(sql).indexOf("NOT EXISTS")).toBeLessThan(String(sql).indexOf("LIMIT :limit"));
@@ -201,7 +203,7 @@ describe("IF durable publishing", () => {
     const query = mocks.query.getMockImplementation()!;
     mocks.query.mockImplementation(async (sql: string, options: any) => {
       if (sql.includes("FROM if_live_outbox AS pending")) return !options.replacements.attemptedIds.includes(busy.id) ? [busy] : !options.replacements.attemptedIds.includes(job.id) ? [job] : [];
-      if (sql.includes("GET_LOCK") && options.replacements.lockName === "wnc_if_aircraft_8") return [{ acquired: 0 }];
+      if (sql.includes("pg_try_advisory_xact_lock") && options.replacements.aircraftId === 8) return [{ acquired: false }];
       return query(sql, options);
     });
     mocks.liveFlight.findByPk.mockImplementation(async (id: number) => id === busy.flight_id ? { ...flight, id, live_aircraft_id: 8 } : flight);
@@ -217,7 +219,7 @@ describe("IF durable publishing", () => {
     expect(await runIfLivePublisher()).toMatchObject({ processed: 0, published: 0 });
     expect(job.update).not.toHaveBeenCalled();
     expect(mocks.create).not.toHaveBeenCalled();
-    expect(mocks.query.mock.calls.some(([sql]) => String(sql).includes("RELEASE_LOCK"))).toBe(true);
+    expect(lockTransaction.commit).toHaveBeenCalled();
   });
 
   it("uses the current queue position when checking a predecessor after selection", async () => {
@@ -255,7 +257,7 @@ describe("IF durable publishing", () => {
     let selections = 0;
     mocks.query.mockImplementation(async (sql: string, options: any) => {
       if (sql.includes("FROM if_live_outbox AS pending")) return Array.from({ length: 10 }, () => ({ ...job, id: ++selections }));
-      if (sql.includes("GET_LOCK")) return [{ acquired: 0 }];
+      if (sql.includes("pg_try_advisory_xact_lock")) return [{ acquired: false }];
       return query(sql, options);
     });
     expect(await runIfLivePublisher()).toMatchObject({ processed: 0 });
@@ -297,7 +299,7 @@ describe("local aircraft publishing scope", () => {
   it("does not acquire or publish another aircraft if a candidate moves before the lease", async () => {
     flight.live_aircraft_id = 8;
     expect(await runIfLivePublisher({ aircraftId: 7 })).toMatchObject({ processed: 0 });
-    expect(mocks.query.mock.calls.some(([value]) => String(value).includes("GET_LOCK"))).toBe(false);
+    expect(mocks.query.mock.calls.some(([value]) => String(value).includes("pg_try_advisory_xact_lock"))).toBe(false);
     expect(job.update).not.toHaveBeenCalled(); expect(mocks.token).not.toHaveBeenCalled();
   });
 
@@ -305,7 +307,7 @@ describe("local aircraft publishing scope", () => {
     mocks.liveFlight.findByPk.mockImplementation(async (_id: number, options: any) => options?.transaction ? { ...flight, live_aircraft_id: 8, revision: 2 } : flight);
     expect(await runIfLivePublisher({ aircraftId: 7 })).toMatchObject({ processed: 0 });
     expect(job.update).not.toHaveBeenCalled(); expect(mocks.token).not.toHaveBeenCalled();
-    expect(mocks.query.mock.calls.some(([value]) => String(value).includes("RELEASE_LOCK"))).toBe(true);
+    expect(lockTransaction.commit).toHaveBeenCalled();
   });
 
   it("rechecks expired lease scope under the mutex before marking reconciliation", async () => {
@@ -428,8 +430,8 @@ describe("individual approved-flight publishing", () => {
 });
 
 // Exercise the actual eligibility SQL and advisory-lock visibility when an
-// explicitly isolated MySQL test database is supplied. Never use app DB vars.
-describe.runIf(Boolean(process.env.SCHEDULING_TEST_DATABASE_URL?.trim()))("IF publisher candidate selection on isolated MySQL", () => {
+// explicitly isolated PostgreSQL test database is supplied. Never use app DB vars.
+describe.runIf(Boolean(process.env.SCHEDULING_TEST_DATABASE_URL?.trim()))("IF publisher candidate selection on isolated PostgreSQL", () => {
   let sqlDatabase: Sequelize;
   let sqlTransaction: Transaction;
   const busyTail = 1_900_000_000 + Math.floor(Math.random() * 1_000_000);
@@ -437,9 +439,8 @@ describe.runIf(Boolean(process.env.SCHEDULING_TEST_DATABASE_URL?.trim()))("IF pu
   const flightTables = ["live_flights", "publisher_flights_1", "publisher_flights_2", "publisher_flights_3"];
   const outboxTables = ["if_live_outbox", "publisher_outbox_1", "publisher_outbox_2", "publisher_outbox_3"];
   function isolatedCandidateSql(sql: string) {
-    // MySQL cannot reference one TEMPORARY table twice in a SELECT. Give each
-    // table reference an identical fixture copy; retain the production query's
-    // joins, predicates, ordering, limits, binds, and actual lock functions.
+    // Keep eligibility-query fixture tables local to this connection; preserve
+    // the production predicates, ordering, limits and actual lock visibility.
     let flights = 0; let outboxes = 0;
     return sql.replace(/\blive_flights AS\b/g, () => `${flightTables[flights++]} AS`)
       .replace(/\bif_live_outbox AS\b/g, () => `${outboxTables[outboxes++]} AS`);
@@ -454,16 +455,16 @@ describe.runIf(Boolean(process.env.SCHEDULING_TEST_DATABASE_URL?.trim()))("IF pu
   beforeAll(async () => {
     const databaseUrl = process.env.SCHEDULING_TEST_DATABASE_URL!.trim();
     const parsed = new URL(databaseUrl);
-    if (parsed.protocol !== "mysql:" || !/^webncrew_scheduling_test_[a-z0-9_]+$/i.test(decodeURIComponent(parsed.pathname.slice(1))) ||
+    if (!["postgres:", "postgresql:"].includes(parsed.protocol) || !/^webncrew_scheduling_test_[a-z0-9_]+$/i.test(decodeURIComponent(parsed.pathname.slice(1))) ||
         (!["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname) && process.env.SCHEDULING_TEST_ALLOW_REMOTE !== "true")) {
-      throw new Error("Publisher SQL tests require an isolated webncrew_scheduling_test_* MySQL database; remote hosts also require SCHEDULING_TEST_ALLOW_REMOTE=true");
+      throw new Error("Publisher SQL tests require an isolated webncrew_scheduling_test_* PostgreSQL database; remote hosts also require SCHEDULING_TEST_ALLOW_REMOTE=true");
     }
     sqlDatabase = new Sequelize(databaseUrl, { logging: false, pool: { max: 2, min: 0 }, retry: { max: 0 } });
     sqlTransaction = await sqlDatabase.transaction();
     // Temporary tables shadow these names only on this pinned connection.
-    await sqlDatabase.query("CREATE TEMPORARY TABLE live_flights (id INT PRIMARY KEY, live_aircraft_id INT NOT NULL, revision INT NOT NULL, status VARCHAR(24) NOT NULL, scheduled_departure DATETIME(3) NULL, queue_order INT NULL, KEY flight_queue (live_aircraft_id, status, queue_order))", { transaction: sqlTransaction });
-    await sqlDatabase.query("CREATE TEMPORARY TABLE if_live_outbox (id INT PRIMARY KEY, flight_id INT NOT NULL, revision INT NOT NULL, state VARCHAR(24) NOT NULL, attempts INT NOT NULL, next_attempt_at DATETIME(3) NOT NULL, created_at DATETIME(3) NOT NULL, lease_until DATETIME(3) NULL, KEY flight_revision (flight_id, revision), KEY ready (state, next_attempt_at))", { transaction: sqlTransaction });
-    for (const tables of [flightTables, outboxTables]) for (const table of tables.slice(1)) await sqlDatabase.query(`CREATE TEMPORARY TABLE ${table} LIKE ${tables[0]}`, { transaction: sqlTransaction });
+    await sqlDatabase.query("CREATE TEMPORARY TABLE live_flights (id INT PRIMARY KEY, live_aircraft_id INT NOT NULL, revision INT NOT NULL, status VARCHAR(24) NOT NULL, scheduled_departure TIMESTAMPTZ(3) NULL, queue_order INT NULL)", { transaction: sqlTransaction });
+    await sqlDatabase.query("CREATE TEMPORARY TABLE if_live_outbox (id INT PRIMARY KEY, flight_id INT NOT NULL, revision INT NOT NULL, state VARCHAR(24) NOT NULL, attempts INT NOT NULL, next_attempt_at TIMESTAMPTZ(3) NOT NULL, created_at TIMESTAMPTZ(3) NOT NULL, lease_until TIMESTAMPTZ(3) NULL)", { transaction: sqlTransaction });
+    for (const tables of [flightTables, outboxTables]) for (const table of tables.slice(1)) await sqlDatabase.query(`CREATE TEMPORARY TABLE ${table} (LIKE ${tables[0]} INCLUDING ALL)`, { transaction: sqlTransaction });
   }, 20_000);
 
   afterAll(async () => {
@@ -583,16 +584,15 @@ describe.runIf(Boolean(process.env.SCHEDULING_TEST_DATABASE_URL?.trim()))("IF pu
   it("skips an actual advisory lock covering the oldest ten jobs", async () => {
     const jobs = await arrangeWindow();
     const holder = await sqlDatabase.transaction();
-    const lockName = `wnc_if_aircraft_${busyTail}`;
+    const lockParameters = { namespace: 0x574e43, aircraftId: busyTail };
     try {
-      const acquired = await sqlDatabase.query<{ acquired: number }>("SELECT GET_LOCK(:lockName, 0) AS acquired", { replacements: { lockName }, type: QueryTypes.SELECT, transaction: holder });
+      const acquired = await sqlDatabase.query<{ acquired: number }>("SELECT pg_try_advisory_xact_lock(:namespace, :aircraftId) AS acquired", { replacements: lockParameters, type: QueryTypes.SELECT, transaction: holder });
       expect(Number(acquired[0].acquired)).toBe(1);
       expect(await runIfLivePublisher()).toMatchObject({ processed: 1 });
       expect(jobs.slice(0, 10).every(row => row.update.mock.calls.length === 0)).toBe(true);
       expect(mocks.outbox.findByPk).toHaveBeenCalledWith(11, expect.anything());
     } finally {
-      try { await sqlDatabase.query("SELECT RELEASE_LOCK(:lockName)", { replacements: { lockName }, transaction: holder }); }
-      finally { await holder.rollback(); }
+      await holder.rollback();
     }
   });
 

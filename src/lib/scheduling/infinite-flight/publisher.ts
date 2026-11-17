@@ -1,3 +1,4 @@
+import { acquireIfAircraftLock, ifAircraftLockAvailableSql } from "../if-aircraft-lock";
 import { Op, QueryTypes, type Transaction } from "sequelize";
 import sequelize from "@/lib/database";
 import { models } from "@/lib/models";
@@ -215,21 +216,20 @@ async function selectedFlightResult(flightId: number, disabled: boolean, reasons
   if (removals.length && await IfLiveOutbox.count({ where: { flight_id: { [Op.in]: removals.map(row => row.id) }, state: { [Op.ne]: "done" } } }) > 0) {
     return result("blocked", "Resolve the aircraft's pending IF cancellations or invalidated reservations first; this button publishes only the selected flight");
   }
-  const available = await sequelize.query<{ available: number | null }>("SELECT IS_FREE_LOCK(:lockName) AS available", {
-    replacements: { lockName: `wnc_if_aircraft_${flight.live_aircraft_id}` }, type: QueryTypes.SELECT,
+  const available = await sequelize.query<{ available: boolean }>(`SELECT ${ifAircraftLockAvailableSql(":aircraftId")} AS available`, {
+    replacements: { aircraftId: flight.live_aircraft_id }, type: QueryTypes.SELECT,
   });
-  if (available[0]?.available !== null && Number(available[0]?.available) === 0) return result("processing", "This aircraft is publishing or being edited; wait and try this flight again");
+  if (available[0]?.available === false) return result("processing", "This aircraft is publishing or being edited; wait and try this flight again");
   return result("queued", "This flight remains queued; refresh its publishing status and try again");
 }
 
 async function publishCandidates(attemptedIds: number[], options: IfPublishOptions) {
   // Filter blocked chains before LIMIT, using the existing aircraft queue and
   // outbox indexes. A busy aircraft must not occupy every candidate slot.
-  // IS_FREE_LOCK is only a selection hint; GET_LOCK and transactional checks
-  // below remain the authority when another publisher races this snapshot.
-  const queryBudgetMs = Math.min(5000, Math.max(1, Math.floor(ifBudgetRemainingMs() - 750)));
+  // Advisory-lock visibility is only a selection hint. Atomic acquisition and
+  // transactional checks remain authoritative if another publisher races it.
   return sequelize.query<IfLiveOutbox>(`
-    SELECT /*+ MAX_EXECUTION_TIME(${queryBudgetMs}) */ pending.*
+    SELECT pending.*
     FROM if_live_outbox AS pending
     INNER JOIN live_flights AS current_flight ON current_flight.id = pending.flight_id
     WHERE pending.state = 'queued'
@@ -238,7 +238,7 @@ async function publishCandidates(attemptedIds: number[], options: IfPublishOptio
       ${options.aircraftId === undefined ? "" : "AND current_flight.live_aircraft_id = :aircraftId"}
       ${options.flightId === undefined ? "" : "AND current_flight.id = :flightId AND current_flight.status = 'approved'"}
       ${attemptedIds.length ? "AND pending.id NOT IN (:attemptedIds)" : ""}
-      AND IS_FREE_LOCK(CONCAT('wnc_if_aircraft_', current_flight.live_aircraft_id)) = 1
+      AND ${ifAircraftLockAvailableSql("current_flight.live_aircraft_id")}
       AND (
         pending.revision <> current_flight.revision
         OR current_flight.status NOT IN ('approved', 'cancelled', 'rejected', 'needs_review')
@@ -289,7 +289,7 @@ async function runBoundedIfLivePublisher(options: IfPublishOptions) {
   const expired = options.aircraftId === undefined && options.flightId === undefined
     ? await IfLiveOutbox.findAll({ where: { state: "processing", lease_until: { [Op.lt]: new Date() } }, limit: 20 })
     : await sequelize.query<IfLiveOutbox>(`
-      SELECT /*+ MAX_EXECUTION_TIME(${Math.min(5000, Math.max(1, Math.floor(ifBudgetRemainingMs() - 750)))}) */ expired.* FROM if_live_outbox AS expired
+      SELECT expired.* FROM if_live_outbox AS expired
       INNER JOIN live_flights AS scoped_flight ON scoped_flight.id = expired.flight_id
       WHERE expired.state = 'processing' AND expired.lease_until < :now
         ${options.aircraftId === undefined ? "" : "AND scoped_flight.live_aircraft_id = :aircraftId"}
@@ -323,12 +323,9 @@ async function runBoundedIfLivePublisher(options: IfPublishOptions) {
       const flight = await LiveFlight.findByPk(candidate.flight_id); if (!flight) { await candidate.update({ state: "done" }); continue; }
       if (options.aircraftId !== undefined && flight.live_aircraft_id !== options.aircraftId) continue;
       if (options.flightId !== undefined && (flight.id !== options.flightId || flight.status !== "approved")) continue;
-      const lockName = `wnc_if_aircraft_${flight.live_aircraft_id}`;
-      // A transaction pins the advisory lock to one pooled MySQL connection. No aircraft row lock is held during HTTP calls.
-      const lockTransaction = await sequelize.transaction(); let acquired = false;
+      const aircraftLock = await acquireIfAircraftLock(flight.live_aircraft_id);
+      if (!aircraftLock) continue;
       try {
-        const rows = await sequelize.query<{ acquired: number }>("SELECT GET_LOCK(:lockName, 0) AS acquired", { replacements: { lockName }, type: QueryTypes.SELECT, transaction: lockTransaction });
-        acquired = Number(rows[0]?.acquired) === 1; if (!acquired) continue;
         const claimed = await sequelize.transaction(async transaction => {
           await mutationMutex(transaction);
           const job = await IfLiveOutbox.findByPk(candidate.id, { transaction, lock: transaction.LOCK.UPDATE });
@@ -360,9 +357,7 @@ async function runBoundedIfLivePublisher(options: IfPublishOptions) {
         try { const state = await publishClaimedJob(claimed); states[state] = (states[state] ?? 0) + 1; if (state === "published") published += 1; }
         catch (error) { const state = await failJob(claimed, claimed.flight_id, error); states[state] = (states[state] ?? 0) + 1; }
       } finally {
-        try {
-          if (acquired) await sequelize.query("SELECT RELEASE_LOCK(:lockName)", { replacements: { lockName }, type: QueryTypes.SELECT, transaction: lockTransaction });
-        } finally { await lockTransaction.commit(); }
+        await aircraftLock.release();
       }
     }
   }

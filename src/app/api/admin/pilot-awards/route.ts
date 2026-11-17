@@ -86,10 +86,10 @@ export async function GET(request: Request) {
     const where = query
       ? {
           [Op.or]: [
-            { name: { [Op.like]: `%${query}%` } },
-            { callsign: { [Op.like]: `%${query}%` } },
-            { ifc: { [Op.like]: `%${query}%` } },
-            { email: { [Op.like]: `%${query}%` } },
+            { name: { [Op.iLike]: `%${query}%` } },
+            { callsign: { [Op.iLike]: `%${query}%` } },
+            { ifc: { [Op.iLike]: `%${query}%` } },
+            { email: { [Op.iLike]: `%${query}%` } },
           ],
         }
       : undefined;

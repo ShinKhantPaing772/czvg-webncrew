@@ -8,13 +8,17 @@ import { hasPermission, requirePermission } from "@/lib/server-auth";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-type CountRow = { label: string; value: number };
+type CountRow = { label: string; value: number | string };
+
+function numericCounts(rows: CountRow[]) {
+  return rows.map((row) => ({ ...row, value: Number(row.value) || 0 }));
+}
 type TrendRow = { label: string; flights?: number; hours?: number; pilots?: number };
 
 function dateParam(value: string | null, fallback: Date) {
   if (!value) return fallback;
 
-  const parsed = new Date(`${value}T00:00:00`);
+  const parsed = new Date(`${value}T00:00:00Z`);
   return Number.isNaN(parsed.getTime()) ? fallback : parsed;
 }
 
@@ -59,7 +63,7 @@ async function countByStatus(table: "pireps" | "pilots") {
 async function topAirportRows(column: "departure" | "arrival" | "dep" | "arr") {
   const table = column === "departure" || column === "arrival" ? "pireps" : "routes";
 
-  return sequelize.query<CountRow>(
+  const rows = await sequelize.query<CountRow>(
     `
       SELECT ${column} AS label, COUNT(*) AS value
       FROM ${table}
@@ -70,6 +74,7 @@ async function topAirportRows(column: "departure" | "arrival" | "dep" | "arr") {
     `,
     { type: QueryTypes.SELECT },
   );
+  return numericCounts(rows);
 }
 
 export async function GET(request: Request) {
@@ -115,17 +120,17 @@ export async function GET(request: Request) {
             SELECT COUNT(*)
             FROM pireps
             WHERE status = 1 AND date BETWEEN :start AND :end
-          ) AS approvedPireps,
+          ) AS "approvedPireps",
           (
             SELECT SUM(flighttime)
             FROM pireps
             WHERE status = 1 AND date BETWEEN :start AND :end
-          ) AS flightSeconds,
+          ) AS "flightSeconds",
           (
             SELECT COUNT(*)
             FROM pilots
             WHERE joined BETWEEN :startDateTime AND :endDateTime
-          ) AS newPilots
+          ) AS "newPilots"
       `,
       {
         replacements: {
@@ -149,7 +154,7 @@ export async function GET(request: Request) {
       totalPilots,
       totalFlights,
       pendingPireps,
-      totalHours: ((totalHoursRows[0]?.total ?? 0) as number) / 3600,
+      totalHours: Number(totalHoursRows[0]?.total ?? 0) / 3600,
       totalRoutes,
       activeAircraft,
       range: {
@@ -166,12 +171,12 @@ export async function GET(request: Request) {
         sequelize.query<TrendRow>(
           `
             SELECT
-              DATE_FORMAT(date, '%Y-%m-%d') AS label,
+              TO_CHAR(date, 'YYYY-MM-DD') AS label,
               COUNT(*) AS flights,
-              SUM(flighttime) / 3600 AS hours
+              SUM(flighttime) / 3600.0 AS hours
             FROM pireps
             WHERE status = 1 AND date BETWEEN :start AND :end
-            GROUP BY DATE_FORMAT(date, '%Y-%m-%d')
+            GROUP BY TO_CHAR(date, 'YYYY-MM-DD')
             ORDER BY label ASC
           `,
           { replacements: { start, end }, type: QueryTypes.SELECT },
@@ -202,10 +207,10 @@ export async function GET(request: Request) {
           countByStatus("pilots"),
           sequelize.query<TrendRow>(
             `
-              SELECT DATE_FORMAT(joined, '%Y-%m-%d') AS label, COUNT(*) AS pilots
+              SELECT TO_CHAR(joined AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS label, COUNT(*) AS pilots
               FROM pilots
               WHERE joined BETWEEN :startDateTime AND :endDateTime
-              GROUP BY DATE_FORMAT(joined, '%Y-%m-%d')
+              GROUP BY TO_CHAR(joined AT TIME ZONE 'UTC', 'YYYY-MM-DD')
               ORDER BY label ASC
             `,
             {
@@ -224,10 +229,10 @@ export async function GET(request: Request) {
           }>(
             `
               SELECT
-                SUM(CASE WHEN exam_status >= 1 THEN 1 ELSE 0 END) AS examDeclared,
+                SUM(CASE WHEN exam_status >= 1 THEN 1 ELSE 0 END) AS "examDeclared",
                 SUM(CASE WHEN exam_score IS NOT NULL THEN 1 ELSE 0 END) AS scored,
-                SUM(CASE WHEN flight_replay_url IS NOT NULL AND flight_replay_url <> '' THEN 1 ELSE 0 END) AS replaySubmitted,
-                SUM(CASE WHEN discord_invite_url IS NOT NULL AND discord_invite_url <> '' THEN 1 ELSE 0 END) AS discordInvited
+                SUM(CASE WHEN flight_replay_url IS NOT NULL AND flight_replay_url <> '' THEN 1 ELSE 0 END) AS "replaySubmitted",
+                SUM(CASE WHEN discord_invite_url IS NOT NULL AND discord_invite_url <> '' THEN 1 ELSE 0 END) AS "discordInvited"
               FROM applications
             `,
             { type: QueryTypes.SELECT },
@@ -235,10 +240,10 @@ export async function GET(request: Request) {
           sequelize.query<{ recentlyActive: number; inactive: number }>(
             `
               SELECT
-                SUM(CASE WHEN lastFlight >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) THEN 1 ELSE 0 END) AS recentlyActive,
-                SUM(CASE WHEN lastFlight IS NULL OR lastFlight < DATE_SUB(CURDATE(), INTERVAL 30 DAY) THEN 1 ELSE 0 END) AS inactive
+                SUM(CASE WHEN last_flight >= (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date - INTERVAL '30 days' THEN 1 ELSE 0 END) AS "recentlyActive",
+                SUM(CASE WHEN last_flight IS NULL OR last_flight < (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date - INTERVAL '30 days' THEN 1 ELSE 0 END) AS inactive
               FROM (
-                SELECT p.id, MAX(pr.date) AS lastFlight
+                SELECT p.id, MAX(pr.date) AS "last_flight"
                 FROM pilots p
                 LEFT JOIN pireps pr ON pr.pilotid = p.id AND pr.status = 1
                 WHERE p.status = 1
@@ -300,14 +305,13 @@ export async function GET(request: Request) {
               FROM routes
             ) buckets
             GROUP BY bucket
-            ORDER BY FIELD(
-              bucket,
-              '< 01:00',
-              '01:00-02:00',
-              '02:00-04:00',
-              '04:00-08:00',
-              '08:00+'
-            )
+            ORDER BY CASE bucket
+              WHEN '< 01:00' THEN 1
+              WHEN '01:00-02:00' THEN 2
+              WHEN '02:00-04:00' THEN 3
+              WHEN '04:00-08:00' THEN 4
+              ELSE 5
+            END
           `,
           { type: QueryTypes.SELECT },
         ),
@@ -317,7 +321,7 @@ export async function GET(request: Request) {
         totalRoutes,
         topDepartures,
         topArrivals,
-        durationBuckets: durationRows,
+        durationBuckets: numericCounts(durationRows),
       };
     }
 
@@ -350,8 +354,8 @@ export async function GET(request: Request) {
 
       sections.aircrafts = {
         activeAircraft,
-        liveryBreakdown: liveryRows,
-        usage: usageRows,
+        liveryBreakdown: numericCounts(liveryRows),
+        usage: numericCounts(usageRows),
       };
     }
 
@@ -371,7 +375,7 @@ export async function GET(request: Request) {
 
       sections.permissions = {
         adminCount,
-        distribution: permissionRows,
+        distribution: numericCounts(permissionRows),
       };
     }
 

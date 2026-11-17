@@ -24,8 +24,8 @@ export async function GET(
         r.duration, 
         r.notes,
         COALESCE(
-          JSON_ARRAYAGG(
-            JSON_OBJECT(
+          JSONB_AGG(
+            JSONB_BUILD_OBJECT(
               'id', a.id,
               'name', a.name, 
               'ifaircraftid', a.ifaircraftid,
@@ -34,8 +34,8 @@ export async function GET(
               'notes', a.notes
 
             )
-          ), 
-          '[]'
+          ) FILTER (WHERE a.id IS NOT NULL),
+          '[]'::jsonb
         ) AS aircraft
       FROM routes r
       LEFT JOIN route_aircraft ra ON r.id = ra.routeid
@@ -67,7 +67,7 @@ export async function GET(
       duration: formatFlightTime(parseInt((route as any).duration)),
       rawDuration: parseInt((route as any).duration),
       notes: (route as any).notes,
-      aircraft: JSON.parse((route as any).aircraft || "[]"),
+      aircraft: ((route as any).aircraft ?? []),
     };
 
     return NextResponse.json({ success: true, data: formattedRoute });

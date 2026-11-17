@@ -1,5 +1,5 @@
 import { DataTypes, Model } from "sequelize";
-import sequelize from "../database"; // adjust the path to your sequelize instance
+import sequelize from "../database";
 
 class OTP extends Model {
   public id!: number;
@@ -13,7 +13,7 @@ class OTP extends Model {
 OTP.init(
   {
     id: {
-      type: DataTypes.INTEGER.UNSIGNED,
+      type: DataTypes.INTEGER,
       autoIncrement: true,
       primaryKey: true,
     },

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { models } from "@/lib/models";
 import { formatFlightTime } from "@/lib/utils/time";
-import { Op } from "sequelize";
+import { col, fn, Op, where as sqlWhere } from "sequelize";
 import { requirePermission } from "@/lib/server-auth";
 
 // Mark this route as dynamic to prevent static optimization
@@ -32,13 +32,15 @@ export async function GET(request: Request) {
     const aircraftWhere: any = {};
 
     if (searchParams.get("fltnum")) {
-      where.fltnum = { [Op.like]: `%${searchParams.get("fltnum")}%` };
+      where.fltnum = { [Op.iLike]: `%${searchParams.get("fltnum")}%` };
     }
-    if (searchParams.get("dep")) {
-      where.dep = searchParams.get("dep");
+    const departure = searchParams.get("dep");
+    if (departure) {
+      where[Op.and] = [sqlWhere(fn("lower", col("Route.dep")), departure.toLowerCase())];
     }
-    if (searchParams.get("arr")) {
-      where.arr = searchParams.get("arr");
+    const arrival = searchParams.get("arr");
+    if (arrival) {
+      where[Op.and] = [...(where[Op.and] || []), sqlWhere(fn("lower", col("Route.arr")), arrival.toLowerCase())];
     }
     if (searchParams.get("minDuration")) {
       where.duration = { [Op.gte]: parseInt(searchParams.get("minDuration")!) };

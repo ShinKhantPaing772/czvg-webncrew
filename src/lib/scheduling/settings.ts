@@ -30,7 +30,7 @@ export async function changeSchedulingSettings(actorId: number, input: unknown):
   return sequelize.transaction({ isolationLevel: Transaction.ISOLATION_LEVELS.READ_COMMITTED }, async transaction => {
     // Match flight starts so a disabling change cannot race past a stale policy read.
     const mutex = await sequelize.query<{ name: string }>("SELECT name FROM options WHERE name = 'live_scheduling_mutex' FOR UPDATE", { type: QueryTypes.SELECT, transaction });
-    if (!mutex.length) throw new SchedulingError("Live scheduling needs its SQL migration. Apply migrations/20261002_live_scheduling.sql first.", 503);
+    if (!mutex.length) throw new SchedulingError("Live scheduling needs its PostgreSQL schema. Apply migrations/postgresql/001_baseline.sql first.", 503);
     const pilot = await models.Pilot.findByPk(id, { attributes: ["status"], transaction, lock: transaction.LOCK.UPDATE });
     const permissions = await models.Permission.findAll({
       where: { userid: id, name: { [Op.in]: ["admin", "scheduling"] } }, attributes: ["name"], transaction, lock: transaction.LOCK.UPDATE,
@@ -40,7 +40,7 @@ export async function changeSchedulingSettings(actorId: number, input: unknown):
     // Global changes have no aircraft ID; keep the last change's actor and UTC
     // time with the policy rather than inventing a tail for the aircraft audit table.
     const value = JSON.stringify({ allowUnpublishedIfStarts: allowed, updatedBy: id, updatedAt: new Date().toISOString(), previousAllowUnpublishedIfStarts: previous.allowUnpublishedIfStarts });
-    await sequelize.query("INSERT INTO options (name, value) VALUES (:name, :value) ON DUPLICATE KEY UPDATE value = VALUES(value)", {
+    await sequelize.query("INSERT INTO options (name, value) VALUES (:name, :value) ON CONFLICT (name) DO UPDATE SET value = EXCLUDED.value", {
       replacements: { name: START_POLICY_OPTION, value }, transaction,
     });
     return { allowUnpublishedIfStarts: allowed };

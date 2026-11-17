@@ -12,7 +12,7 @@ virtual airline on Infinite Flight.
 ## Stack
 
 - Next.js 15 (App Router) and React 19, deployed on Vercel
-- MySQL through Sequelize (models in `src/lib/models/index.ts`)
+- PostgreSQL through Sequelize (models in `src/lib/models/index.ts`)
 - shadcn/ui (Radix) and Tailwind CSS 3, with an English/Chinese UI
   (`src/lib/i18n.tsx`)
 - Vitest for tests
@@ -36,7 +36,7 @@ Required:
 
 | Variable | Purpose |
 | --- | --- |
-| `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | MySQL connection (always over SSL) |
+| `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | PostgreSQL connection |
 | `JWT_SECRET` | Signs login tokens |
 | `IF_API` | Infinite Flight Live API key |
 
@@ -44,8 +44,11 @@ Optional:
 
 | Variable | Purpose |
 | --- | --- |
-| `DB_SSL_CA` | CA certificate for the database (`\n` escapes allowed); turns on certificate checks |
-| `DB_SSL_REJECT_UNAUTHORIZED` | `true` to check the database certificate without a custom CA |
+| `DB_PORT` | PostgreSQL port; default `5432` |
+| `DB_SSL_CA` | Provider CA certificate (`\n` escapes allowed); TLS certificate checks are enabled by default |
+| `DB_SSL` | Set `false` only for an explicitly configured local database without TLS |
+| `DB_SSL_REJECT_UNAUTHORIZED` | Explicit `false` disables certificate verification; retain the secure default for hosted databases |
+| `DB_POOL_MAX` | Connections per application process; default `3`, minimum `2`; does not cap total Vercel connections |
 | `DISCORD_WEBHOOK` | New-PIREP and award announcements |
 | `DISCORD_WEBHOOK_ADMIN` | New-application alerts for staff |
 | `BREVO_API_KEY` | Application, approval and password-reset emails |
@@ -57,17 +60,23 @@ Live scheduling and the Infinite Flight OAuth connection (`IF_LIVE_*`,
 
 ## Database
 
-There is no migration framework. Apply the SQL files by hand:
+There is no migration framework. Create a **new, empty PostgreSQL database**
+with `migrations/postgresql/001_baseline.sql`. This includes all current
+tables, constraints and the scheduling mutex option. After importing explicit
+IDs, run `migrations/postgresql/002_reset_identity_sequences.sql` while writes
+are stopped.
 
-1. `crewcenterdb.sql`: the base schema, including the live-scheduling tables.
-2. `tokens.sql`: the login token table.
-3. `migrations/*.sql` in date order: apply the ones your database doesn't
-   have yet. Read each file's header first, since some changes are already in
-   the base schema.
+The root `crewcenterdb.sql`, `tokens.sql` and dated SQL files directly under
+`migrations/` are historical MySQL files. Do not run them on PostgreSQL.
+Read [POSTGRESQL_MIGRATION.md](./POSTGRESQL_MIGRATION.md) for the rehearsal,
+data mapping, acceptance checks and later cutover procedure. Preparing this
+code does not move data, change hosted settings or deploy production.
 
-`migrations/20261105_create_missing_tables.sql` creates the applications,
-password-reset and API cache tables. It only creates tables that don't exist
-yet, so it's safe on any database.
+The Aiven free PostgreSQL service's 20 connections are shared by all Vercel
+processes, previews, scripts and operator sessions. Keep capacity available
+for scheduling's separate short transactions; test the combined connection
+usage before cutover. Database sessions use UTC and statements have a
+15-second timeout.
 
 Infinite Flight's terms allow Live API data only in short-lived caches. See
 [.github/llms.txt](./.github/llms.txt) before storing anything from it.
@@ -78,7 +87,7 @@ Infinite Flight's terms allow Live API data only in short-lived caches. See
 | --- | --- |
 | `pnpm dev` | Dev server on localhost:3000 |
 | `pnpm build`, `pnpm start` | Production build, and serving it |
-| `pnpm test` | Vitest suite. The two MySQL integration suites skip unless `SCHEDULING_TEST_DATABASE_URL` is set |
+| `pnpm test` | Vitest suite. Database integration suites skip unless `SCHEDULING_TEST_DATABASE_URL` points to a disposable PostgreSQL test database |
 | `pnpm lint` | ESLint |
 | `pnpm sync:ifc-users` | Resolves pilots' Infinite Flight user IDs. Dry run by default; `--apply`, `--pilot-id <id>`, `--help` |
 | `pnpm sync:awards` | Syncs the award catalog and grants awards pilots have already earned |
@@ -93,6 +102,8 @@ keep it in sync). Apply new migrations before deploying code that needs them.
 
 - [LIVE_SCHEDULING.md](./LIVE_SCHEDULING.md): live aircraft scheduling and the
   Infinite Flight integration
+- [POSTGRESQL_MIGRATION.md](./POSTGRESQL_MIGRATION.md): PostgreSQL setup,
+  rehearsal and migration checks
 - [BULK_IMPORT_GUIDE.md](./BULK_IMPORT_GUIDE.md): importing routes from CSV
 - [.github/llms.txt](./.github/llms.txt): Infinite Flight Live API reference
   and usage rules

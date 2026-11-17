@@ -1,3 +1,4 @@
+import { col, fn, where as sqlWhere } from "sequelize";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
@@ -122,7 +123,7 @@ describe("POST /api/auth login status routing", () => {
       });
       expect(mocks.findPilot).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { email: "pilot@example.com" },
+          where: sqlWhere(fn("lower", col("email")), "pilot@example.com"),
         }),
       );
       expect(mocks.comparePassword).toHaveBeenCalledWith(

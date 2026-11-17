@@ -38,7 +38,7 @@ describe("persistent scheduling start policy", () => {
     expect(JSON.parse(value!)).toMatchObject({ previousAllowUnpublishedIfStarts: true });
     expect(mocks.transaction).toHaveBeenCalledWith({ isolationLevel: Transaction.ISOLATION_LEVELS.READ_COMMITTED }, expect.any(Function));
     expect(mocks.query.mock.calls[0]).toEqual([expect.stringContaining("FOR UPDATE"), { type: QueryTypes.SELECT, transaction }]);
-    expect(mocks.query).toHaveBeenCalledWith(expect.stringContaining("ON DUPLICATE KEY UPDATE"), { replacements: { name: "live_scheduling_allow_unpublished_if_starts", value: expect.any(String) }, transaction });
+    expect(mocks.query).toHaveBeenCalledWith(expect.stringContaining("ON CONFLICT (name) DO UPDATE"), { replacements: { name: "live_scheduling_allow_unpublished_if_starts", value: expect.any(String) }, transaction });
   });
 
   it.each([null, [], {}, { allowUnpublishedIfStarts: "true" }, { allowUnpublishedIfStarts: true, actorId: 1 }])("rejects invalid or extra mutation fields %j", async body => {

@@ -1,4 +1,4 @@
-import { Op, QueryTypes } from "sequelize";
+import { Op, QueryTypes, type Transaction } from "sequelize";
 import sequelize from "@/lib/database";
 import { models } from "@/lib/models";
 import { canAccessCrewCenter } from "@/lib/pilot-status";
@@ -38,10 +38,10 @@ export async function storeIfConnection(pilotId: number, tokens: IfTokenSet) {
   clearIfLiveCache();
 }
 
-async function connectionOwnerStillHasAccess(pilotId: number) {
+async function connectionOwnerStillHasAccess(pilotId: number, transaction: Transaction) {
   const [pilot, permissions] = await Promise.all([
-    models.Pilot.findByPk(pilotId, { attributes: ["status"], raw: true }),
-    models.Permission.findAll({ where: { userid: pilotId, name: { [Op.in]: ["admin", "scheduling"] } }, attributes: ["name"], raw: true }),
+    models.Pilot.findByPk(pilotId, { attributes: ["status"], raw: true, transaction }),
+    models.Permission.findAll({ where: { userid: pilotId, name: { [Op.in]: ["admin", "scheduling"] } }, attributes: ["name"], raw: true, transaction }),
   ]);
   return pilot && canAccessCrewCenter(Number(pilot.status)) && permissions.length > 0;
 }
@@ -53,7 +53,7 @@ export async function getIfAuthorizationSnapshot() {
   const result = await sequelize.transaction(async transaction => {
     const row = await IfLiveConnection.findByPk(1, { transaction, lock: transaction.LOCK.UPDATE });
     if (!row || row.state !== "connected" || !row.access_token_encrypted) throw new IfLiveError("Connect an IF organization account on the scheduling admin page", "not_connected");
-    if (!await connectionOwnerStillHasAccess(row.connected_by)) {
+    if (!await connectionOwnerStillHasAccess(row.connected_by, transaction)) {
       await row.update({ state: "access_suspended" }, { transaction });
       return { error: new IfLiveError("The connected site's admin no longer has scheduling access", "access_suspended", 403) };
     }
@@ -115,7 +115,7 @@ export async function configureIfOrganization(organizationId: string) {
     if (row.access_token_encrypted !== authorization.credential || row.connected_by !== authorization.owner) {
       throw new IfLiveError("IF authorization changed while checking this organization; reload the connection and try again", "connection_changed", 409);
     }
-    if (!await connectionOwnerStillHasAccess(row.connected_by)) throw new IfLiveError("The connected site's admin no longer has scheduling access", "access_suspended", 403);
+    if (!await connectionOwnerStillHasAccess(row.connected_by, transaction)) throw new IfLiveError("The connected site's admin no longer has scheduling access", "access_suspended", 403);
     if (row.organization_id && row.organization_id.toLowerCase() !== organizationId.toLowerCase()) {
       const [boundAircraft, publishedFlights, unresolvedJobs] = await Promise.all([
         LiveAircraft.count({ where: { if_aircraft_id: { [Op.ne]: null } }, transaction }),

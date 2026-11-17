@@ -47,9 +47,9 @@ Rank.init(
     name: { type: DataTypes.STRING(120), allowNull: false },
     timereq: { type: DataTypes.INTEGER, allowNull: false },
     imageurl: { type: DataTypes.TEXT, allowNull: true },
-    barcount: { type: DataTypes.TINYINT.UNSIGNED, allowNull: false, defaultValue: 1 },
+    barcount: { type: DataTypes.SMALLINT, allowNull: false, defaultValue: 1, validate: { min: 0, max: 255 } },
     bartone: { type: DataTypes.STRING(10), allowNull: false, defaultValue: "gold" },
-    starcount: { type: DataTypes.TINYINT.UNSIGNED, allowNull: false, defaultValue: 0 },
+    starcount: { type: DataTypes.SMALLINT, allowNull: false, defaultValue: 0, validate: { min: 0, max: 255 } },
   },
   { sequelize, modelName: "Rank", tableName: "ranks", timestamps: false },
 );
@@ -73,7 +73,7 @@ Award.init(
     description: { type: DataTypes.TEXT },
     description_zh: { type: DataTypes.TEXT, allowNull: true, defaultValue: null },
     imageurl: { type: DataTypes.TEXT, allowNull: false },
-    featured: { type: DataTypes.TINYINT, allowNull: true, defaultValue: null },
+    featured: { type: DataTypes.SMALLINT, allowNull: true, defaultValue: null },
     category: {
       type: DataTypes.STRING(50),
       allowNull: false,
@@ -132,14 +132,14 @@ class AwardGranted extends Model {
   declare id: number;
   declare awardid: number;
   declare pilotid: number;
-  declare dateawarded: Date;
+  declare dateawarded: string;
 }
 AwardGranted.init(
   {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     awardid: { type: DataTypes.INTEGER, allowNull: false },
     pilotid: { type: DataTypes.INTEGER, allowNull: false },
-    dateawarded: { type: DataTypes.DATE, allowNull: false },
+    dateawarded: { type: DataTypes.DATEONLY, allowNull: false },
   },
   {
     sequelize,
@@ -156,7 +156,7 @@ class Pirep extends Model {
   declare arrival: string;
   declare flighttime: number;
   declare pilotid: number;
-  declare date: Date;
+  declare date: string;
   declare aircraftid: number;
   declare fuelused: number;
   declare multi: string;
@@ -170,7 +170,7 @@ Pirep.init(
     arrival: { type: DataTypes.STRING(4), allowNull: false },
     flighttime: { type: DataTypes.INTEGER, allowNull: false },
     pilotid: { type: DataTypes.INTEGER, allowNull: false },
-    date: { type: DataTypes.DATE, allowNull: false },
+    date: { type: DataTypes.DATEONLY, allowNull: false },
     aircraftid: { type: DataTypes.INTEGER, allowNull: false },
     fuelused: { type: DataTypes.INTEGER, allowNull: false },
     multi: { type: DataTypes.TEXT, allowNull: false },
@@ -337,7 +337,7 @@ Application.init(
   {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     pilotid: { type: DataTypes.INTEGER, allowNull: false, unique: true },
-    exam_status: { type: DataTypes.TINYINT, allowNull: false, defaultValue: 0 },
+    exam_status: { type: DataTypes.SMALLINT, allowNull: false, defaultValue: 0 },
     exam_score: { type: DataTypes.DECIMAL(5, 2), allowNull: true },
     exam_completed_at: { type: DataTypes.DATE, allowNull: true },
     exam_result_received_at: { type: DataTypes.DATE, allowNull: true },
@@ -417,6 +417,7 @@ Pilot.hasMany(PirepComment, { foreignKey: "userid", as: "Comments" });
 Route.belongsToMany(Aircraft, {
   through: RouteAircraft,
   foreignKey: "routeid",
+  otherKey: "aircraftid",
 });
 Pilot.hasMany(Permission, { foreignKey: "userid" });
 Permission.belongsTo(Pilot, { foreignKey: "userid" });

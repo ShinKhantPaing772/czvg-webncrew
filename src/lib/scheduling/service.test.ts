@@ -82,7 +82,7 @@ function installTable(name: TableName) {
     if (options.order) result.sort((a, b) => {
       for (const [field, direction] of options.order) {
         const comparison = comparable(a[field])! < comparable(b[field])! ? -1 : comparable(a[field])! > comparable(b[field])! ? 1 : 0;
-        if (comparison) return direction === "DESC" ? -comparison : comparison;
+        if (comparison) return String(direction).startsWith("DESC") ? -comparison : comparison;
       }
       return 0;
     });
@@ -144,7 +144,7 @@ beforeEach(() => {
   mocks.eligible.mockReset().mockImplementation(async id => eligiblePilots.has(id));
   ifAircraftLockFree = 1;
   startPolicyValue = null;
-  mocks.query.mockReset().mockImplementation(async (sql: string) => sql.startsWith("SELECT value FROM options") ? startPolicyValue == null ? [] : [{ value: startPolicyValue }] : sql.includes("IS_FREE_LOCK") ? [{ available: ifAircraftLockFree }] : [{ name: "live_scheduling_mutex" }]);
+  mocks.query.mockReset().mockImplementation(async (sql: string) => sql.startsWith("SELECT value FROM options") ? startPolicyValue == null ? [] : [{ value: startPolicyValue }] : sql.includes("pg_try_advisory_xact_lock") ? [{ acquired: ifAircraftLockFree === 1 }] : [{ name: "live_scheduling_mutex" }]);
   mocks.transaction.mockReset().mockImplementation(async (_options, work) => {
     const before = structuredClone(rows);
     try { return await work(transaction); }
@@ -164,16 +164,10 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe("database setup diagnostics", () => {
-  it("identifies the flight-types migration for a missing flight type column", () => {
+  it.each(["flight_type", "queue_order"])("identifies a missing PostgreSQL %s column", column => {
     vi.spyOn(console, "error").mockImplementation(() => {});
-    expect(schedulingFailure({ original: { code: "ER_BAD_FIELD_ERROR", sqlMessage: "Unknown column 'LiveFlight.flight_type' in 'field list'" } })).toEqual({
-      status: 503, error: "Live scheduling needs its flight-types migration. Apply migrations/20261004_live_flight_types.sql first.",
-    });
-  });
-  it("identifies the optional-times migration for a missing queue order column", () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    expect(schedulingFailure({ original: { code: "ER_BAD_FIELD_ERROR", sqlMessage: "Unknown column 'LiveFlight.queue_order' in 'field list'" } })).toEqual({
-      status: 503, error: "Live scheduling needs its optional-times migration. Apply migrations/20261004_optional_live_flight_times.sql first.",
+    expect(schedulingFailure({ original: { code: "42703", message: `column "LiveFlight.${column}" does not exist` } })).toEqual({
+      status: 503, error: "Live scheduling has a database column mismatch. An administrator needs to check the deployed app and database schema.",
     });
   });
   it("keeps an IF authorization failure separate from the pilot's site access", () => {
@@ -181,17 +175,17 @@ describe("database setup diagnostics", () => {
   });
   it("distinguishes a model column mismatch from an unapplied migration", () => {
     const logger = vi.spyOn(console, "error").mockImplementation(() => {});
-    const result = schedulingFailure({ original: { code: "ER_BAD_FIELD_ERROR", sqlMessage: "Unknown column 'LiveFlight.location_updated_at' in 'field list'", sql: "private query", parameters: ["private value"] } });
+    const result = schedulingFailure({ original: { code: "42703", message: 'column "LiveFlight.location_updated_at" does not exist', sql: "private query", parameters: ["private value"] } });
     expect(result).toEqual({ status: 503, error: "Live scheduling has a database column mismatch. An administrator needs to check the deployed app and database schema." });
-    expect(logger).toHaveBeenCalledWith("[Scheduling] Database schema mismatch", { code: "ER_BAD_FIELD_ERROR", identifier: "LiveFlight.location_updated_at" });
+    expect(logger).toHaveBeenCalledWith("[Scheduling] Database schema mismatch", { code: "42703", identifier: "LiveFlight.location_updated_at" });
   });
 
   it("keeps migration instructions for missing tables without logging full driver errors", () => {
     const logger = vi.spyOn(console, "error").mockImplementation(() => {});
-    const result = schedulingFailure({ original: { code: "ER_NO_SUCH_TABLE", sqlMessage: "Table 'crew_center.live_flights' doesn't exist", sql: "private query" } });
+    const result = schedulingFailure({ original: { code: "42P01", message: 'relation "crew_center.live_flights" does not exist', sql: "private query" } });
     expect(result.status).toBe(503);
-    expect(result.error).toContain("Apply migrations/20261002_live_scheduling.sql first.");
-    expect(logger).toHaveBeenCalledWith("[Scheduling] Database schema mismatch", { code: "ER_NO_SUCH_TABLE", identifier: "crew_center.live_flights" });
+    expect(result.error).toContain("Apply migrations/postgresql/001_baseline.sql to a new target database first.");
+    expect(logger).toHaveBeenCalledWith("[Scheduling] Database schema mismatch", { code: "42P01", identifier: "crew_center.live_flights" });
   });
 });
 
@@ -286,8 +280,8 @@ describe("flight proposals", () => {
     expect(rows.LiveFlight[0].status).toBe("pending");
     expect(rows.LiveScheduleEvent).toHaveLength(0);
     expect(rows.IfLiveOutbox).toHaveLength(0);
-    expect(mocks.query).toHaveBeenCalledWith("SELECT IS_FREE_LOCK(:lockName) AS available", expect.objectContaining({
-      transaction, replacements: { lockName: "wnc_if_aircraft_1" },
+    expect(mocks.query).toHaveBeenCalledWith("SELECT pg_try_advisory_xact_lock(:namespace, :aircraftId) AS acquired", expect.objectContaining({
+      transaction, replacements: { namespace: 0x574e43, aircraftId: 1 },
     }));
   });
 
@@ -303,7 +297,7 @@ describe("flight proposals", () => {
     ifAircraftLockFree = 0;
     await requestFlight(captain, proposal());
     expect(rows.LiveFlight).toHaveLength(1);
-    expect(mocks.query.mock.calls.some(([sql]) => sql.includes("IS_FREE_LOCK"))).toBe(false);
+    expect(mocks.query.mock.calls.some(([sql]) => sql.includes("pg_try_advisory_xact_lock"))).toBe(false);
   });
 
   it("accepts an optional callsign and fallback origin without prematurely moving the aircraft", async () => {
@@ -899,7 +893,7 @@ describe("start and completion policies", () => {
 
   it("expires a departure check that waited too long for local locks", async () => {
     vi.useFakeTimers(); linkedFlight();
-    mocks.query.mockImplementation(async (sql: string) => { vi.setSystemTime(Date.now() + 31_000); return sql.includes("IS_FREE_LOCK") ? [{ available: 1 }] : [{ name: "live_scheduling_mutex" }]; });
+    mocks.query.mockImplementation(async (sql: string) => { vi.setSystemTime(Date.now() + 31_000); return sql.includes("pg_try_advisory_xact_lock") ? [{ acquired: true }] : [{ name: "live_scheduling_mutex" }]; });
     await expect(changeFlight(captain, { flight_id: 1, action: "start" })).rejects.toThrow("changed during the departure check");
     expect(rows.LiveFlight[0].status).toBe("approved");
   });

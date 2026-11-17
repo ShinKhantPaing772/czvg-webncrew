@@ -1,3 +1,4 @@
+import { col, fn, where as sqlWhere } from "sequelize";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -77,7 +78,7 @@ describe("resetPassword", () => {
     expect(response.status).toBe(200);
     expect(mocks.updatePilot).toHaveBeenCalledWith(
       { password: "new-password-hash" },
-      { where: { email: "pilot@example.com" }, transaction },
+      { where: sqlWhere(fn("lower", col("email")), "pilot@example.com"), transaction },
     );
     expect(mocks.destroyTokens).toHaveBeenCalledWith({
       where: { pilotId: [42] },

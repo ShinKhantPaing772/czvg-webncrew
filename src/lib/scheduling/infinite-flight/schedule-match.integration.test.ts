@@ -1,3 +1,5 @@
+import { isAbsolute } from "node:path";
+import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { Sequelize, QueryTypes } from "sequelize";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -9,26 +11,36 @@ import type { IfSchedule, IfScheduleRequest } from "./types";
 // Opt in with a NEW, EMPTY disposable database. Run serially with other SQL
 // suites; this file never reads the production DB_* environment variables.
 const suppliedUrl = process.env.SCHEDULING_TEST_DATABASE_URL;
+
+function remoteTestTlsAllowed(target: URL) {
+  return process.env.SCHEDULING_TEST_ALLOW_REMOTE === "1"
+    && target.searchParams.get("sslmode") === "verify-full"
+    && isAbsolute(target.searchParams.get("sslrootcert") || "");
+}
 function isolatedTarget(raw: string) {
   const target = new URL(raw);
   const database = decodeURIComponent(target.pathname.slice(1));
-  if (target.protocol !== "mysql:" || !/^webncrew_scheduling_test_[a-z0-9_]+$/i.test(database)) {
-    throw new Error("IF matching SQL tests require a dedicated mysql:// database named webncrew_scheduling_test_<name>");
+  const isLoopback = ["localhost", "127.0.0.1", "[::1]", "::1"].includes(target.hostname);
+  if (!["postgres:", "postgresql:"].includes(target.protocol) || !/^webncrew_scheduling_test_[a-z0-9_]+$/i.test(database)) {
+    throw new Error("IF matching SQL tests require a dedicated postgres:// database named webncrew_scheduling_test_<name>");
   }
-  if (!["localhost", "127.0.0.1", "[::1]", "::1"].includes(target.hostname) && process.env.SCHEDULING_TEST_ALLOW_REMOTE !== "true") {
-    throw new Error("IF matching SQL tests require loopback; SCHEDULING_TEST_ALLOW_REMOTE=true is only for an explicitly dedicated remote test database");
+  if (!isLoopback && !remoteTestTlsAllowed(target)) {
+    throw new Error("IF matching SQL tests require loopback; remote tests require SCHEDULING_TEST_ALLOW_REMOTE=1, sslmode=verify-full and an absolute sslrootcert path");
   }
-  return { url: target.toString(), database };
+  return { url: target.toString(), database, isLoopback };
 }
 
-describe.skipIf(!suppliedUrl)("MySQL explicit IF schedule matching", () => {
+describe.skipIf(!suppliedUrl)("PostgreSQL explicit IF schedule matching", () => {
   let database: Sequelize;
+  let administrator: Sequelize;
+  const schema = `match_test_${randomUUID().replaceAll("-", "")}`;
   let base: typeof import("@/lib/models").models;
   let live: typeof import("../models");
   let matching: typeof import("./schedule-match");
   let service: typeof import("../service");
   let settings: typeof import("../settings");
   let mayCleanUp = false;
+  let checkpointWaitMs = 3_000;
   let local: InstanceType<typeof import("../models").LiveFlight>;
   const http = { authorization: vi.fn(), binding: vi.fn(), schedules: vi.fn(), update: vi.fn() };
   const tables = ["if_live_outbox", "live_schedule_events", "live_flight_members", "live_flights", "live_aircraft", "if_live_connections", "awards_granted", "awards", "aircraft", "permissions", "pilots", "options"];
@@ -49,12 +61,14 @@ describe.skipIf(!suppliedUrl)("MySQL explicit IF schedule matching", () => {
 
   beforeAll(async () => {
     const target = isolatedTarget(suppliedUrl!);
-    database = new Sequelize(target.url, { dialect: "mysql", logging: false, timezone: "+00:00", pool: { min: 0, max: 8 }, dialectOptions: { multipleStatements: true } });
-    await database.authenticate();
-    const selected = await database.query<{ name: string }>("SELECT DATABASE() AS name", { type: QueryTypes.SELECT });
+    checkpointWaitMs = target.isLoopback ? 3_000 : 30_000;
+    administrator = new Sequelize(target.url, { dialect: "postgres", logging: false, pool: { min: 0, max: 1 } });
+    const selected = await administrator.query<{ name: string }>("SELECT current_database() AS name", { type: QueryTypes.SELECT });
     if (selected[0]?.name !== target.database) throw new Error("The matching test connection selected an unexpected database");
-    const existing = await database.query("SELECT TABLE_NAME FROM information_schema.tables WHERE TABLE_SCHEMA = DATABASE()", { type: QueryTypes.SELECT });
-    if (existing.length) throw new Error("The matching test database must be empty. Existing tables will never be modified or deleted.");
+    await administrator.query(`CREATE SCHEMA "${schema}"`);
+    mayCleanUp = true;
+    database = new Sequelize(target.url, { dialect: "postgres", logging: false, timezone: "+00:00", pool: { min: 0, max: 3 }, dialectOptions: { options: `-c search_path=${schema},public -c timezone=UTC` } });
+    await database.query(await readFile(new URL("../../../../migrations/postgresql/001_baseline.sql", import.meta.url), "utf8"));
 
     vi.doMock("@/lib/database", () => ({ default: database }));
     vi.doMock("./connection", () => ({ getIfAuthorizationSnapshot: http.authorization }));
@@ -71,50 +85,20 @@ describe.skipIf(!suppliedUrl)("MySQL explicit IF schedule matching", () => {
     vi.stubEnv("IF_LIVE_CLIENT_SECRET", "fixture-client-secret"); vi.stubEnv("IF_LIVE_REVOCATION_URL", "");
     vi.stubEnv("IF_LIVE_REDIRECT_URI", "https://example.com/oauth/callback");
     vi.stubEnv("IF_LIVE_TOKEN_ENCRYPTION_KEY", Buffer.alloc(32, 7).toString("base64"));
-    mayCleanUp = true;
-    await database.query(`
-      CREATE TABLE pilots (
-        id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, callsign VARCHAR(120) NOT NULL, name TEXT NOT NULL,
-        ifc TEXT NOT NULL, ifuserid VARCHAR(36) NULL, email TEXT NOT NULL, password TEXT NOT NULL,
-        transhours INT NOT NULL DEFAULT 0, transflights INT NOT NULL DEFAULT 0, notes VARCHAR(1200) NOT NULL DEFAULT '',
-        status INT NOT NULL DEFAULT 1, joined DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB;
-      CREATE TABLE aircraft (
-        id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, name TEXT NOT NULL, ifaircraftid TEXT NULL,
-        liveryname TEXT NULL, ifliveryid TEXT NULL, notes VARCHAR(12) NULL, rankreq INT NULL, awardreq INT NULL,
-        status INT NOT NULL DEFAULT 1
-      ) ENGINE=InnoDB;
-      CREATE TABLE awards (
-        id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, name TEXT NOT NULL, description TEXT NOT NULL,
-        imageurl TEXT NOT NULL, featured TINYINT NULL
-      ) ENGINE=InnoDB;
-      CREATE TABLE awards_granted (
-        id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, pilotid INT NOT NULL, awardid INT NOT NULL,
-        dateawarded DATE NOT NULL, UNIQUE KEY pilot_award (pilotid, awardid),
-        FOREIGN KEY (pilotid) REFERENCES pilots(id), FOREIGN KEY (awardid) REFERENCES awards(id)
-      ) ENGINE=InnoDB;
-      CREATE TABLE permissions (
-        id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, name VARCHAR(120) NOT NULL, userid INT NOT NULL,
-        FOREIGN KEY (userid) REFERENCES pilots(id)
-      ) ENGINE=InnoDB;
-    `);
-    for (const migration of ["20261002_live_scheduling.sql", "20261004_optional_live_flight_times.sql", "20261004_live_flight_types.sql"]) {
-      await database.query(await readFile(new URL(`../../../../migrations/${migration}`, import.meta.url), "utf8"));
-    }
   }, 30_000);
 
   afterAll(async () => {
     vi.restoreAllMocks(); vi.unstubAllEnvs();
-    if (database) {
-      try {
-        if (mayCleanUp) await database.query(`SET FOREIGN_KEY_CHECKS=0; ${tables.map(table => `DROP TABLE IF EXISTS \`${table}\``).join("; ")}; SET FOREIGN_KEY_CHECKS=1;`);
-      } finally { await database.close(); }
+    if (database) await database.close();
+    if (administrator) {
+      try { if (mayCleanUp) await administrator.query(`DROP SCHEMA "${schema}" CASCADE`); }
+      finally { await administrator.close(); }
     }
     for (const path of ["@/lib/database", "./connection", "./binding", "./client"]) vi.doUnmock(path);
   }, 30_000);
 
   beforeEach(async () => {
-    for (const table of tables.filter(name => name !== "options")) await database.query(`DELETE FROM \`${table}\``);
+    for (const table of tables.filter(name => name !== "options")) await database.query(`DELETE FROM "${table}"`);
     await database.query("DELETE FROM options WHERE name = :name", { replacements: { name: "live_scheduling_allow_unpublished_if_starts" } });
     await base.Pilot.bulkCreate([1, 2, 9].map(id => ({
       id, name: `Fixture Pilot ${id}`, callsign: `CC${id}`, ifc: `fixture${id}`, ifuserid: id === 1 ? CAPTAIN : id === 2 ? CREW : OTHER,
@@ -166,7 +150,7 @@ describe.skipIf(!suppliedUrl)("MySQL explicit IF schedule matching", () => {
     expect(await live.LiveScheduleEvent.count({ where: { flight_id: 1, action: "if_schedule_match_requested" } })).toBe(1);
     expect(await live.LiveScheduleEvent.count({ where: { flight_id: 1, action: "if_schedule_matched" } })).toBe(0);
     expect(http.update).toHaveBeenCalledOnce();
-    const lock = await database.query<{ available: number }>("SELECT IS_FREE_LOCK(:name) AS available", { replacements: { name: "wnc_if_aircraft_1" }, type: QueryTypes.SELECT });
+    const lock = await database.query<{ available: boolean }>("SELECT pg_try_advisory_xact_lock(:namespace, 1) AS available", { replacements: { namespace: 0x574e43 }, type: QueryTypes.SELECT });
     expect(Number(lock[0]?.available)).toBe(1);
   });
 
@@ -181,7 +165,7 @@ describe.skipIf(!suppliedUrl)("MySQL explicit IF schedule matching", () => {
     void first.catch(() => {});
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      await Promise.race([writeStarted, new Promise<void>((_resolve, reject) => { timer = setTimeout(() => reject(new Error("The match never reached its checkpointed IF write")), 3_000); })]);
+      await Promise.race([writeStarted, new Promise<void>((_resolve, reject) => { timer = setTimeout(() => reject(new Error("The match never reached its checkpointed IF write")), checkpointWaitMs); })]);
       await expect(matching.matchIfAircraftSchedule(9, input())).rejects.toMatchObject({ code: "conflict", message: expect.stringContaining("publishing or being edited") });
       await expect(service.changeFlight({ id: 1, admin: false }, { flight_id: 1, action: "start" })).rejects.toMatchObject({ status: 409, message: expect.stringContaining("currently being updated") });
       expect((await live.LiveFlight.findByPk(1))?.status).toBe("approved");

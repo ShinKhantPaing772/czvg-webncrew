@@ -55,7 +55,7 @@ beforeEach(() => {
     rowTransactions += 1;
     try { return await work(lockTransaction); } finally { rowTransactions -= 1; }
   });
-  mocks.query.mockImplementation(async sql => sql.includes("GET_LOCK") ? [{ acquired: 1 }] : sql.includes("FOR UPDATE") ? [{ name: "live_scheduling_mutex" }] : []);
+  mocks.query.mockImplementation(async sql => sql.includes("pg_try_advisory_xact_lock") ? [{ acquired: true }] : sql.includes("FOR UPDATE") ? [{ name: "live_scheduling_mutex" }] : []);
   mocks.aircraft.findByPk.mockResolvedValue({ ...aircraft }); mocks.connection.findByPk.mockResolvedValue({ ...connection }); mocks.catalog.findByPk.mockResolvedValue({ ...catalog });
   mocks.flights.findByPk.mockImplementation(async () => flight); mocks.flights.findAll.mockImplementation(async () => [flight]); mocks.flights.findOne.mockResolvedValue(null);
   mocks.members.findAll.mockResolvedValue([{ pilot_id: 13 }]); mocks.outbox.findOne.mockResolvedValue(null);
@@ -83,7 +83,6 @@ describe("explicit same-flight IF matching", () => {
     expect(mocks.outbox.create.mock.calls.every(call => call[0].action === "sync")).toBe(true);
     expect(JSON.stringify(flight.last_published_payload)).not.toMatch(/IF private|sequence|updatedAt|organizationId|aircraftId/);
     expect(mocks.events.create).toHaveBeenCalledWith(expect.objectContaining({ actor_id: 99, action: "if_schedule_matched", details: { schedule_id: SCHEDULE, revision: 4 } }), expect.anything());
-    expect(mocks.query).toHaveBeenLastCalledWith("SELECT RELEASE_LOCK(:lockName)", expect.objectContaining({ replacements: { lockName: "wnc_if_aircraft_7" } }));
     expect(lockTransaction.commit).toHaveBeenCalledOnce();
   });
   it("updates the existing revision job instead of requiring a second publishing record", async () => {
@@ -180,7 +179,7 @@ describe("explicit same-flight IF matching", () => {
     await expect(run()).rejects.toMatchObject({ code: "conflict", message: expect.stringContaining("discontinuous") }); expect(mocks.update).not.toHaveBeenCalled();
   });
   it("fails closed while another publisher or editor owns the aircraft lock", async () => {
-    mocks.query.mockResolvedValue([{ acquired: 0 }]); await expect(run()).rejects.toMatchObject({ code: "conflict" }); expect(mocks.authorization).not.toHaveBeenCalled(); expect(mocks.update).not.toHaveBeenCalled();
+    mocks.query.mockResolvedValue([{ acquired: false }]); await expect(run()).rejects.toMatchObject({ code: "conflict" }); expect(mocks.authorization).not.toHaveBeenCalled(); expect(mocks.update).not.toHaveBeenCalled();
     expect(lockTransaction.commit).toHaveBeenCalledOnce();
   });
   it("requires authorized durable bindings even when preview OAuth is connected", async () => {

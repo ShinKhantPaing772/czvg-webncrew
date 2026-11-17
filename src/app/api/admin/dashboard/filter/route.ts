@@ -58,7 +58,7 @@ export async function GET(request: Request) {
       },
     );
     const flightHoursSeconds =
-      flightHoursResult[0]?.total || 0;
+      Number(flightHoursResult[0]?.total) || 0;
     const flightHours = formatFlightTime(flightHoursSeconds);
 
     // Compile date range stats

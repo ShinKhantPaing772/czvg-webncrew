@@ -16,6 +16,7 @@ import type { AuthoredIfPayload, IfCrew } from "./infinite-flight/types";
 import type { IfLocalFlight, IfPublishedPayload } from "./infinite-flight/itinerary";
 import { DEFAULT_FLIGHT_TYPE, isFlightType } from "./flight-types";
 import { getSchedulingSettings } from "./settings";
+import { tryIfAircraftTransactionLock } from "./if-aircraft-lock";
 
 export type SchedulingActor = { id: number; admin: boolean };
 type Body = Record<string, unknown>;
@@ -55,7 +56,7 @@ async function pilotIdsForFlight(flightId: number, transaction: Transaction) {
 async function mutate<T>(actor: SchedulingActor, body: Body, work: (transaction: Transaction, aircraft: LiveAircraft | null, flight: LiveFlight | null) => Promise<T>) {
   return sequelize.transaction({ isolationLevel: Transaction.ISOLATION_LEVELS.READ_COMMITTED }, async transaction => {
     const mutex = await sequelize.query<{ name: string }>("SELECT name FROM options WHERE name = 'live_scheduling_mutex' FOR UPDATE", { type: QueryTypes.SELECT, transaction });
-    if (!mutex.length) throw new SchedulingError("Live scheduling needs its SQL migration. Apply migrations/20261002_live_scheduling.sql first.", 503);
+    if (!mutex.length) throw new SchedulingError("Live scheduling needs its PostgreSQL schema. Apply migrations/postgresql/001_baseline.sql first.", 503);
     let flight: LiveFlight | null = null;
     const ids = [actor.id];
     if (has(body, "captain_id")) ids.push(validId(body.captain_id, "Captain"));
@@ -72,10 +73,7 @@ async function mutate<T>(actor: SchedulingActor, body: Body, work: (transaction:
     const aircraft = aircraftId ? await LiveAircraft.findByPk(aircraftId, { transaction, lock: transaction.LOCK.UPDATE }) : null;
     if (aircraftId && !aircraft) throw new SchedulingError("Live aircraft not found", 404);
     if (aircraft?.if_aircraft_id) {
-      const lock = await sequelize.query<{ available: number | null }>("SELECT IS_FREE_LOCK(:lockName) AS available", {
-        replacements: { lockName: `wnc_if_aircraft_${aircraft.id}` }, type: QueryTypes.SELECT, transaction,
-      });
-      if (Number(lock[0]?.available) !== 1) throw new SchedulingError("This aircraft's IF schedules are currently being updated. Try again when that operation finishes.", 409);
+      if (!await tryIfAircraftTransactionLock(aircraft.id, transaction)) throw new SchedulingError("This aircraft's IF schedules are currently being updated. Try again when that operation finishes.", 409);
     }
     return work(transaction, aircraft, flight);
   });
@@ -85,7 +83,7 @@ async function queue(aircraftId: number, transaction: Transaction, exclude?: num
   return LiveFlight.findAll({ where: { live_aircraft_id: aircraftId, status: reserved, ...(exclude ? { id: { [Op.ne]: exclude } } : {}) }, order: [["queue_order", "ASC"], ["id", "ASC"]], transaction });
 }
 async function nextQueueOrder(aircraftId: number, transaction: Transaction) {
-  const last = await LiveFlight.findOne({ where: { live_aircraft_id: aircraftId }, attributes: ["queue_order"], order: [["queue_order", "DESC"]], transaction });
+  const last = await LiveFlight.findOne({ where: { live_aircraft_id: aircraftId }, attributes: ["queue_order"], order: [["queue_order", "DESC NULLS LAST"]], transaction });
   const next = Number(last?.queue_order ?? 0) + 1;
   if (!Number.isSafeInteger(next) || next > 2_147_483_647) throw new SchedulingError("The aircraft queue cannot allocate another position; an administrator needs to review it", 503);
   return next;
@@ -505,20 +503,15 @@ export function schedulingFailure(error: unknown) {
   // Upstream authorization belongs to the shared IF account, not the pilot's site session.
   if (error instanceof IfLiveError) return { status: [401, 403].includes(error.status) ? 503 : error.status, error: error.message };
   if (error instanceof UniqueConstraintError) return { status: 409, error: "This registration, IF binding, or request already exists" };
-  const dbError = (error as { original?: { code?: string; sqlMessage?: string } })?.original;
+  const dbError = (error as { original?: { code?: string; message?: string; table?: string; column?: string } })?.original;
   const dbCode = dbError?.code;
-  if (dbCode === "ER_NO_SUCH_TABLE" || dbCode === "ER_BAD_FIELD_ERROR") {
-    // Keep schema identifiers useful for deployment diagnosis without logging
-    // SQL statements, bound values, credentials, or the complete driver error.
-    const identifier = dbError?.sqlMessage?.match(/^(?:Table|Unknown column) '([A-Za-z0-9_.]+)'/)?.[1];
+  if (dbCode === "42P01" || dbCode === "42703") {
+    // Never log SQL, values or the complete driver error.
+    const identifier = dbError?.table ?? dbError?.column ?? dbError?.message?.match(/(?:relation|column) "([A-Za-z0-9_.]+)"/)?.[1];
     console.error("[Scheduling] Database schema mismatch", { code: dbCode, identifier });
-    return { status: 503, error: dbCode === "ER_NO_SUCH_TABLE"
-      ? "Live scheduling needs its SQL migration. Apply migrations/20261002_live_scheduling.sql first."
-      : identifier?.split(".").at(-1) === "queue_order"
-        ? "Live scheduling needs its optional-times migration. Apply migrations/20261004_optional_live_flight_times.sql first."
-        : identifier?.split(".").at(-1) === "flight_type"
-          ? "Live scheduling needs its flight-types migration. Apply migrations/20261004_live_flight_types.sql first."
-        : "Live scheduling has a database column mismatch. An administrator needs to check the deployed app and database schema." };
+    return { status: 503, error: dbCode === "42P01"
+      ? "Live scheduling needs its PostgreSQL schema. Apply migrations/postgresql/001_baseline.sql to a new target database first."
+      : "Live scheduling has a database column mismatch. An administrator needs to check the deployed app and database schema." };
   }
   console.error("[Scheduling] Operation failed", error instanceof Error ? error.name : "Unknown error");
   return { status: 500, error: "Unable to complete this scheduling operation" };

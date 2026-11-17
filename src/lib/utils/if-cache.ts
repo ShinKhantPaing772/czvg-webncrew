@@ -64,10 +64,13 @@ async function ensureCacheTable() {
       await sequelize.query(
         `CREATE TABLE IF NOT EXISTS ${TABLE_NAME} (
           cache_key VARCHAR(255) NOT NULL PRIMARY KEY,
-          value LONGTEXT NOT NULL,
-          expires_at BIGINT NOT NULL,
-          KEY idx_api_cache_expires_at (expires_at)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+          value TEXT NOT NULL,
+          expires_at BIGINT NOT NULL
+        );`,
+        { type: QueryTypes.RAW },
+      );
+      await sequelize.query(
+        `CREATE INDEX IF NOT EXISTS idx_api_cache_expires_at ON ${TABLE_NAME} (expires_at)`,
         { type: QueryTypes.RAW },
       );
       tableInitialized = true;
@@ -149,9 +152,9 @@ export async function setCached<T>(key: string, data: T, ttlSeconds: number) {
     await sequelize.query(
       `INSERT INTO ${TABLE_NAME} (cache_key, value, expires_at)
        VALUES (?, ?, ?)
-       ON DUPLICATE KEY UPDATE
-         value = VALUES(value),
-         expires_at = VALUES(expires_at)`,
+       ON CONFLICT (cache_key) DO UPDATE SET
+         value = EXCLUDED.value,
+         expires_at = EXCLUDED.expires_at`,
       {
         replacements: [key, value, expiresAt],
         type: QueryTypes.INSERT,
@@ -182,24 +185,19 @@ export async function incrementCounter(key: string, windowSeconds: number) {
 
     await cleanupExpiredDbCache();
     const now = Date.now();
-    // `value` must be assigned first: MySQL applies these left to right, and
-    // the reset check has to see the window's old `expires_at`.
-    await sequelize.query(
+    // The upsert locks this counter row, and RETURNING reads this hit's own
+    // result before another request can increment the counter.
+    const rows = await sequelize.query<{ value: string }>(
       `INSERT INTO ${TABLE_NAME} (cache_key, value, expires_at)
        VALUES (?, '1', ?)
-       ON DUPLICATE KEY UPDATE
-         value = IF(expires_at <= ?, '1', CAST(value AS UNSIGNED) + 1),
-         expires_at = IF(expires_at <= ?, VALUES(expires_at), expires_at)`,
+       ON CONFLICT (cache_key) DO UPDATE SET
+         value = CASE WHEN ${TABLE_NAME}.expires_at <= ? THEN '1'
+           ELSE (CAST(${TABLE_NAME}.value AS BIGINT) + 1)::TEXT END,
+         expires_at = CASE WHEN ${TABLE_NAME}.expires_at <= ?
+           THEN EXCLUDED.expires_at ELSE ${TABLE_NAME}.expires_at END
+       RETURNING value`,
       {
         replacements: [key, now + windowSeconds * 1000, now, now],
-        type: QueryTypes.INSERT,
-      },
-    );
-
-    const rows = await sequelize.query<{ value: string }>(
-      `SELECT value FROM ${TABLE_NAME} WHERE cache_key = ? LIMIT 1`,
-      {
-        replacements: [key],
         type: QueryTypes.SELECT,
       },
     );

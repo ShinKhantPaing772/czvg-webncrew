@@ -6,10 +6,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const badgesDir = path.join(__dirname, "../public/badges");
 
-if (!fs.existsSync(badgesDir)) {
-  fs.mkdirSync(badgesDir, { recursive: true });
-}
-
 // 102 Master Badges with authentic English and poetic, understated Chinese (Claude style: Sonnet, Haiku, Opus)
 export const MASTER_BADGES = [
   // ================= 1. MILESTONES: FLIGHTS (16) =================
@@ -1147,6 +1143,52 @@ export const MASTER_BADGES = [
   },
 ];
 
+/** Build PostgreSQL catalog SQL without generating assets or changing files on import. */
+export function buildAwardsSeedSql() {
+  const literal = (value) => `'${String(value).replaceAll("'", "''")}'`;
+  const sqlRows = MASTER_BADGES.map((badge) => `  (${[
+    badge.name, badge.nameZh, badge.description, badge.descriptionZh,
+    badge.imageurl, badge.category,
+  ].map(literal).join(", ")}, ${literal(JSON.stringify(badge.criteria))}::jsonb, ${badge.featured === 1 ? "1" : "NULL"})`).join(",\n");
+  return `-- Optional PostgreSQL awards catalog seed. Preserves existing award IDs.
+BEGIN;
+ALTER TABLE awards
+  ADD COLUMN IF NOT EXISTS name_zh VARCHAR(255) NULL,
+  ADD COLUMN IF NOT EXISTS description_zh TEXT NULL,
+  ADD COLUMN IF NOT EXISTS category VARCHAR(50) NOT NULL DEFAULT 'milestone',
+  ADD COLUMN IF NOT EXISTS criteria JSONB NULL;
+
+UPDATE awards SET category = 'honor', imageurl = '/badges/badge-honor-live.svg', criteria = '{"type":"manual"}'::jsonb
+WHERE LOWER(name) LIKE '%live operations%' OR LOWER(name) LIKE '%live pilot%';
+UPDATE awards SET category = 'honor', imageurl = '/badges/badge-honor-ceo.svg', criteria = '{"type":"manual"}'::jsonb
+WHERE LOWER(name) LIKE '%ceo%';
+
+WITH catalog (name, name_zh, description, description_zh, imageurl, category, criteria, featured) AS (
+  VALUES
+${sqlRows}
+), updated AS (
+  UPDATE awards AS existing SET
+    name_zh = catalog.name_zh,
+    description = catalog.description,
+    description_zh = catalog.description_zh,
+    imageurl = catalog.imageurl,
+    category = catalog.category,
+    criteria = catalog.criteria
+  FROM catalog WHERE LOWER(BTRIM(existing.name)) = LOWER(BTRIM(catalog.name))
+  RETURNING existing.id
+)
+INSERT INTO awards (name, name_zh, description, description_zh, imageurl, category, criteria, featured)
+SELECT name, name_zh, description, description_zh, imageurl, category, criteria, featured
+FROM catalog WHERE NOT EXISTS (
+  SELECT 1 FROM awards WHERE LOWER(BTRIM(awards.name)) = LOWER(BTRIM(catalog.name))
+);
+COMMIT;
+`;
+}
+
+// Sync commands import MASTER_BADGES; generation runs only as a direct command.
+if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
+fs.mkdirSync(badgesDir, { recursive: true });
 console.log(`Loaded ${MASTER_BADGES.length} Master Badges!`);
 
 // Helper to generate themed SVG badges
@@ -1391,54 +1433,11 @@ for (const b of MASTER_BADGES) {
 }
 console.log(`Successfully generated all ${MASTER_BADGES.length} badge SVGs!`);
 
-// 2. Generate SQL migration file with name_zh and description_zh
-const sqlRows = MASTER_BADGES.map((b) => {
-  const criteriaJson = JSON.stringify(b.criteria);
-  const featuredVal = b.featured === 1 ? "1" : "NULL";
-  const nameSafe = b.name.replace(/'/g, "''");
-  const nameZhSafe = b.nameZh.replace(/'/g, "''");
-  const descSafe = b.description.replace(/'/g, "''");
-  const descZhSafe = b.descriptionZh.replace(/'/g, "''");
-  return `  ('${nameSafe}', '${nameZhSafe}', '${descSafe}', '${descZhSafe}', '${b.imageurl}', '${b.category}', '${criteriaJson}', ${featuredVal})`;
-}).join(",\n");
-
-const sqlContent = `-- Comprehensive awards migration with ${MASTER_BADGES.length} badges (Bilingual: Pure English + Poetic Chinese)
-ALTER TABLE \`awards\`
-  ADD COLUMN IF NOT EXISTS \`name_zh\` VARCHAR(255) NULL,
-  ADD COLUMN IF NOT EXISTS \`description_zh\` TEXT NULL,
-  ADD COLUMN IF NOT EXISTS \`category\` VARCHAR(50) NOT NULL DEFAULT 'milestone',
-  ADD COLUMN IF NOT EXISTS \`criteria\` JSON NULL;
-
-UPDATE \`awards\`
-SET \`category\` = 'honor',
-    \`imageurl\` = '/badges/badge-honor-live.svg',
-    \`criteria\` = '{"type":"manual"}'
-WHERE LOWER(\`name\`) LIKE '%live operations%' OR LOWER(\`name\`) LIKE '%live pilot%';
-
-UPDATE \`awards\`
-SET \`category\` = 'honor',
-    \`imageurl\` = '/badges/badge-honor-ceo.svg',
-    \`criteria\` = '{"type":"manual"}'
-WHERE LOWER(\`name\`) LIKE '%ceo%';
-
-INSERT INTO \`awards\` (\`name\`, \`name_zh\`, \`description\`, \`description_zh\`, \`imageurl\`, \`category\`, \`criteria\`, \`featured\`)
-VALUES
-${sqlRows}
-ON DUPLICATE KEY UPDATE
-  \`name_zh\` = VALUES(\`name_zh\`),
-  \`description\` = VALUES(\`description\`),
-  \`description_zh\` = VALUES(\`description_zh\`),
-  \`imageurl\` = VALUES(\`imageurl\`),
-  \`category\` = VALUES(\`category\`),
-  \`criteria\` = VALUES(\`criteria\`);
-`;
-
-fs.writeFileSync(
-  path.join(__dirname, "../migrations/20261027_comprehensive_awards_and_criteria.sql"),
-  sqlContent,
-  "utf-8"
-);
-console.log("Successfully wrote migrations/20261027_comprehensive_awards_and_criteria.sql!");
+// 2. Generate an optional PostgreSQL catalog seed without rewriting archived MySQL SQL.
+const seedPath = path.join(__dirname, "../migrations/postgresql/20261027_comprehensive_awards_and_criteria.sql");
+fs.mkdirSync(path.dirname(seedPath), { recursive: true });
+fs.writeFileSync(seedPath, buildAwardsSeedSql(), "utf-8");
+console.log("Successfully wrote PostgreSQL awards catalog seed!");
 
 // 3. Update preview fixtures in crew-preview.ts
 const previewPilotStats = {
@@ -1725,4 +1724,6 @@ if (awardsRegex.test(previewCode)) {
   console.log("Successfully updated crew-preview.ts with all 102 badges (Bilingual)! ");
 } else {
   console.error("Could not find awards block in crew-preview.ts");
+}
+
 }

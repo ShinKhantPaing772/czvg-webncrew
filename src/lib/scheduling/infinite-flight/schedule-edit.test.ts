@@ -40,7 +40,7 @@ beforeEach(() => {
     rowTransactions += 1;
     try { return await work(lockTransaction); } finally { rowTransactions -= 1; }
   });
-  mocks.query.mockImplementation(async sql => sql.includes("GET_LOCK") ? [{ acquired: 1 }] : sql.includes("FOR UPDATE") ? [{ name: "live_scheduling_mutex" }] : []);
+  mocks.query.mockImplementation(async sql => sql.includes("pg_try_advisory_xact_lock") ? [{ acquired: true }] : sql.includes("FOR UPDATE") ? [{ name: "live_scheduling_mutex" }] : []);
   mocks.aircraft.findByPk.mockResolvedValue({ ...aircraft }); mocks.connection.findByPk.mockResolvedValue({ ...connection });
   mocks.pilot.findByPk.mockResolvedValue({ status: 1 }); mocks.permission.findAll.mockResolvedValue([{ name: "scheduling" }]);
   mocks.flights.findAll.mockResolvedValue([]);
@@ -82,8 +82,7 @@ describe("explicit admin IF schedule edits", () => {
     expect(mocks.schedules).toHaveBeenCalledWith("private-token", AIRCRAFT, { fresh: true });
     expect(mocks.update).toHaveBeenCalledOnce(); expect(mocks.update).toHaveBeenCalledWith("private-token", AIRCRAFT, SCHEDULE,
       expect.objectContaining({ callsign: "IF2", flightType: 1, briefing: remote.briefing, flightPlan: remote.flightPlan }));
-    expect(mocks.query).toHaveBeenCalledWith("SELECT GET_LOCK(:lockName, 0) AS acquired", expect.objectContaining({ replacements: { lockName: "wnc_if_aircraft_7" }, transaction: lockTransaction }));
-    expect(mocks.query).toHaveBeenLastCalledWith("SELECT RELEASE_LOCK(:lockName)", expect.objectContaining({ replacements: { lockName: "wnc_if_aircraft_7" } }));
+    expect(mocks.query).toHaveBeenCalledWith("SELECT pg_try_advisory_xact_lock(:namespace, :aircraftId) AS acquired", expect.objectContaining({ replacements: { namespace: 0x574e43, aircraftId: 7 }, transaction: lockTransaction }));
     expect(lockTransaction.commit).toHaveBeenCalledOnce();
     expect(mocks.events.create).toHaveBeenCalledWith({ live_aircraft_id: 7, flight_id: null, actor_id: 99, action: "if_schedule_edited", details: { schedule_id: SCHEDULE, changes: { callsign: "IF2" } } }, expect.anything());
     expect(mocks.aircraft.update).not.toHaveBeenCalled(); expect(mocks.flights.update).not.toHaveBeenCalled(); expect(mocks.connection.update).not.toHaveBeenCalled();
@@ -156,7 +155,7 @@ describe("explicit admin IF schedule edits", () => {
     return expect(run()).rejects.toMatchObject({ code: "invalid_response" }).then(() => expect(mocks.update).not.toHaveBeenCalled());
   });
   it("fails closed when a publisher or another editor holds the aircraft advisory lock", async () => {
-    mocks.query.mockResolvedValue([{ acquired: 0 }]);
+    mocks.query.mockResolvedValue([{ acquired: false }]);
     await expect(run()).rejects.toMatchObject({ code: "conflict" }); expect(mocks.authorization).not.toHaveBeenCalled(); expect(mocks.update).not.toHaveBeenCalled();
     expect(lockTransaction.commit).toHaveBeenCalledOnce();
   });

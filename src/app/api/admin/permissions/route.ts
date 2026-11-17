@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { QueryTypes } from "sequelize";
+import { col, fn, QueryTypes, where as sqlWhere } from "sequelize";
 import sequelize from "@/lib/database";
 import { models } from "@/lib/models";
 import { requirePermission } from "@/lib/server-auth";
@@ -95,8 +95,8 @@ export async function GET(request: Request) {
             SELECT MAX(pr.date)
             FROM pireps pr
             WHERE pr.pilotid = p.id
-          ) AS lastActive,
-          GROUP_CONCAT(DISTINCT perms.name ORDER BY perms.name SEPARATOR ',') AS permissions
+          ) AS "lastActive",
+          STRING_AGG(DISTINCT perms.name, ',' ORDER BY perms.name) AS permissions
         FROM pilots p
         INNER JOIN permissions perms ON perms.userid = p.id
         GROUP BY p.id, p.name, p.email, p.callsign, p.joined
@@ -136,7 +136,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const pilot = await models.Pilot.findOne({ where: { email } });
+    const pilot = await models.Pilot.findOne({ where: sqlWhere(fn("lower", col("email")), email.toLowerCase()) });
     if (!pilot) {
       return NextResponse.json(
         { success: false, message: "No pilot account found with that email" },

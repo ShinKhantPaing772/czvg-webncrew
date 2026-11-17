@@ -1,4 +1,4 @@
-import mysql from "mysql2/promise";
+import pg from "pg";
 import { parseOptions, printUsage } from "./cli-options.mjs";
 import {
   applyPlans,
@@ -18,7 +18,8 @@ export async function runSync(argv) {
   }
 
   const apiKey = requiredEnvironment("IF_API");
-  const connection = await mysql.createConnection(databaseConfiguration());
+  const connection = new pg.Client(databaseConfiguration());
+  await connection.connect();
 
   try {
     await ensureApiCacheTable(connection);

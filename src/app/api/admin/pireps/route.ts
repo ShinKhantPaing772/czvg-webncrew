@@ -96,11 +96,11 @@ export async function GET(request: Request) {
 
     if (searchQuery) {
       where[Op.or] = [
-        { flightnum: { [Op.like]: `%${searchQuery}%` } },
-        { departure: { [Op.like]: `%${searchQuery}%` } },
-        { arrival: { [Op.like]: `%${searchQuery}%` } },
-        { "$Pilot.name$": { [Op.like]: `%${searchQuery}%` } },
-        { "$Pilot.callsign$": { [Op.like]: `%${searchQuery}%` } },
+        { flightnum: { [Op.iLike]: `%${searchQuery}%` } },
+        { departure: { [Op.iLike]: `%${searchQuery}%` } },
+        { arrival: { [Op.iLike]: `%${searchQuery}%` } },
+        { "$Pilot.name$": { [Op.iLike]: `%${searchQuery}%` } },
+        { "$Pilot.callsign$": { [Op.iLike]: `%${searchQuery}%` } },
       ];
     }
 

@@ -7,15 +7,13 @@ unchanged.
 
 ## Enable local scheduling
 
-1. Back up your database and manually run
-   `migrations/20261002_live_scheduling.sql`. Do not rerun the full
-   `crewcenterdb.sql` against an existing installation. The migration adds six
-   tables and one transaction-mutex option; it grants no pilot access.
-   The migration also creates the legacy `options` table if your installation
-   omitted it. If an earlier copy created all six scheduling tables but failed
-   with `Table '...options' doesn't exist`, run
-   `migrations/20261002_live_scheduling_options_repair.sql` in that same database
-   to complete the missing final step.
+1. For a new PostgreSQL installation, apply
+   `migrations/postgresql/001_baseline.sql` to an empty database. It includes
+   scheduling tables, queue/time/type constraints and the transaction-mutex
+   option, and grants no pilot access. For an existing MySQL installation,
+   follow [POSTGRESQL_MIGRATION.md](./POSTGRESQL_MIGRATION.md) to rehearse and
+   import its data before the separate production cutover. Do not apply the
+   historical MySQL migrations to PostgreSQL.
 2. Create or select a **Live Pilot** award in the existing admin Awards page.
    Find its ID with `SELECT id, name FROM awards;` and configure the server
    environment variable `LIVE_PILOT_AWARD_ID` with that positive integer.
@@ -27,30 +25,10 @@ unchanged.
    current ICAO airport. An unknown initial airport may be left empty: the pilot
    enters a departure, and first admin approval confirms that initial location.
 
-Apply `migrations/20261004_optional_live_flight_times.sql` once after the original
-migration and before deploying the optional-time scheduler. Back up the database
-and pause scheduling writes while it runs. It makes both planned times nullable,
-adds an explicit per-aircraft queue order, and backfills existing non-pending
-flights in their previous chronological order. Fresh installs include these
-fields in `crewcenterdb.sql`.
-
-Run the entire migration file in one connection. It temporarily disables only
-that session's safe-update mode for the queue backfill and restores the previous
-setting before adding constraints. If an earlier version added `queue_order`,
-then failed with error 1175 on the `UPDATE` and error 3819 on the final `ALTER`,
-run `migrations/20261004_optional_live_flight_times_repair.sql` once instead of
-rerunning the original file. Keep scheduling writes paused during recovery.
-This repair skips the successful column addition, backfills the legacy queue,
-and adds the remaining indexes/checks. Its verification query must return zero
-reserved flights without queue positions. Do not run the repair after a
-successful upgrade or after new queue assignments have been made.
-
-For the flight-type dropdown, apply
-`migrations/20261004_live_flight_types.sql` once before deploying this update.
-This single atomic `ALTER` adds the validated `flight_type` field and defaults
-existing flights to **Commercial**. It uses no whole-table `UPDATE`, so Workbench
-safe-update mode can stay enabled. Pause scheduling writes during the change.
-Fresh installations already include this field in `crewcenterdb.sql`.
+The PostgreSQL baseline already supports nullable planned times, explicit
+per-aircraft queue positions and the validated flight-type dropdown. Preserve
+existing queue positions and flight types when importing MySQL data. The dated
+MySQL SQL files remain as historical records of those schema changes.
 
 Pilots choose a flight type when requesting or editing a pending flight, and
 admins can amend it on approved flights. Choices include Commercial, Freight,
@@ -401,13 +379,20 @@ There is no background publishing worker or external scheduler. Failed transient
 
 ## Verification
 
-Run `npm test`, `npx tsc --noEmit --incremental false`, and `npm run build`.
-The isolated MySQL concurrency, matching, and publisher-selection tests require a new, empty test database;
-they never use the application's production DB environment. Run them with
-`SCHEDULING_TEST_DATABASE_URL=mysql://user:password@127.0.0.1/webncrew_scheduling_test_local npm test -- src/lib/scheduling/service.integration.test.ts src/lib/scheduling/infinite-flight/schedule-match.integration.test.ts src/lib/scheduling/infinite-flight/publisher.test.ts --no-file-parallelism`.
+Run `pnpm test`, `pnpm exec tsc --noEmit --incremental false`, and
+`pnpm build`. The isolated PostgreSQL concurrency, matching and publisher
+selection tests use a dedicated test database and create separate disposable
+schemas; they never use the application's production DB environment. Run:
+
+```sh
+SCHEDULING_TEST_DATABASE_URL=postgres://user:password@127.0.0.1/webncrew_scheduling_test_local pnpm test -- src/lib/scheduling/service.integration.test.ts src/lib/scheduling/infinite-flight/schedule-match.integration.test.ts src/lib/scheduling/infinite-flight/publisher.test.ts --no-file-parallelism
+```
+
 Only database names starting with `webncrew_scheduling_test_` are accepted. A
 remote test server additionally requires `SCHEDULING_TEST_ALLOW_REMOTE=true`.
-The suite creates and removes its own tables after verifying the schema is empty.
+Each suite removes only its own schema. See
+[POSTGRESQL_MIGRATION.md](./POSTGRESQL_MIGRATION.md) for timestamp mapping,
+identity reset and shared connection-budget checks.
 
 Before enabling IF writes, use the approved preview/test organization to verify
 linking, revoked credentials, assignment failures, external schedule conflicts,

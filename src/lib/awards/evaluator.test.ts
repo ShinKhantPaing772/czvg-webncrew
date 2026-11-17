@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   findPireps: vi.fn(),
   findGrants: vi.fn(),
   findAwards: vi.fn(),
+  createAward: vi.fn(),
   bulkCreateGrants: vi.fn(),
   bulkCreateNotifications: vi.fn(),
 }));
@@ -25,7 +26,7 @@ vi.mock("@/lib/models", () => ({
       findAll: mocks.findGrants,
       bulkCreate: mocks.bulkCreateGrants,
     },
-    Award: { findAll: mocks.findAwards },
+    Award: { findAll: mocks.findAwards, create: mocks.createAward },
     Notification: { bulkCreate: mocks.bulkCreateNotifications },
   },
 }));
@@ -148,9 +149,12 @@ describe("evaluateCriteria", () => {
 
 describe("evaluateAndGrantAwards", () => {
   const transactionObj = {};
+  const savepointObj = { parent: transactionObj };
 
   beforeEach(() => {
-    mocks.transaction.mockReset().mockImplementation((cb) => cb(transactionObj));
+    mocks.transaction.mockReset().mockImplementation((optionsOrCallback, callback) =>
+      typeof optionsOrCallback === "function" ? optionsOrCallback(transactionObj) : callback(savepointObj),
+    );
     mocks.findPilot.mockReset().mockResolvedValue({
       id: 10,
       callsign: "CSN10",
@@ -183,6 +187,7 @@ describe("evaluateAndGrantAwards", () => {
     ]);
     mocks.bulkCreateGrants.mockReset().mockResolvedValue([]);
     mocks.bulkCreateNotifications.mockReset().mockResolvedValue([]);
+    mocks.createAward.mockReset().mockRejectedValue(new Error("Catalog insert unavailable"));
   });
 
   it("grants newly met awards and records grants", async () => {
@@ -214,7 +219,7 @@ describe("evaluateAndGrantAwards", () => {
     await evaluateAndGrantAwards(10);
 
     const [rows, options] = mocks.bulkCreateNotifications.mock.calls[0];
-    expect(options).toEqual({ transaction: transactionObj });
+    expect(options).toEqual({ transaction: savepointObj });
     expect(rows).toContainEqual(
       expect.objectContaining({
         pilotid: 10,
@@ -236,6 +241,21 @@ describe("evaluateAndGrantAwards", () => {
 
     expect(result.grantedAwards).toHaveLength(0);
     expect(mocks.bulkCreateGrants).not.toHaveBeenCalled();
+  });
+
+  it("isolates a failed optional notification write from the grant transaction", async () => {
+    mocks.bulkCreateNotifications.mockRejectedValue(new Error("Notification constraint failed"));
+    const result = await evaluateAndGrantAwards(10);
+    expect(result.allAwardIds).toContain(101);
+    expect(mocks.bulkCreateGrants).toHaveBeenCalledWith(expect.any(Array), expect.objectContaining({ transaction: transactionObj }));
+    expect(mocks.bulkCreateNotifications).toHaveBeenCalledWith(expect.any(Array), { transaction: savepointObj });
+  });
+
+  it("isolates a failed catalog insert before using its existing fallback award id", async () => {
+    mocks.findAwards.mockResolvedValue([]);
+    expect((await evaluateAndGrantAwards(10)).allAwardIds).toContain(101);
+    expect(mocks.createAward).toHaveBeenCalledWith(expect.any(Object), { transaction: savepointObj });
+    expect(mocks.bulkCreateGrants).toHaveBeenCalledWith(expect.any(Array), expect.objectContaining({ transaction: transactionObj }));
   });
 });
 

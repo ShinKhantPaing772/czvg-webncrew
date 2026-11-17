@@ -3,6 +3,7 @@ import "@/app/globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { NavigationProgress } from "@/components/navigation-progress";
 import { MaintenanceNotice } from "@/components/maintenance-notice";
+import { isCrewLoginDisabled } from "@/lib/login-maintenance";
 
 export const metadata = {
   title: "China Southern Virtual Group IF",
@@ -31,7 +32,7 @@ export default function RootLayout({
       <body suppressHydrationWarning>
         <ThemeProvider>
           <NavigationProgress />
-          <MaintenanceNotice />
+          <MaintenanceNotice active={isCrewLoginDisabled()} />
           {children}
         </ThemeProvider>
       </body>

@@ -2,7 +2,7 @@ import { requiredEnvironment, stringValue } from "./values.mjs";
 import { databaseSslOptions } from "../database-ssl.mjs";
 
 export function databaseConfiguration() {
-  const port = Number(process.env.DB_PORT || 3306);
+  const port = Number(process.env.DB_PORT || 5432);
 
   if (!Number.isInteger(port) || port <= 0 || port > 65_535) {
     throw new Error("DB_PORT must be a valid TCP port");
@@ -14,12 +14,12 @@ export function databaseConfiguration() {
     password: requiredEnvironment("DB_PASSWORD"),
     database: requiredEnvironment("DB_NAME"),
     port,
-    ssl: databaseSslOptions(),
+    ssl: process.env.DB_SSL === "false" ? false : databaseSslOptions(),
   };
 }
 
 export async function loadPilots(connection) {
-  const [rows] = await connection.query(`
+  const { rows } = await connection.query(`
     SELECT id, callsign, ifc, ifuserid
     FROM pilots
     ORDER BY id ASC
@@ -39,16 +39,16 @@ export async function applyPlans(connection, plans) {
   const changes = plans.filter((plan) => plan.changed && !plan.conflict);
   if (changes.length === 0) return 0;
 
-  await connection.beginTransaction();
+  await connection.query("BEGIN");
   try {
     for (const plan of changes) {
-      const [result] = await connection.execute(
+      const result = await connection.query(
         `
           UPDATE pilots
-          SET ifc = ?, ifuserid = ?
-          WHERE id = ?
-            AND ifc <=> ?
-            AND ifuserid <=> ?
+          SET ifc = $1, ifuserid = $2
+          WHERE id = $3
+            AND ifc IS NOT DISTINCT FROM $4
+            AND ifuserid IS NOT DISTINCT FROM $5
         `,
         [
           plan.targetIfc,
@@ -59,17 +59,17 @@ export async function applyPlans(connection, plans) {
         ],
       );
 
-      if (result.affectedRows !== 1) {
+      if (result.rowCount !== 1) {
         throw new Error(
           `Pilot #${plan.pilot.id} changed after the audit; no updates were committed`,
         );
       }
     }
 
-    await connection.commit();
+    await connection.query("COMMIT");
     return changes.length;
   } catch (error) {
-    await connection.rollback();
+    await connection.query("ROLLBACK");
     throw error;
   }
 }

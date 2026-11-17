@@ -1,3 +1,4 @@
+import { col, fn, where as sqlWhere } from "sequelize";
 import { after, NextRequest, NextResponse } from "next/server";
 import { models } from "@/lib/db";
 import bcryptjs from "bcryptjs";
@@ -93,9 +94,7 @@ async function handleLogin({
   let pilot;
   try {
     pilot = await models.Pilot.findOne({
-      where: {
-        email: normalizedEmail,
-      },
+      where: sqlWhere(fn("lower", col("email")), normalizedEmail),
       attributes: ["id", "email", "password", "name", "callsign", "status"],
     });
   } catch (error) {
@@ -310,7 +309,7 @@ async function handleSignup(
   const normalizedEmail = email.trim().toLowerCase();
   const normalizedIfc = ifc.trim();
   const existingPilotMail = await models.Pilot.findOne({
-    where: { email: normalizedEmail },
+    where: sqlWhere(fn("lower", col("email")), normalizedEmail),
   });
 
   if (existingPilotMail) {
@@ -324,7 +323,7 @@ async function handleSignup(
   }
 
   const existingPilotIFC = await models.Pilot.findOne({
-    where: { ifc: normalizedIfc },
+    where: sqlWhere(fn("lower", col("ifc")), normalizedIfc.toLowerCase()),
   });
 
   if (existingPilotIFC) {

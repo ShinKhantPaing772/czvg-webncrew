@@ -45,13 +45,13 @@ export async function ensureApiCacheTable(connection) {
   await connection.query(`
     CREATE TABLE IF NOT EXISTS ${IF_CACHE_TABLE} (
       cache_key VARCHAR(255) NOT NULL PRIMARY KEY,
-      value LONGTEXT NOT NULL,
-      expires_at BIGINT NOT NULL,
-      KEY idx_api_cache_expires_at (expires_at)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      value TEXT NOT NULL,
+      expires_at BIGINT NOT NULL
+    )
   `);
-  await connection.execute(
-    `DELETE FROM ${IF_CACHE_TABLE} WHERE expires_at <= ?`,
+  await connection.query(`CREATE INDEX IF NOT EXISTS idx_api_cache_expires_at ON ${IF_CACHE_TABLE} (expires_at)`);
+  await connection.query(
+    `DELETE FROM ${IF_CACHE_TABLE} WHERE expires_at <= $1`,
     [Date.now()],
   );
 }
@@ -59,11 +59,11 @@ export async function ensureApiCacheTable(connection) {
 export async function getCachedUserPayload(connection, search) {
   const cacheKey = userSearchCacheKey(search);
   const now = Date.now();
-  const [rows] = await connection.execute(
+  const { rows } = await connection.query(
     `
       SELECT value, expires_at
       FROM ${IF_CACHE_TABLE}
-      WHERE cache_key = ? AND expires_at > ?
+      WHERE cache_key = $1 AND expires_at > $2
       LIMIT 1
     `,
     [cacheKey, now],
@@ -74,8 +74,8 @@ export async function getCachedUserPayload(connection, search) {
   try {
     return unwrapCachedPayload(row.value, Number(row.expires_at));
   } catch {
-    await connection.execute(
-      `DELETE FROM ${IF_CACHE_TABLE} WHERE cache_key = ?`,
+    await connection.query(
+      `DELETE FROM ${IF_CACHE_TABLE} WHERE cache_key = $1`,
       [cacheKey],
     );
     return null;
@@ -85,13 +85,13 @@ export async function getCachedUserPayload(connection, search) {
 export async function setCachedUserPayload(connection, search, payload) {
   const cacheKey = userSearchCacheKey(search);
   const expiresAt = Date.now() + IF_USER_CACHE_TTL_MS;
-  await connection.execute(
+  await connection.query(
     `
       INSERT INTO ${IF_CACHE_TABLE} (cache_key, value, expires_at)
-      VALUES (?, ?, ?)
-      ON DUPLICATE KEY UPDATE
-        value = VALUES(value),
-        expires_at = VALUES(expires_at)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (cache_key) DO UPDATE SET
+        value = EXCLUDED.value,
+        expires_at = EXCLUDED.expires_at
     `,
     [cacheKey, JSON.stringify(payload), expiresAt],
   );

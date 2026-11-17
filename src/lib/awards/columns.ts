@@ -15,11 +15,13 @@ export async function getAwardExistingColumnNames(): Promise<Set<string>> {
     return new Set(["id", "name", "description", "imageurl", "featured"]);
   }
   try {
-    const [columns] = await sequelize.query("SHOW COLUMNS FROM `awards`");
+    const [columns] = await sequelize.query(
+      "SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'awards'",
+    );
     return new Set(
       (columns as any[]).map((c) =>
         String(
-          c.Field || c.field || c.COLUMN_NAME || c.column_name || "",
+          c.column_name || "",
         ).toLowerCase(),
       ),
     );
@@ -30,7 +32,7 @@ export async function getAwardExistingColumnNames(): Promise<Set<string>> {
 
 /**
  * Checks and auto-migrates missing columns in the `awards` table.
- * Idempotent, safe across all MySQL/MariaDB versions, and alters columns one by one.
+ * Idempotent PostgreSQL column additions, applied one by one.
  */
 export async function ensureAwardColumnsExist(): Promise<void> {
   if (columnsChecked) return;
@@ -47,14 +49,14 @@ export async function ensureAwardColumnsExist(): Promise<void> {
 
       if (!existingColNames.has("name_zh")) {
         await sequelize
-          .query("ALTER TABLE `awards` ADD COLUMN `name_zh` VARCHAR(255) NULL")
+          .query('ALTER TABLE awards ADD COLUMN IF NOT EXISTS name_zh VARCHAR(255) NULL')
           .catch((e: any) =>
             console.warn("[Awards Auto-Migrate] name_zh note:", e?.message || e),
           );
       }
       if (!existingColNames.has("description_zh")) {
         await sequelize
-          .query("ALTER TABLE `awards` ADD COLUMN `description_zh` TEXT NULL")
+          .query('ALTER TABLE awards ADD COLUMN IF NOT EXISTS description_zh TEXT NULL')
           .catch((e: any) =>
             console.warn(
               "[Awards Auto-Migrate] description_zh note:",
@@ -65,7 +67,7 @@ export async function ensureAwardColumnsExist(): Promise<void> {
       if (!existingColNames.has("category")) {
         await sequelize
           .query(
-            "ALTER TABLE `awards` ADD COLUMN `category` VARCHAR(50) NOT NULL DEFAULT 'milestone'",
+            "ALTER TABLE awards ADD COLUMN IF NOT EXISTS category VARCHAR(50) NOT NULL DEFAULT 'milestone'",
           )
           .catch((e: any) =>
             console.warn(
@@ -75,14 +77,9 @@ export async function ensureAwardColumnsExist(): Promise<void> {
           );
       }
       if (!existingColNames.has("criteria")) {
-        // Try JSON type first, fallback to LONGTEXT for MariaDB / MySQL 5.6
         await sequelize
-          .query("ALTER TABLE `awards` ADD COLUMN `criteria` JSON NULL")
-          .catch(async () => {
-            await sequelize
-              .query("ALTER TABLE `awards` ADD COLUMN `criteria` LONGTEXT NULL")
-              .catch(() => {});
-          });
+          .query("ALTER TABLE awards ADD COLUMN IF NOT EXISTS criteria JSONB NULL")
+          .catch((e: any) => console.warn("[Awards Auto-Migrate] criteria note:", e?.message || e));
       }
 
       columnsChecked = true;
@@ -152,7 +149,7 @@ function enrichAwardRecord(
 /**
  * Safely fetches awards from database.
  * If columns like `name_zh` or `category` do not exist yet in database,
- * automatically falls back to base columns without throwing ER_BAD_FIELD_ERROR.
+ * automatically falls back to base columns if PostgreSQL reports a missing column.
  * Automatically enriches missing metadata from MASTER_BADGES.
  */
 export async function getSafeAwards(options?: {
@@ -187,7 +184,7 @@ export async function getSafeAwards(options?: {
   ];
 
   try {
-    const rows = (await models.Award.findAll({
+    const findRows = (transaction = options?.transaction) => models.Award.findAll({
       where: options?.where,
       attributes: fullAttributes,
       order: options?.order || [
@@ -195,16 +192,20 @@ export async function getSafeAwards(options?: {
         ["id", "ASC"],
       ],
       raw: true,
-      transaction: options?.transaction,
-    })) as any[];
+      transaction,
+    });
+    // PostgreSQL aborts a transaction after an undefined-column error. A
+    // savepoint lets the legacy-schema fallback keep the caller's work valid.
+    const rows = (options?.transaction
+      ? await sequelize.transaction({ transaction: options.transaction }, findRows)
+      : await findRows()) as any[];
 
     return rows.map((r) => enrichAwardRecord(r, masterByName));
   } catch (err: any) {
     const isBadFieldError =
       err?.name === "SequelizeDatabaseError" &&
-      (err?.original?.code === "ER_BAD_FIELD_ERROR" ||
-        err?.parent?.code === "ER_BAD_FIELD_ERROR" ||
-        String(err?.message || "").includes("Unknown column"));
+      (err?.original?.code === "42703" ||
+        err?.parent?.code === "42703");
 
     if (isBadFieldError) {
       console.warn(

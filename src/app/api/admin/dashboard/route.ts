@@ -41,7 +41,7 @@ export async function GET(request: Request) {
     `;
     const [totalHoursResult] = await sequelize.query(totalHoursQuery);
     const totalHoursSeconds =
-      (totalHoursResult[0] as { total: number | null })?.total || 0;
+      Number((totalHoursResult[0] as { total: number | string | null })?.total) || 0;
     const totalHours = formatFlightTime(totalHoursSeconds);
 
     // Compile all stats
