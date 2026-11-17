@@ -5,29 +5,17 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { format, parseISO } from "date-fns";
-import { motion } from "framer-motion";
 import {
   AlertCircle,
   CheckCircle2,
-  Clock,
   Loader2,
   PlaneIcon,
   RefreshCw,
-  ArrowRight,
   Calendar as CalendarIcon,
-  ShieldCheck,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import {
   Form,
   FormControl,
@@ -51,10 +39,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CrewHeader } from "@/components/crew-header";
-import { useRouter, useSearchParams } from "next/navigation";
-import { authFetch } from "@/lib/utils/api";
 import { AirlineLogo } from "@/components/airline-logo";
+import { CrewHeader } from "@/components/crew-header";
+import {
+  CrewCallsign,
+  CrewMeta,
+  CrewPageHeader,
+  CrewPanel,
+  CrewSector,
+} from "@/components/crew-ui";
+import { useRouter, useSearchParams } from "next/navigation";
+import { airportCity } from "@/lib/airports";
+import { useI18n } from "@/lib/i18n";
+import { authFetch } from "@/lib/utils/api";
 import { useSession } from "@/hooks/use-session";
 
 interface aircraft {
@@ -129,6 +126,7 @@ const acarsFieldLabels: Record<keyof FormValues, string> = {
 
 export default function FilePirep() {
   const { user } = useSession();
+  const { t } = useI18n();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingAcars, setIsFetchingAcars] = useState(false);
@@ -220,9 +218,13 @@ export default function FilePirep() {
   });
 
   const watchedValues = form.watch();
+  const sectorReady =
+    Boolean(watchedValues.departure) && Boolean(watchedValues.arrival);
   const selectedAircraft = originalAircraftData.find(
-    (item) => item.id === watchedValues.aircraftId,
+    (aircraft) => aircraft.id === watchedValues.aircraftId,
   );
+  const departureCity = airportCity(watchedValues.departure);
+  const arrivalCity = airportCity(watchedValues.arrival);
 
   useEffect(() => {
     if (isLoadingAircraft) return;
@@ -270,7 +272,7 @@ export default function FilePirep() {
       }
 
       form.reset();
-      router.push("/crew/view-pireps");
+      router.push("/crew/view-pireps?submitted=1");
     } catch (error) {
       console.error(error);
       setSubmitMessage(
@@ -387,7 +389,7 @@ export default function FilePirep() {
     return [
       baseClassName,
       acarsFilledFields.includes(fieldName)
-        ? "border-emerald-500/40 bg-emerald-500/5"
+        ? "bg-[var(--v2-state-bg-success,#e3fae1)]"
         : "",
     ]
       .filter(Boolean)
@@ -396,509 +398,467 @@ export default function FilePirep() {
 
   return (
     <CrewHeader>
-      <div className="space-y-5 pb-24 md:pb-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">File PIREP</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Submit a flight report manually or import active telemetry from
-              Infinite Flight ACARS.
-            </p>
-          </div>
-
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={fetchAcarsData}
-            disabled={
-              isFetchingAcars ||
-              isLoadingAircraft ||
-              Boolean(aircraftLoadError)
-            }
-          >
-            {isFetchingAcars || isLoadingAircraft ? (
-              <Loader2 className="mr-1.5 size-3.5 animate-spin" />
-            ) : (
-              <RefreshCw className="mr-1.5 size-3.5" />
-            )}
-            {isLoadingAircraft
-              ? "Loading aircraft"
-              : aircraftLoadError
-                ? "Aircraft unavailable"
-                : "Import ACARS"}
-          </Button>
-        </div>
-
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-4">
-          <SummaryCard
-            icon={PlaneIcon}
-            label="Selected sector"
-            value={
-              watchedValues.departure || watchedValues.arrival
-                ? `${(watchedValues.departure || "----").toUpperCase()} → ${(watchedValues.arrival || "----").toUpperCase()}`
-                : "Not set"
-            }
-          />
-          <SummaryCard
-            icon={Clock}
-            label="Block time"
-            value={watchedValues.flightTime || "00:00"}
-          />
-          <SummaryCard
-            icon={ShieldCheck}
-            label="Unlocked fleet"
-            value={isLoadingAircraft ? "—" : originalAircraftData.length}
-          />
-        </div>
-
-        <div className="grid gap-4 rounded-[6px] bg-[var(--v2-background-bg-layer-01,#fafafa)] px-4 py-3.5 md:grid-cols-[1fr_1.3fr_1fr]">
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <AirlineLogo
-                flightnum={watchedValues.flightnum}
-                liveryname={selectedAircraft?.liveryname}
-                className="h-4 w-auto max-w-[54px] shrink-0 object-contain"
-              />
-              <span className="font-mono text-lg font-semibold">
-                {watchedValues.flightnum || "CSN----"}
-              </span>
-              {acarsFilledFields.length > 0 && (
-                <Badge variant="default">ACARS linked</Badge>
-              )}
-            </div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {selectedAircraft
-                ? `${selectedAircraft.name}${selectedAircraft.liveryname ? ` · ${selectedAircraft.liveryname}` : ""}`
-                : "Select an unlocked aircraft below"}
-            </p>
-          </div>
-
-          <div className="space-y-1 text-sm">
-            <div className="flex items-center gap-2 font-medium">
-              <span className="font-mono text-base">
-                {(watchedValues.departure || "----").toUpperCase()}
-              </span>
-              <ArrowRight className="h-4 w-4 text-muted-foreground" />
-              <span className="font-mono text-base">
-                {(watchedValues.arrival || "----").toUpperCase()}
-              </span>
-              {watchedValues.flightTime && (
-                <span className="text-xs font-normal text-muted-foreground">
-                  ({watchedValues.flightTime})
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Flight date: {watchedValues.date || "Not selected"}
-              {watchedValues.fuelUsed
-                ? ` · Fuel: ${watchedValues.fuelUsed} kg`
-                : ""}
-            </p>
-          </div>
-
-          <div className="flex flex-col justify-between gap-2 md:items-end">
-            <div className="text-xs text-muted-foreground md:text-right">
-              {user?.name ? `${user.name} (${user.callsign})` : "Active pilot"}
-              {watchedValues.multi ? ` · Multiplier ${watchedValues.multi}` : ""}
-            </div>
-          </div>
-        </div>
-
-        <div>
-          {acarsMessage && (
-            <div
-              className={
-                acarsFilledFields.length > 0
-                  ? "mb-5 rounded-[6px] bg-emerald-500/10 px-4 py-3 text-sm text-emerald-900 dark:text-emerald-200"
-                  : "mb-5 rounded-[6px] bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200"
+      <div className="space-y-6 pb-24 md:pb-6">
+        <CrewPageHeader
+          title="File PIREP"
+          meta={
+            <CrewMeta
+              items={[
+                <CrewCallsign key="cs">
+                  {user?.callsign || "——"}
+                </CrewCallsign>,
+                isLoadingAircraft
+                  ? "Loading fleet"
+                  : `${originalAircraftData.length} unlocked aircraft`,
+                watchedValues.flightnum
+                  ? <span key="fn" className="font-mono tabular-nums">{watchedValues.flightnum}</span>
+                  : null,
+              ]}
+            />
+          }
+          actions={
+            <Button
+              type="button"
+              variant="outline"
+              onClick={fetchAcarsData}
+              disabled={
+                isFetchingAcars ||
+                isLoadingAircraft ||
+                Boolean(aircraftLoadError)
               }
             >
-              <div className="flex items-start gap-2.5">
-                {acarsFilledFields.length > 0 ? (
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+              {isFetchingAcars || isLoadingAircraft ? (
+                <Loader2 className="size-3.5 animate-spin" strokeWidth={1.5} />
+              ) : (
+                <RefreshCw className="size-3.5" strokeWidth={1.5} />
+              )}
+              {aircraftLoadError ? "Aircraft unavailable" : "Import ACARS"}
+            </Button>
+          }
+        />
+
+        <CrewSector
+          departure={watchedValues.departure || "————"}
+          arrival={watchedValues.arrival || "————"}
+          departureName={departureCity}
+          arrivalName={arrivalCity}
+          duration={watchedValues.flightTime || undefined}
+          durationHint={watchedValues.flightTime ? "Block time" : undefined}
+          size="lg"
+          eyebrow={
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+                {watchedValues.flightnum ? (
+                  <AirlineLogo
+                    flightnum={watchedValues.flightnum}
+                    liveryname={selectedAircraft?.liveryname}
+                    className="h-5 w-auto max-w-[72px] shrink-0 object-contain"
+                  />
+                ) : null}
+                {watchedValues.flightnum ? (
+                  <span className="font-mono text-[15px] font-medium tabular-nums text-[var(--v2-text-text-base,#171717)]">
+                    {watchedValues.flightnum}
+                  </span>
                 ) : (
-                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                  <span>Enter flight details to preview the sector</span>
                 )}
-                <div className="space-y-1">
-                  <p className="font-medium">{acarsMessage}</p>
-                  {acarsFilledFields.length > 0 && (
-                    <p className="text-xs opacity-80">
-                      Filled:{" "}
-                      {acarsFilledFields
-                        .map((fieldName) => acarsFieldLabels[fieldName])
-                        .join(", ")}
-                    </p>
-                  )}
-                  {acarsMissingFields.length > 0 && (
-                    <p className="text-xs opacity-80">
-                      Still needed:{" "}
-                      {acarsMissingFields
-                        .map((fieldName) => acarsFieldLabels[fieldName])
-                        .join(", ")}
-                    </p>
-                  )}
+                {sectorReady ? (
+                  <span className="text-[var(--v2-text-text-faint,#737373)]">
+                    · Active sector
+                  </span>
+                ) : null}
+              </div>
+              {watchedValues.date ? (
+                <span className="font-mono tabular-nums text-[var(--v2-text-text-muted,#525252)]">
+                  {watchedValues.date}
+                </span>
+              ) : null}
+            </div>
+          }
+          footer={
+            selectedAircraft || watchedValues.fuelUsed || user?.callsign ? (
+              <CrewMeta
+                className="mt-0"
+                items={[
+                  selectedAircraft
+                    ? [selectedAircraft.name, selectedAircraft.liveryname]
+                        .filter(Boolean)
+                        .join(" · ")
+                    : null,
+                  watchedValues.fuelUsed
+                    ? `Fuel ${watchedValues.fuelUsed} kg`
+                    : null,
+                  user?.callsign ? (
+                    <CrewCallsign key="cs">{user.callsign}</CrewCallsign>
+                  ) : null,
+                ]}
+              />
+            ) : undefined
+          }
+        />
+
+        {acarsMessage ? (
+          <div
+            className={
+              acarsFilledFields.length > 0
+                ? "rounded-[12px] bg-[var(--v2-state-bg-success,#e3fae1)] px-4 py-3 text-[13px] text-[var(--v2-state-fg-success,#196b2b)]"
+                : "rounded-[12px] bg-[var(--v2-state-bg-warning,#fcefd0)] px-4 py-3 text-[13px] text-[var(--v2-state-fg-warning,#8e6518)]"
+            }
+          >
+            <div className="flex items-start gap-2.5">
+              {acarsFilledFields.length > 0 ? (
+                <CheckCircle2
+                  className="mt-0.5 size-4 shrink-0"
+                  strokeWidth={1.5}
+                />
+              ) : (
+                <AlertCircle
+                  className="mt-0.5 size-4 shrink-0"
+                  strokeWidth={1.5}
+                />
+              )}
+              <div className="space-y-1">
+                <p className="font-medium">{acarsMessage}</p>
+                {acarsFilledFields.length > 0 ? (
+                  <p className="text-[12px] opacity-80">
+                    Filled:{" "}
+                    {acarsFilledFields
+                      .map((fieldName) => acarsFieldLabels[fieldName])
+                      .join(", ")}
+                  </p>
+                ) : null}
+                {acarsMissingFields.length > 0 ? (
+                  <p className="text-[12px] opacity-80">
+                    Still needed:{" "}
+                    {acarsMissingFields
+                      .map((fieldName) => acarsFieldLabels[fieldName])
+                      .join(", ")}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {submitMessage ? (
+          <div className="rounded-[12px] bg-[var(--v2-state-bg-danger,#fceceb)] px-4 py-3 text-[13px] text-[var(--v2-state-fg-danger,#c8102e)]">
+            {submitMessage}
+          </div>
+        ) : null}
+
+        <Form {...form}>
+          <form
+            onSubmit={form.handleSubmit(onSubmit)}
+            className="space-y-8"
+          >
+            <CrewPanel title="Sector details">
+              <div className="space-y-4 rounded-[16px] bg-[var(--v2-background-bg-layer-01,#f7f8fa)] p-5">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="flightnum"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Flight number</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="CZ3101"
+                            className={fieldClass(
+                              "flightnum",
+                              "font-mono tabular-nums",
+                            )}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="date"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Date</FormLabel>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className={fieldClass(
+                                "date",
+                                "w-full justify-between font-mono tabular-nums text-left",
+                              )}
+                            >
+                              <span>
+                                {field.value ? field.value : "Pick a date"}
+                              </span>
+                              <CalendarIcon
+                                className="size-4 opacity-60"
+                                strokeWidth={1.5}
+                              />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar
+                              mode="single"
+                              selected={
+                                field.value ? parseISO(field.value) : undefined
+                              }
+                              onSelect={(date) => {
+                                if (date) {
+                                  field.onChange(format(date, "yyyy-MM-dd"));
+                                }
+                              }}
+                              disabled={(date) =>
+                                date > new Date() ||
+                                date < new Date("1900-01-01")
+                              }
+                            />
+                          </PopoverContent>
+                        </Popover>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="departure"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Departure</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="ZGGG"
+                            className={fieldClass(
+                              "departure",
+                              "font-mono uppercase tabular-nums",
+                            )}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="arrival"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Arrival</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="ZBAA"
+                            className={fieldClass(
+                              "arrival",
+                              "font-mono uppercase tabular-nums",
+                            )}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="flightTime"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Block time</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="02:55"
+                            className={fieldClass(
+                              "flightTime",
+                              "font-mono tabular-nums",
+                            )}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="fuelUsed"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Fuel used (kg)</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="12850"
+                            className={fieldClass(
+                              "fuelUsed",
+                              "font-mono tabular-nums",
+                            )}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
               </div>
-            </div>
-          )}
+            </CrewPanel>
 
-          {submitMessage && (
-            <div className="mb-5 rounded-[6px] bg-red-500/10 px-4 py-3 text-sm text-red-700">
-              {submitMessage}
-            </div>
-          )}
-
-          <Form {...form}>
-            <form
-              onSubmit={form.handleSubmit(onSubmit)}
-              className="space-y-5"
-            >
-              <div className="grid gap-5 lg:grid-cols-2">
-                <Card>
-                  <CardHeader className="p-4 pb-2">
-                    <CardTitle className="text-sm font-semibold">
-                      Sector & Telemetry
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="grid grid-cols-1 gap-4 p-4 pt-2 sm:grid-cols-2">
-                    <FormField
-                      control={form.control}
-                      name="flightnum"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Flight Number (Not Callsign)</FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder="CZ3101"
-                              className={fieldClass(
-                                "flightnum",
-                                "font-mono tabular-nums",
-                              )}
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="date"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Flight Date</FormLabel>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="outline"
-                                className={fieldClass(
-                                  "date",
-                                  "w-full justify-between font-mono tabular-nums text-left",
-                                )}
-                              >
-                                <span>
-                                  {field.value ? field.value : "Pick a date"}
-                                </span>
-                                <CalendarIcon className="size-4 opacity-60" />
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0">
-                              <Calendar
-                                mode="single"
-                                selected={
-                                  field.value
-                                    ? parseISO(field.value)
-                                    : undefined
-                                }
-                                onSelect={(date) => {
-                                  if (date) {
-                                    field.onChange(format(date, "yyyy-MM-dd"));
-                                  }
-                                }}
-                                disabled={(date) =>
-                                  date > new Date() ||
-                                  date < new Date("1900-01-01")
-                                }
-                              />
-                            </PopoverContent>
-                          </Popover>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="departure"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Departure ICAO</FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder="ZGGG"
-                              className={fieldClass(
-                                "departure",
-                                "font-mono uppercase tabular-nums",
-                              )}
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="arrival"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Arrival ICAO</FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder="ZBAA"
-                              className={fieldClass(
-                                "arrival",
-                                "font-mono uppercase tabular-nums",
-                              )}
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="flightTime"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Flight Time (HH:MM)</FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder="02:55"
-                              className={fieldClass(
-                                "flightTime",
-                                "font-mono tabular-nums",
-                              )}
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="fuelUsed"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Fuel Used (KG)</FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder="12850"
-                              className={fieldClass(
-                                "fuelUsed",
-                                "font-mono tabular-nums",
-                              )}
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="p-4 pb-2">
-                    <CardTitle className="text-sm font-semibold">
-                      Aircraft & Dispatch Remarks
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4 p-4 pt-2">
-                    <FormField
-                      control={form.control}
-                      name="aircraftId"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Aircraft</FormLabel>
-                          <Select
-                            onValueChange={field.onChange}
-                            value={field.value}
+            <CrewPanel title="Aircraft and remarks">
+              <div className="grid grid-cols-1 gap-4 rounded-[16px] bg-[var(--v2-background-bg-layer-01,#f7f8fa)] p-5 sm:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="aircraftId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Type</FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger
+                            className={fieldClass("aircraftId", "w-full")}
                           >
-                            <FormControl>
-                              <div className="grid gap-2 sm:grid-cols-[1.3fr_1fr]">
-                                <SelectTrigger
-                                  className={fieldClass("aircraftId", "w-full")}
-                                >
-                                  <SelectValue
-                                    placeholder={
-                                      originalAircraftData.find(
-                                        (aircraft: { id: string }) =>
-                                          aircraft.id === field.value,
-                                      )?.name || "Select aircraft.."
-                                    }
-                                  />
-                                </SelectTrigger>
-
-                                <Input
-                                  placeholder="Filter aircraft fleet..."
-                                  onChange={(e) => {
-                                    const searchTerm =
-                                      e.target.value.toLowerCase();
-                                    const filtered =
-                                      originalAircraftData.filter(
-                                        (aircraft) =>
-                                          aircraft.name
-                                            .toLowerCase()
-                                            .includes(searchTerm) ||
-                                          aircraft.liveryname
-                                            ?.toLowerCase()
-                                            .includes(searchTerm),
-                                      );
-                                    setFilteredAircraftData(filtered);
-                                  }}
-                                />
-                              </div>
-                            </FormControl>
-                            <SelectContent className="max-h-[220px] overflow-y-auto">
-                              {isLoadingAircraft && (
-                                <div className="flex h-10 items-center justify-center">
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                </div>
-                              )}
-                              {filteredAircraftData.map((aircraft) => (
-                                <SelectItem
-                                  key={aircraft.id}
-                                  value={"" + aircraft.id}
-                                >
-                                  {aircraft.name} - {aircraft.liveryname}
-                                  {aircraft.notes && (
-                                    <span className="block text-xs text-muted-foreground">
-                                      Notes: {aircraft.notes}
-                                    </span>
-                                  )}
-                                </SelectItem>
-                              ))}
-                              {!isLoadingAircraft &&
-                                filteredAircraftData.length === 0 && (
-                                  <div className="p-3 text-sm text-muted-foreground">
-                                    No aircraft are available for your rank or
-                                    awards.
-                                  </div>
-                                )}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="multi"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Multiplier Code (Optional)</FormLabel>
-                          <FormControl>
+                            <SelectValue placeholder="Select aircraft" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="max-h-[220px] overflow-y-auto">
+                          <div className="sticky top-0 z-10 bg-white p-1">
                             <Input
-                              placeholder="1001"
-                              className={fieldClass(
-                                "multi",
-                                "font-mono tabular-nums",
-                              )}
-                              {...field}
+                              placeholder="Filter"
+                              onKeyDown={(event) => {
+                                // Keep typing and caret movement out of Select's typeahead.
+                                if (!["ArrowUp", "ArrowDown", "Escape", "Tab"].includes(event.key)) {
+                                  event.stopPropagation();
+                                }
+                              }}
+                              onChange={(e) => {
+                                const searchTerm =
+                                  e.target.value.toLowerCase();
+                                setFilteredAircraftData(
+                                  originalAircraftData.filter(
+                                    (aircraft) =>
+                                      aircraft.name
+                                        .toLowerCase()
+                                        .includes(searchTerm) ||
+                                      aircraft.liveryname
+                                        ?.toLowerCase()
+                                        .includes(searchTerm),
+                                  ),
+                                );
+                              }}
                             />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="notes"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Notes (Optional)</FormLabel>
-                          <FormControl>
-                            <Textarea
-                              placeholder="Add any details for the PIREP review team..."
-                              rows={3}
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormDescription>
-                            Your notes will be posted as the first comment on
-                            this PIREP.
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </CardContent>
-                </Card>
-              </div>
-
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <span className="text-xs text-muted-foreground">
-                  All flight times are recorded in hours:minutes format.
-                </span>
-                <Button
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-full sm:w-auto"
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                      Submitting...
-                    </>
-                  ) : (
-                    <>
-                      <PlaneIcon className="mr-1.5 h-3.5 w-3.5" />
-                      Submit PIREP
-                    </>
+                          </div>
+                          {isLoadingAircraft ? (
+                            <div className="flex h-10 items-center justify-center">
+                              <Loader2 className="size-4 animate-spin" />
+                            </div>
+                          ) : null}
+                          {filteredAircraftData.map((aircraft) => (
+                            <SelectItem
+                              key={aircraft.id}
+                              value={"" + aircraft.id}
+                            >
+                              {aircraft.name}
+                              {aircraft.liveryname
+                                ? ` · ${aircraft.liveryname}`
+                                : ""}
+                            </SelectItem>
+                          ))}
+                          {!isLoadingAircraft &&
+                          filteredAircraftData.length === 0 ? (
+                            <div className="p-3 text-[13px] text-[var(--v2-text-text-muted,#525252)]">
+                              No aircraft available for your rank
+                            </div>
+                          ) : null}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
                   )}
-                </Button>
+                />
+
+                <FormField
+                  control={form.control}
+                  name="multi"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Multiplier</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="Optional"
+                          className={fieldClass(
+                            "multi",
+                            "font-mono tabular-nums",
+                          )}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="notes"
+                  render={({ field }) => (
+                    <FormItem className="sm:col-span-2">
+                      <FormLabel>Notes</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder="Optional remarks for reviewers"
+                          rows={3}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Posted as the first comment on this PIREP
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
-            </form>
-          </Form>
-        </div>
+            </CrewPanel>
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <p className="max-w-xl text-[12px] leading-relaxed text-[var(--v2-text-text-faint,#737373)]">
+                {t(
+                  "Review usually takes about 48 hours. Keep flying and file more PIREPs while you wait — no need to pause.",
+                  "审核通常约需 48 小时。期间可照常飞行并继续提交飞行报告，无需等待。",
+                )}
+              </p>
+              <Button type="submit" disabled={isLoading} className="shrink-0">
+                {isLoading ? (
+                  <>
+                    <Loader2
+                      className="size-3.5 animate-spin"
+                      strokeWidth={1.5}
+                    />
+                    {t("Submitting", "提交中")}
+                  </>
+                ) : (
+                  <>
+                    <PlaneIcon className="size-3.5" strokeWidth={1.5} />
+                    {t("Submit PIREP", "提交飞行报告")}
+                  </>
+                )}
+              </Button>
+            </div>
+          </form>
+        </Form>
       </div>
     </CrewHeader>
-  );
-}
-
-function SummaryCard({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: typeof PlaneIcon;
-  label: string;
-  value: number | string;
-}) {
-  return (
-    <Card>
-      <CardContent className="flex items-center gap-3 p-3 sm:p-4">
-        <div className="shrink-0 rounded-md bg-[#eef4fb] p-2 text-[#0052a5]">
-          <Icon className="h-4 w-4" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="break-words font-mono text-lg font-semibold leading-tight tabular-nums sm:text-xl">
-            {value}
-          </p>
-          <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
-            {label}
-          </p>
-        </div>
-      </CardContent>
-    </Card>
   );
 }

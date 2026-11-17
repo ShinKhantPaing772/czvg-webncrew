@@ -2,22 +2,18 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   ArrowRight,
   Award,
-  CalendarClock,
   CheckCircle2,
-  Clock,
-  ImageOff,
   Loader2,
   Lock,
+  Medal,
   Plane,
   Plus,
   RefreshCw,
-  Sparkles,
 } from "lucide-react";
 
 import {
@@ -26,6 +22,15 @@ import {
   TrendChart,
 } from "@/components/admin/dashboard-charts";
 import { CrewHeader } from "@/components/crew-header";
+import {
+  CrewCallsign,
+  CrewEmpty,
+  CrewFlightRow,
+  CrewMeta,
+  CrewPageHeader,
+  CrewPanel,
+  CrewStat,
+} from "@/components/crew-ui";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -133,34 +138,17 @@ type DashboardData = {
 };
 
 function SummaryCard({
-  icon,
   label,
   value,
   hint,
+  accent = false,
 }: {
-  icon: ReactNode;
   label: string;
   value: string | number;
   hint?: string;
+  accent?: boolean;
 }) {
-  return (
-    <Card className="group relative overflow-hidden transition-all">
-      <CardContent className="relative z-10 flex items-center gap-3 p-3 sm:p-4">
-        <span
-          className="hidden rounded-md bg-[#eef4fb] p-2 text-[#0052a5] sm:block"
-        >
-          {icon}
-        </span>
-        <div>
-          <p className="text-xl font-semibold sm:text-2xl">{value}</p>
-          <p className="text-xs text-muted-foreground">{label}</p>
-          {hint && (
-            <p className="text-[11px] text-muted-foreground">{hint}</p>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  );
+  return <CrewStat label={label} value={value} hint={hint} accent={accent} />;
 }
 
 function StatusBadge({ status }: { status: number }) {
@@ -227,10 +215,10 @@ function AwardArtwork({
         width={size}
         height={size}
         unoptimized
-        className={`shrink-0 object-contain transition-all duration-200 ${
+        className={`shrink-0 object-contain transition-[opacity,filter] duration-150 ${
           grayscale
             ? "grayscale opacity-40 brightness-75 contrast-75"
-            : "drop-shadow-sm"
+            : ""
         }`}
         style={{ width: `${size}px`, height: `${size}px` }}
       />
@@ -386,37 +374,41 @@ export default function UserDashboard() {
 
         {!sessionLoading && !loading && user && dashboard && (
           <>
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="text-2xl font-bold">{user.name}</h1>
-                </div>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {dashboard.rank.next
-                    ? `${user.callsign} · ${dashboard.rank.current.name} · ${dashboard.rank.next.remainingFormatted} remaining to ${dashboard.rank.next.name}`
-                    : `${user.callsign} · ${dashboard.rank.current.name} · Top rank achieved`}
-                </p>
-              </div>
-
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => void fetchDashboard(true)}
-                  disabled={refreshing}
-                  aria-label="Refresh dashboard"
-                >
-                  <RefreshCw
-                    className={"h-4 w-4 " + (refreshing ? "animate-spin" : "")}
-                  />
-                </Button>
-                <Button asChild>
-                  <Link href="/crew/file-pirep">
-                    <Plus className="mr-1 h-4 w-4" />
-                    File PIREP
-                  </Link>
-                </Button>
-              </div>
-            </div>
+            <CrewPageHeader
+              title={t("Dashboard", "飞行员主页")}
+              meta={
+                <CrewMeta
+                  items={[
+                    <CrewCallsign key="cs">{user.callsign}</CrewCallsign>,
+                    user.name,
+                    dashboard.rank.next
+                      ? `${dashboard.rank.current.name} · ${dashboard.rank.next.remainingFormatted} to ${dashboard.rank.next.name}`
+                      : `${dashboard.rank.current.name} · Top rank`,
+                  ]}
+                />
+              }
+              actions={
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={() => void fetchDashboard(true)}
+                    disabled={refreshing}
+                    aria-label="Refresh dashboard"
+                  >
+                    <RefreshCw
+                      className={"h-4 w-4 " + (refreshing ? "animate-spin" : "")}
+                      strokeWidth={1.5}
+                    />
+                  </Button>
+                  <Button asChild>
+                    <Link href="/crew/file-pirep">
+                      <Plus className="h-4 w-4" strokeWidth={1.5} />
+                      File PIREP
+                    </Link>
+                  </Button>
+                </>
+              }
+            />
 
             {dashboard.statistics.recentRejectedPireps > 0 && (
               <div
@@ -434,12 +426,11 @@ export default function UserDashboard() {
               </div>
             )}
 
-            {/* Summary Metric Row */}
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <SummaryCard
-                icon={<Clock className="h-4 w-4" />}
                 label="Total flight time"
                 value={dashboard.statistics.totalFlightTime}
+                accent
                 hint={
                   dashboard.statistics.transferFlightSeconds
                     ? t(
@@ -450,17 +441,14 @@ export default function UserDashboard() {
                 }
               />
               <SummaryCard
-                icon={<CheckCircle2 className="h-4 w-4" />}
                 label="Approved PIREPs"
                 value={dashboard.statistics.approvedPireps}
               />
               <SummaryCard
-                icon={<CalendarClock className="h-4 w-4" />}
                 label="Pending PIREPs"
                 value={dashboard.statistics.pendingPireps}
               />
               <SummaryCard
-                icon={<Award className="h-4 w-4" />}
                 label={
                   dashboard.rank.next
                     ? `Next: ${dashboard.rank.next.name}`
@@ -483,152 +471,112 @@ export default function UserDashboard() {
               {/* Tab 1: Fused Analytics + Recent Flights (Clean 2-Column Row + Flight List) */}
               <TabsContent value="overview" className="space-y-6">
                 {chartMetrics && (
-                  <section className="grid items-start gap-10 lg:grid-cols-2">
-                    <div>
-                      <div className="mb-3 flex items-center justify-between">
-                        <h2 className="text-sm font-medium">
-                          Recent Flight Time
+                  <div className="grid items-stretch gap-4 lg:grid-cols-[1.4fr_1fr]">
+                    <div className="rounded-[16px] bg-[var(--v2-background-bg-layer-01,#f7f8fa)] p-5">
+                      <div className="mb-4 flex items-center justify-between">
+                        <h2 className="text-[13px] font-medium text-[var(--v2-text-text-muted,#525252)]">
+                          Recent flight time
                         </h2>
-                        <span className="text-xs text-muted-foreground">
-                          {`Latest ${chartMetrics.trendData.length} sectors`}
+                        <span className="font-mono text-[12px] tabular-nums text-[var(--v2-text-text-faint,#737373)]">
+                          {`Latest ${chartMetrics.trendData.length}`}
                         </span>
                       </div>
                       <TrendChart
                         data={chartMetrics.trendData}
                         dataKey="hours"
-                        className="h-[172px]"
+                        className="h-[200px]"
                       />
                     </div>
 
-                    <div>
-                      <div className="mb-3 flex items-center justify-between">
-                        <h2 className="text-sm font-medium">
-                          Most Flown Aircraft
+                    <div className="rounded-[16px] bg-[var(--v2-background-bg-layer-01,#f7f8fa)] p-5">
+                      <div className="mb-4 flex items-center justify-between">
+                        <h2 className="text-[13px] font-medium text-[var(--v2-text-text-muted,#525252)]">
+                          Most flown aircraft
                         </h2>
-                        <span className="text-xs text-muted-foreground">
-                          {`Latest ${chartMetrics.latestSectorCount} sectors`}
+                        <span className="font-mono text-[12px] tabular-nums text-[var(--v2-text-text-faint,#737373)]">
+                          {`Latest ${chartMetrics.latestSectorCount}`}
                         </span>
                       </div>
                       <BarList data={chartMetrics.topAircraft} />
                     </div>
-                  </section>
+                  </div>
                 )}
 
-                {/* Part B: Recent Flights List (Live aircraft scheduling style) */}
-                <section className="space-y-3">
+                <CrewPanel title="Recent sectors">
                   <Input
                     aria-label="Search recent flights"
-                    placeholder="Search route, flight number, or aircraft"
+                    placeholder="Search"
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
                   />
 
                   {visibleFlights.length === 0 ? (
-                    <div className="rounded-[6px] bg-[var(--v2-background-bg-layer-01,#fafafa)] px-6 py-10 text-center">
-                      <Plane className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
-                      <p className="text-[13px] font-medium">
-                        No flights to show
-                      </p>
-                      <p className="mt-1 text-[12px] text-muted-foreground">
-                        Try another search, or file a new PIREP.
-                      </p>
-                    </div>
+                    <CrewEmpty
+                      title="No flights to show"
+                      description="Try another search, or file a new PIREP"
+                      action={
+                        <Button asChild>
+                          <Link href="/crew/file-pirep">File PIREP</Link>
+                        </Button>
+                      }
+                    />
                   ) : (
-                    <div className="space-y-1.5">
+                    <div className="space-y-2">
                       {visibleFlights.map((flight) => (
-                        <Card key={flight.id}>
-                          <Link
-                            href={buildReflyHref(flight)}
-                            className="grid w-full gap-4 rounded-[6px] bg-[var(--v2-background-bg-layer-01,#fafafa)] px-4 py-3.5 text-left transition-colors hover:bg-[var(--v2-background-bg-layer-02,#f2f2f2)] focus-visible:outline-none md:grid-cols-[1fr_1.3fr_1fr]"
-                          >
-                            <div>
-                              <div className="mb-2 flex flex-wrap items-center gap-2">
-                                <AirlineLogo
-                                  flightnum={flight.flightnum}
-                                  liveryname={flight.aircraft?.liveryname}
-                                  className="h-4 w-auto max-w-[54px] shrink-0 object-contain"
-                                />
-                                <span className="font-semibold">
-                                  {flight.flightnum}
-                                </span>
-                                <StatusBadge status={flight.status} />
-                              </div>
-                              <p className="text-sm text-muted-foreground">
-                                {flight.aircraft?.name || "Fleet aircraft"}
-                                {flight.aircraft?.liveryname
-                                  ? ` · ${flight.aircraft.liveryname}`
-                                  : ""}
-                              </p>
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                Logged {formatUtcDate(flight.date)}
-                              </p>
-                            </div>
-
-                            <div>
-                              <div className="flex items-center gap-3 text-xl font-semibold tracking-tight">
-                                <span>{flight.departure}</span>
-                                <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                                <span>{flight.arrival}</span>
-                              </div>
-                              <p className="mt-2 text-xs text-muted-foreground">
-                                Block duration {flight.flighttime}
-                              </p>
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                Date {flight.date}
-                              </p>
-                            </div>
-
-                            <div className="space-y-2 md:text-right">
-                              <p className="text-sm">
-                                {user.name}
-                                <span className="ml-1 text-xs text-muted-foreground">
-                                  {user.callsign}
-                                </span>
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {dashboard.rank.current.name}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                Click to file again
-                              </p>
-                            </div>
-                          </Link>
-                        </Card>
+                        <CrewFlightRow
+                          key={flight.id}
+                          href={buildReflyHref(flight)}
+                          flightnum={flight.flightnum}
+                          liveryname={flight.aircraft?.liveryname}
+                          badge={<StatusBadge status={flight.status} />}
+                          subtitle={flight.aircraft?.name || "Fleet aircraft"}
+                          departure={flight.departure}
+                          arrival={flight.arrival}
+                          duration={flight.flighttime}
+                          routeMeta={formatUtcDate(flight.date)}
+                          trailing={
+                            <span className="text-[12px] text-[#0052a5]">
+                              File again
+                            </span>
+                          }
+                        />
                       ))}
                     </div>
                   )}
-                </section>
+                </CrewPanel>
               </TabsContent>
 
               {/* Tab 2: Awards & Rank */}
               <TabsContent value="awards" className="space-y-6">
                 {/* 1. Technical Rank Progression */}
-                <div className="rounded-[8px] border border-border/40 bg-[var(--v2-background-bg-layer-01,#fafafa)] p-4 shadow-sm dark:bg-card">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="relative overflow-hidden rounded-[16px] bg-[var(--v2-background-bg-layer-01,#f7f8fa)] p-5">
+                  <div
+                    aria-hidden
+                    className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_80%_at_100%_0%,rgba(0,82,165,0.08),transparent_55%)]"
+                  />
+                  <div className="relative flex flex-wrap items-end justify-between gap-3">
                     <div>
-                      <div className="flex items-center gap-2">
-                        <p className="font-semibold text-foreground">
-                          {dashboard.rank.current.name}
-                        </p>
-                        <Badge variant="outline" className="text-xs">
-                          {t("Pilot Rank", "技术职级")}
-                        </Badge>
-                      </div>
-                      <p className="mt-1 text-xs text-muted-foreground">
+                      <p className="text-[12px] text-[var(--v2-text-text-muted,#525252)]">
+                        {t("Pilot Rank", "技术职级")}
+                      </p>
+                      <p className="mt-1 text-[20px] font-medium text-[var(--v2-text-text-base,#171717)]">
+                        {dashboard.rank.current.name}
+                      </p>
+                      <p className="mt-1 text-[12px] text-[var(--v2-text-text-faint,#737373)]">
                         {dashboard.rank.next
                           ? locale === "zh"
                             ? `距离晋升至 ${dashboard.rank.next.name} 还需 ${dashboard.rank.next.remainingFormatted}（要求 ${dashboard.rank.next.timeReqFormatted}）`
-                            : `${dashboard.rank.next.remainingFormatted} remaining to reach ${dashboard.rank.next.name} (${dashboard.rank.next.timeReqFormatted} required)`
+                            : `${dashboard.rank.next.remainingFormatted} remaining to ${dashboard.rank.next.name} (${dashboard.rank.next.timeReqFormatted} required)`
                           : t("Maximum pilot rank achieved", "已达成最高飞行职级")}
                       </p>
                     </div>
-                    <Badge variant="default" className="text-xs">
+                    <p className="font-mono text-[28px] font-medium tabular-nums text-[#0052a5]">
                       {Math.round(dashboard.rank.progressToNextRank)}%
-                    </Badge>
+                    </p>
                   </div>
                   <Progress
                     value={dashboard.rank.progressToNextRank}
-                    className="mt-3 h-2"
+                    className="relative mt-4 h-1.5"
                   />
                 </div>
 
@@ -636,40 +584,41 @@ export default function UserDashboard() {
                 {dashboard.awards?.overview ? (
                   <div className="space-y-4">
                     {/* Collection Overview Banner */}
-                    <div className="rounded-[8px] border border-border/40 bg-[var(--v2-background-bg-layer-01,#fafafa)] p-4 shadow-sm dark:bg-card">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="flex items-center gap-2.5">
-                          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary">
-                            <Sparkles className="h-5 w-5" />
-                          </span>
+                    <div className="rounded-[16px] bg-[var(--v2-background-bg-layer-01,#f7f8fa)] p-5">
+                      <div className="flex flex-wrap items-end justify-between gap-3">
+                        <div className="flex items-start gap-3">
+                          <Medal
+                            className="mt-0.5 size-4 shrink-0 text-[var(--v2-icon-icon-muted,#737373)]"
+                            strokeWidth={1.5}
+                          />
                           <div>
-                            <h3 className="font-semibold text-foreground">
+                            <h3 className="text-[16px] font-medium text-[var(--v2-text-text-base,#171717)]">
                               {t("Achievement Wall", "飞行成就勋章墙")}
                             </h3>
-                            <p className="text-xs text-muted-foreground">
+                            <p className="mt-1 text-[12px] text-[var(--v2-text-text-faint,#737373)]">
                               {locale === "zh"
-                                ? `已解锁 ${dashboard.awards.overview.totalUnlocked} / 共 ${dashboard.awards.overview.totalAvailable} 枚勋章 (${dashboard.awards.overview.unlockPercentage}%)`
-                                : `${dashboard.awards.overview.totalUnlocked} of ${dashboard.awards.overview.totalAvailable} Medals Unlocked (${dashboard.awards.overview.unlockPercentage}%)`}
+                                ? `已解锁 ${dashboard.awards.overview.totalUnlocked} / 共 ${dashboard.awards.overview.totalAvailable} 枚勋章`
+                                : `${dashboard.awards.overview.totalUnlocked} of ${dashboard.awards.overview.totalAvailable} medals unlocked`}
                             </p>
                           </div>
                         </div>
 
-                        <Badge
-                          variant="secondary"
-                          className="font-mono text-xs font-semibold"
-                        >
-                          {dashboard.awards.overview.totalUnlocked} /{" "}
-                          {dashboard.awards.overview.totalAvailable}
-                        </Badge>
+                        <p className="font-mono text-[20px] font-medium tabular-nums text-[#0052a5]">
+                          {dashboard.awards.overview.totalUnlocked}
+                          <span className="text-[var(--v2-text-text-faint,#737373)]">
+                            {" "}
+                            / {dashboard.awards.overview.totalAvailable}
+                          </span>
+                        </p>
                       </div>
 
                       <Progress
                         value={dashboard.awards.overview.unlockPercentage}
-                        className="mt-3.5 h-2"
+                        className="mt-4 h-1.5"
                       />
 
-                      {/* Category Filter Chips */}
-                      <div className="mt-4 flex flex-wrap gap-1.5 border-t border-border/30 pt-3">
+                      {/* Category Filter */}
+                      <div className="mt-4 flex flex-wrap gap-1 border-t border-black/[0.06] pt-3">
                         {[
                           { key: "all", label: t("All", "全部") },
                           { key: "milestone", label: t("Milestones", "飞行里程碑") },
@@ -691,18 +640,18 @@ export default function UserDashboard() {
                               key={cat.key}
                               type="button"
                               onClick={() => setAwardCategory(cat.key)}
-                              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-all ${
+                              className={`inline-flex h-8 items-center gap-2 rounded-[8px] px-2.5 text-[12px] font-medium transition-colors duration-150 ${
                                 isActive
-                                  ? "bg-primary text-primary-foreground shadow-sm"
-                                  : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground"
+                                  ? "bg-[#0052a5] text-white"
+                                  : "text-[var(--v2-text-text-muted,#525252)] hover:bg-[rgba(0,0,0,0.04)] hover:text-[var(--v2-text-text-base,#171717)]"
                               }`}
                             >
                               <span>{cat.label}</span>
                               <span
-                                className={`rounded-full px-1.5 py-0.2 text-[10px] ${
+                                className={`font-mono tabular-nums ${
                                   isActive
-                                    ? "bg-primary-foreground/20 text-primary-foreground"
-                                    : "bg-muted text-muted-foreground"
+                                    ? "text-white/80"
+                                    : "text-[var(--v2-text-text-faint,#737373)]"
                                 }`}
                               >
                                 {count}
@@ -735,10 +684,10 @@ export default function UserDashboard() {
                           return (
                             <div
                               key={badge.id}
-                              className={`relative flex flex-col justify-between rounded-[8px] border p-4 transition-all ${
+                              className={`relative flex flex-col justify-between rounded-[12px] p-4 transition-[background-color,opacity] duration-150 ${
                                 badge.isUnlocked
-                                  ? "border-primary/30 bg-card shadow-sm hover:border-primary/50"
-                                  : "border-border/40 bg-muted/20 opacity-75 hover:opacity-90"
+                                  ? "bg-[var(--v2-background-bg-layer-01,#f7f8fa)] hover:bg-[var(--v2-background-bg-layer-02,#eef0f3)]"
+                                  : "bg-[var(--v2-background-bg-layer-01,#f7f8fa)] opacity-70 hover:opacity-90"
                               }`}
                             >
                               <div className="flex items-start gap-3.5">
@@ -810,7 +759,7 @@ export default function UserDashboard() {
                                         "官方特殊表彰",
                                       )}
                                     </span>
-                                    <span className="text-[11px] italic">
+                                    <span className="text-[11px] text-[var(--v2-text-text-faint,#737373)]">
                                       {t(
                                         "Admin grant required",
                                         "需管理员授予",

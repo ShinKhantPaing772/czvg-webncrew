@@ -18,7 +18,7 @@ const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
         data-slot="input"
         onKeyDown={handleKeyDown}
         className={cn(
-          "flex h-8 w-full min-w-0 rounded-[6px] border-0 bg-[#eef4fb] px-2.5 py-1 text-[13px] text-[var(--v2-text-text-base,#161616)] placeholder:text-[var(--v2-text-text-faint,#808080)] transition-[background-color,box-shadow] duration-120 outline-none hover:bg-[#dfeaf8] focus-visible:bg-[#eef4fb] focus-visible:shadow-[0_0_0_1px_rgba(0,58,116,0.25)] disabled:pointer-events-none disabled:opacity-50",
+          "flex h-8 w-full min-w-0 rounded-[8px] border-0 bg-[var(--v2-background-bg-layer-02,#eef0f3)] px-2.5 py-1 text-[13px] text-[var(--v2-text-text-base,#171717)] placeholder:text-[var(--v2-text-text-faint,#737373)] transition-[background-color,box-shadow] duration-150 outline-none hover:bg-[var(--v2-background-bg-layer-03,#e4e6ea)] focus-visible:bg-[var(--v2-background-bg-layer-02,#eef0f3)] focus-visible:shadow-[0_0_0_1px_rgba(0,82,165,0.35)] disabled:pointer-events-none disabled:opacity-50",
           className
         )}
         {...props}

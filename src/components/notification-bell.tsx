@@ -85,8 +85,8 @@ function NotificationGlyph({ notification }: { notification: PilotNotification }
 
   const Icon = notification.kind === "award" ? Award : Bell;
   return (
-    <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#0052a5]/[0.08] text-[#0052a5]">
-      <Icon className="size-4" />
+    <span className="flex size-9 shrink-0 items-center justify-center rounded-[8px] bg-[var(--v2-background-bg-layer-02,#eef0f3)] text-[var(--v2-icon-icon-muted,#737373)]">
+      <Icon className="size-4" strokeWidth={1.5} />
     </span>
   );
 }
@@ -111,8 +111,8 @@ function NotificationRow({
           <span
             className={`min-w-0 flex-1 break-words text-[13px] leading-5 ${
               unread
-                ? "font-semibold text-[var(--v2-text-text-base,#0f172a)]"
-                : "font-medium text-[var(--v2-text-text-muted,#475569)]"
+                ? "font-medium text-[var(--v2-text-text-base,#171717)]"
+                : "font-medium text-[var(--v2-text-text-muted,#525252)]"
             }`}
           >
             {title}
@@ -123,7 +123,7 @@ function NotificationRow({
             </span>
           )}
         </span>
-        <span className="mt-0.5 block break-words text-[12px] leading-[18px] text-[var(--v2-text-text-muted,#475569)]">
+        <span className="mt-0.5 block break-words text-[12px] leading-[18px] text-[var(--v2-text-text-muted,#525252)]">
           {body}
         </span>
         {when && (

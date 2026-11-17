@@ -670,6 +670,72 @@ export const EN_TO_ZH_PHRASES: Record<string, string> = {
   "需管理员授予": "由管理员特许授予",
 
   // File PIREP Page
+  "Review usually takes about 48 hours. Keep flying and file more PIREPs while you wait — no need to pause.":
+    "审核通常约需 48 小时。期间可照常飞行并继续提交飞行报告，无需等待。",
+  "PIREP submitted": "飞行报告已提交",
+  Dismiss: "知道了",
+  Submitting: "提交中",
+
+  // Crew UI polish — page headers, sector cards, scheduling form
+  "Search the CZVG network and open a PIREP":
+    "检索 CZVG 航线网络并申报飞行报告",
+  "Submitted reports and staff comments": "已提交的飞行报告与签派评语",
+  "Sector details": "航段信息",
+  "Aircraft and remarks": "机型与备注",
+  "Fuel used (kg)": "消耗燃油量 (KG)",
+  "Enter flight details to preview the sector": "填写航班信息以预览航段",
+  "Active sector": "当前航段",
+  "File again": "再次申报",
+  "Recent sectors": "近期航段",
+  "Recent flights": "近期执飞",
+  "No recent flights": "暂无近期执飞记录",
+  "Be the first to file this sector": "成为首个申报此航段的飞行员",
+  "Try another filter or clear the search criteria":
+    "请尝试调整筛选条件，或清空搜索",
+  "Try another filter, or file a new pilot report":
+    "请尝试切换筛选条件，或提交一份新的飞行报告",
+  "Medal catalog for the achievement wall": "成就勋章墙的目录",
+  "Pilot roster, applications, and account status":
+    "飞行员名册、入职申请与账号状态",
+  "Review, approve, and comment on pilot reports":
+    "审核、批准飞行报告并添加签派评语",
+  "Network sectors, aircraft assignments, and notes":
+    "航线网络、机型配属与备注",
+  "Fleet catalog, liveries, and unlock requirements":
+    "机队目录、涂装与解锁要求",
+  "Pilot rank ladder and flight-time requirements":
+    "飞行员职级阶梯与飞行时间要求",
+  "Event and seasonal flight-time multipliers": "活动与季节性飞行时间倍率",
+  "Who can manage each Crew Center module": "各机组中心模块的管理权限",
+  "Assign and revoke medals for individual pilots":
+    "为个别飞行员授予或撤销勋章",
+  "No other pending requests": "暂无其他待审申请",
+  "Queue clear after approval": "批准后即可进入队列前端",
+  "Needs admin approval · joins the aircraft queue · UTC times optional":
+    "需管理员审批 · 加入飞机队列 · UTC 时刻选填",
+  "Checked against the aircraft sequence; published to IF when linked":
+    "将校验飞机航段顺序；若已关联则同步发布至 IF",
+  "Departure from aircraft location and earlier approved flights":
+    "起飞站依据飞机当前位置与此前已批准航班推算",
+  "Optional · otherwise follows the aircraft queue":
+    "选填 · 不指定则按飞机队列顺延",
+  "Plan notes for crew": "供机组参考的计划备注",
+  "Departure (UTC)": "起飞时刻 (UTC)",
+  "Arrival (UTC)": "到达时刻 (UTC)",
+  "Review requests, fleet, and Infinite Flight sync":
+    "审核申请、机队与 Infinite Flight 同步",
+  "Request a flight or join an approved crew":
+    "申请航班或加入已批准机组",
+  "Times in UTC · 1 captain + up to 2 crew":
+    "时间均为 UTC · 1 名机长 + 最多 2 名机组成员",
+  "Your pending": "我的待审",
+  "Open seats": "空余席位",
+  "Failed to update award": "更新勋章失败",
+  "Failed to create award": "创建勋章失败",
+  "Failed to batch grant awards": "批量授予勋章失败",
+  "Failed to grant award": "授予勋章失败",
+  "Failed to revoke award": "撤销勋章失败",
+
   "Submit a flight report manually or import active telemetry from Infinite Flight ACARS.":
     "手动填报飞行报告，或通过 Infinite Flight ACARS 一键导入实时航班遥测数据。",
   "Import ACARS": "导入 ACARS 数据",
@@ -941,6 +1007,9 @@ export const EN_TO_ZH_PHRASES: Record<string, string> = {
   "Match to Crew Center flight": "关联匹配至本地航班",
   "No schedules returned by IF.": "Infinite Flight 未返回任何排班记录。",
   "Set UTC times (optional)": "指定计划起降时刻 (UTC，选填)",
+  "Set UTC times": "指定计划起降时刻 (UTC)",
+  "Enter the actual departure airport for review":
+    "请填写实际起飞机场供签派审核",
   "Use suggested times": "采用推荐接续时刻",
   "Scheduled departure (UTC)": "计划起飞时刻 (UTC)",
   "Scheduled arrival (UTC)": "计划到达时刻 (UTC)",
@@ -2208,6 +2277,10 @@ const EN_TO_ZH_PATTERNS: Array<[RegExp, string]> = [
   [/^(\d+) of 3 seats$/i, "已占 $1 / 3 个机组席位"],
   [/^(\d+)\/3 crew$/i, "$1/3 名机组"],
   [/^(\d+) awaiting review$/i, "$1 人待审批"],
+  [/^(\d+) pending ahead$/i, "$1 个待审申请在前"],
+  [/^(\d+) approved ahead$/i, "$1 个已批准航段在前"],
+  [/^Showing operational metrics for (.+) to (.+)$/i, "运营指标统计区间：$1 至 $2"],
+  [/^Fuel (.+) kg$/i, "燃油 $1 kg"],
   [/^(\d+) assigned crew$/i, "已指派 $1 名机组"],
   [/^(\d+) crew$/i, "$1 名机组"],
   [/^Captain assigned$/i, "已指派机长"],
@@ -2620,9 +2693,9 @@ export function LanguageSwitcher({
       data-no-i18n
       aria-label={locale === "zh" ? "Switch to English" : "切换到中文"}
       title={locale === "zh" ? "Switch to English" : "切换到中文"}
-      className={`inline-flex h-8 items-center justify-center gap-1.5 rounded-[6px] px-2.5 text-[13px] font-medium text-[var(--v2-text-text-muted,#475569)] transition-colors hover:bg-[#0052a5]/[0.06] hover:text-[#0052a5] ${className}`}
+      className={`inline-flex h-8 items-center justify-center gap-1.5 rounded-[8px] px-2.5 text-[13px] font-medium text-[var(--v2-text-text-muted,#525252)] transition-colors duration-150 hover:bg-[rgba(0,0,0,0.04)] hover:text-[var(--v2-text-text-base,#171717)] ${className}`}
     >
-      <Globe className="size-3.5 shrink-0 text-[var(--v2-icon-icon-muted,#64748b)]" />
+      <Globe className="size-3.5 shrink-0 text-[var(--v2-icon-icon-muted,#737373)]" strokeWidth={1.5} />
       {!compact && (
         <span className="font-sans text-[12px] font-medium">
           {locale === "zh" ? "中文 / EN" : "EN / 中文"}

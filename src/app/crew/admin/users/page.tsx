@@ -16,6 +16,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { CrewHeader } from "@/components/crew-header";
+import { CrewPageHeader } from "@/components/crew-ui";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -542,9 +543,10 @@ export default function Users() {
     <CrewHeader>
       <main className="flex-1 ">
         <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <h1 className="text-2xl font-bold">Users</h1>
-          </div>
+          <CrewPageHeader
+            title="Users"
+            meta={<p className="mt-2 text-[13px] text-[var(--v2-text-text-muted,#525252)]">Pilot roster, applications, and account status</p>}
+          />
 
           <Tabs
             defaultValue="all"

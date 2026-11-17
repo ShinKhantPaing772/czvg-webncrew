@@ -62,6 +62,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { CrewHeader } from "@/components/crew-header";
+import { CrewPageHeader } from "@/components/crew-ui";
 import {
   Card,
   CardContent,
@@ -430,8 +431,14 @@ export default function RoutesPage() {
   return (
     <CrewHeader>
       <div className="flex flex-1 flex-col gap-4 ">
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-bold">Routes</h1>
+        <CrewPageHeader
+          title="Routes"
+          meta={
+            <p className="mt-2 text-[13px] text-[var(--v2-text-text-muted,#525252)]">
+              Network sectors, aircraft assignments, and notes
+            </p>
+          }
+          actions={
           <div className="flex gap-2">
             <Button
               onClick={() => {
@@ -440,15 +447,16 @@ export default function RoutesPage() {
               }}
               variant="outline"
             >
-              <Upload className="mr-2 h-4 w-4" />
+              <Upload className="h-4 w-4" strokeWidth={1.5} />
               Bulk Import CSV
             </Button>
             <Button onClick={() => setIsAddingRoute(true)}>
-              <Plus className="mr-2 h-4 w-4" />
+              <Plus className="h-4 w-4" strokeWidth={1.5} />
               Add Route
             </Button>
           </div>
-        </div>
+          }
+        />
 
         <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
           <div className="space-y-2">
@@ -546,7 +554,7 @@ export default function RoutesPage() {
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 id="search"
-                placeholder="Search by flight number"
+                placeholder="Search"
                 className="pl-8"
                 value={searchQuery}
                 onChange={(e) => {
@@ -768,7 +776,7 @@ export default function RoutesPage() {
                   <Label htmlFor="dep">Departure Airport *</Label>
                   <Input
                     id="dep"
-                    placeholder="Enter departure ICAO code"
+                    placeholder="Departure ICAO"
                     maxLength={4}
                     {...register("dep")}
                     onChange={(e) =>
@@ -785,7 +793,7 @@ export default function RoutesPage() {
                   <Label htmlFor="arr">Arrival Airport *</Label>
                   <Input
                     id="arr"
-                    placeholder="Enter arrival ICAO code"
+                    placeholder="Arrival ICAO"
                     maxLength={4}
                     {...register("arr")}
                     onChange={(e) =>
@@ -833,7 +841,7 @@ export default function RoutesPage() {
                       }}
                     >
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select aircraft..." />
+                        <SelectValue placeholder="Aircraft" />
                       </SelectTrigger>
 
                       <SelectContent className="bg-white max-h-[200px] overflow-y-auto">
@@ -852,7 +860,7 @@ export default function RoutesPage() {
                     </Select>
 
                     <Input
-                      placeholder="Search aircraft..."
+                      placeholder="Search aircraft"
                       className="w-full"
                       onChange={(e) => {
                         const term = e.target.value.toLowerCase();
@@ -882,7 +890,7 @@ export default function RoutesPage() {
                           {a.name} - {a.liveryname}
                         </span>
                         <button
-                          className="text-xs font-bold hover:text-red-500"
+                          className="text-xs font-medium hover:text-red-500"
                           onClick={() =>
                             setNewRoute({
                               ...newRoute,
@@ -905,7 +913,7 @@ export default function RoutesPage() {
                 <Label htmlFor="notes">Notes</Label>
                 <Textarea
                   id="notes"
-                  placeholder="Enter any additional info..."
+                  placeholder="Notes"
                   rows={3}
                   {...register("notes")}
                 />
@@ -968,10 +976,10 @@ export default function RoutesPage() {
         >
           <DialogContent className="max-w-4xl bg-white max-h-[92vh] flex flex-col p-0 overflow-hidden">
             {/* Wizard Header with Steps */}
-            <div className="p-6 border-b bg-gray-50/70">
+            <div className="p-6 border-b bg-[var(--v2-background-bg-layer-01,#f7f8fa)]">
               <DialogHeader className="mb-4">
-                <DialogTitle className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-blue-600" />
+                <DialogTitle className="text-[20px] font-medium text-[var(--v2-text-text-base,#171717)] flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-[#0052a5]" />
                   批量导入航线 CSV (Bulk Import Routes)
                 </DialogTitle>
                 <DialogDescription>
@@ -998,19 +1006,19 @@ export default function RoutesPage() {
                       key={step.id}
                       className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border transition-colors ${
                         isCurrent
-                          ? "bg-blue-50 border-blue-300 text-blue-700 font-semibold"
+                          ? "bg-[#0052a5]/[0.06] border-[#0052a5]/[0.35] text-[#003a74] font-semibold"
                           : isDone
-                            ? "bg-green-50 border-green-200 text-green-700"
-                            : "bg-white border-gray-200 text-gray-400"
+                            ? "bg-[var(--v2-state-bg-success,#e3fae1)] border-transparent text-[var(--v2-state-fg-success,#196b2b)]"
+                            : "bg-white border-black/[0.08] text-[var(--v2-text-text-faint,#737373)]"
                       }`}
                     >
                       <span
-                        className={`h-5 w-5 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 ${
+                        className={`h-5 w-5 rounded-full flex items-center justify-center text-[11px] font-medium shrink-0 ${
                           isCurrent
-                            ? "bg-blue-600 text-white"
+                            ? "bg-[#0052a5] text-white"
                             : isDone
-                              ? "bg-green-600 text-white"
-                              : "bg-gray-200 text-gray-600"
+                              ? "bg-[var(--v2-state-fg-success,#196b2b)] text-white"
+                              : "bg-[var(--v2-background-bg-layer-03,#e4e6ea)] text-[var(--v2-text-text-muted,#525252)]"
                         }`}
                       >
                         {isDone ? <Check className="h-3 w-3" /> : idx + 1}
@@ -1029,39 +1037,39 @@ export default function RoutesPage() {
                 <div className="space-y-6">
                   {/* Mode Selector */}
                   <div className="space-y-3">
-                    <Label className="text-sm font-semibold text-gray-800">
+                    <Label className="text-sm font-semibold text-[var(--v2-text-text-base,#171717)]">
                       1. 选择导入模式 (Select Import Mode)
                     </Label>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {/* Option 1: Append */}
                       <div
                         onClick={() => setImportMode("append")}
-                        className={`cursor-pointer rounded-xl border-2 p-4 transition-all flex flex-col justify-between ${
+                        className={`cursor-pointer rounded-[12px] border-2 p-4 transition-colors duration-150 flex flex-col justify-between ${
                           importMode === "append"
-                            ? "border-blue-600 bg-blue-50/40 shadow-sm ring-1 ring-blue-500"
-                            : "border-gray-200 bg-white hover:border-gray-300"
+                            ? "border-[#0052a5] bg-[#0052a5]/[0.06]/40 shadow-sm ring-1 ring-[#0052a5]"
+                            : "border-black/[0.08] bg-white hover:border-black/[0.12]"
                         }`}
                       >
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <Layers className="h-5 w-5 text-blue-600" />
-                              <span className="font-semibold text-gray-900">
+                              <Layers className="h-5 w-5 text-[#0052a5]" />
+                              <span className="font-semibold text-[var(--v2-text-text-base,#171717)]">
                                 新增追加 (Append)
                               </span>
                             </div>
                             <Badge
                               variant="outline"
-                              className="bg-green-50 text-green-700 border-green-200"
+                              className="bg-[var(--v2-state-bg-success,#e3fae1)] text-[var(--v2-state-fg-success,#196b2b)] border-transparent"
                             >
                               推荐 / 安全
                             </Badge>
                           </div>
-                          <p className="text-xs text-gray-600 leading-relaxed">
+                          <p className="text-xs text-[var(--v2-text-text-muted,#525252)] leading-relaxed">
                             保留数据库中现存的全部航线，将 CSV 中的新数据追加到航线库中，适合日常增补航班。
                           </p>
                         </div>
-                        <div className="mt-3 pt-2 border-t border-gray-100 flex items-center text-xs text-gray-500">
+                        <div className="mt-3 pt-2 border-t border-black/[0.06] flex items-center text-xs text-[var(--v2-text-text-faint,#737373)]">
                           <span>现有航线不受任何影响</span>
                         </div>
                       </div>
@@ -1069,32 +1077,32 @@ export default function RoutesPage() {
                       {/* Option 2: Overwrite */}
                       <div
                         onClick={() => setImportMode("overwrite")}
-                        className={`cursor-pointer rounded-xl border-2 p-4 transition-all flex flex-col justify-between ${
+                        className={`cursor-pointer rounded-[12px] border-2 p-4 transition-colors duration-150 flex flex-col justify-between ${
                           importMode === "overwrite"
-                            ? "border-amber-600 bg-amber-50/40 shadow-sm ring-1 ring-amber-500"
-                            : "border-gray-200 bg-white hover:border-gray-300"
+                            ? "border-[var(--v2-state-fg-warning,#8e6518)] bg-[var(--v2-state-bg-warning,#fcefd0)] shadow-sm ring-1 ring-[var(--v2-state-fg-warning,#8e6518)]"
+                            : "border-black/[0.08] bg-white hover:border-black/[0.12]"
                         }`}
                       >
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <AlertTriangle className="h-5 w-5 text-amber-600" />
-                              <span className="font-semibold text-gray-900">
+                              <AlertTriangle className="h-5 w-5 text-[var(--v2-state-fg-warning,#8e6518)]" />
+                              <span className="font-semibold text-[var(--v2-text-text-base,#171717)]">
                                 全量覆盖替换 (Wipe & Replace)
                               </span>
                             </div>
                             <Badge
                               variant="destructive"
-                              className="bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-100"
+                              className="bg-[var(--v2-state-bg-warning,#fcefd0)] text-[var(--v2-state-fg-warning,#8e6518)] border-transparent"
                             >
                               高危替换
                             </Badge>
                           </div>
-                          <p className="text-xs text-gray-600 leading-relaxed">
+                          <p className="text-xs text-[var(--v2-text-text-muted,#525252)] leading-relaxed">
                             清空数据库中的所有旧航线，完全用本次上传的 CSV 数据替代，适合航班换季或航线库重置。
                           </p>
                         </div>
-                        <div className="mt-3 pt-2 border-t border-amber-100 flex items-center text-xs text-amber-700 font-medium">
+                        <div className="mt-3 pt-2 border-t border-black/[0.06] flex items-center text-xs text-[var(--v2-state-fg-warning,#8e6518)] font-medium">
                           <span>执行前会要求二次安全确认</span>
                         </div>
                       </div>
@@ -1103,7 +1111,7 @@ export default function RoutesPage() {
 
                   {/* File Upload Drop Area */}
                   <div className="space-y-3">
-                    <Label className="text-sm font-semibold text-gray-800">
+                    <Label className="text-sm font-semibold text-[var(--v2-text-text-base,#171717)]">
                       2. 上传 CSV 文件 (Upload CSV)
                     </Label>
                     <div
@@ -1120,10 +1128,10 @@ export default function RoutesPage() {
                           handleBulkImport(file);
                         }
                       }}
-                      className={`border-2 border-dashed rounded-xl p-8 text-center transition-all cursor-pointer ${
+                      className={`border-2 border-dashed rounded-[12px] p-8 text-center transition-colors duration-150 cursor-pointer ${
                         isDragOver
-                          ? "border-blue-500 bg-blue-50/60 scale-[0.99]"
-                          : "border-gray-300 bg-gray-50 hover:border-gray-400 hover:bg-gray-100/50"
+                          ? "border-[#0052a5] bg-[#0052a5]/[0.06]/60 "
+                          : "border-black/[0.12] bg-[var(--v2-background-bg-layer-01,#f7f8fa)] hover:border-black/[0.2] hover:bg-[var(--v2-background-bg-layer-02,#eef0f3)]"
                       }`}
                       onClick={() => !importLoading && fileInputRef.current?.click()}
                     >
@@ -1143,24 +1151,24 @@ export default function RoutesPage() {
                       <div className="flex flex-col items-center justify-center gap-3">
                         {importLoading ? (
                           <>
-                            <Loader2 className="h-10 w-10 text-blue-600 animate-spin" />
-                            <div className="text-sm font-medium text-gray-700">
+                            <Loader2 className="h-10 w-10 text-[#0052a5] animate-spin" />
+                            <div className="text-sm font-medium text-[var(--v2-text-text-muted,#525252)]">
                               正在解析 CSV 并校验数据格式...
                             </div>
-                            <div className="text-xs text-gray-500">
+                            <div className="text-xs text-[var(--v2-text-text-faint,#737373)]">
                               系统正在核验 ICAO 机场代码、时长与表头
                             </div>
                           </>
                         ) : (
                           <>
-                            <div className="h-12 w-12 rounded-full bg-blue-50 flex items-center justify-center text-blue-600">
+                            <div className="h-12 w-12 rounded-full bg-[#0052a5]/[0.06] flex items-center justify-center text-[#0052a5]">
                               <Upload className="h-6 w-6" />
                             </div>
                             <div>
-                              <p className="text-sm font-semibold text-gray-800">
+                              <p className="text-sm font-semibold text-[var(--v2-text-text-base,#171717)]">
                                 点击选择文件 或 将 CSV 文件拖放到此处
                               </p>
-                              <p className="text-xs text-gray-500 mt-1">
+                              <p className="text-xs text-[var(--v2-text-text-faint,#737373)] mt-1">
                                 支持标准 UTF-8 编码的 .csv 格式文件
                               </p>
                             </div>
@@ -1179,16 +1187,16 @@ export default function RoutesPage() {
                   </div>
 
                   {/* Standard CSV Help Box */}
-                  <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-4 text-xs text-blue-900 space-y-2">
+                  <div className="bg-[#0052a5]/[0.06]/70 border border-blue-200 rounded-[12px] p-4 text-xs text-blue-900 space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="font-semibold flex items-center gap-1.5">
-                        <Info className="h-4 w-4 text-blue-600" />
+                        <Info className="h-4 w-4 text-[#0052a5]" />
                         CSV 表头规范说明
                       </span>
                       <a
                         href="/routes-template.csv"
                         download
-                        className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-medium hover:underline"
+                        className="inline-flex items-center gap-1 text-[#0052a5] hover:text-blue-800 font-medium hover:underline"
                       >
                         <Download className="h-3.5 w-3.5" />
                         下载标准样例模板 (routes-template.csv)
@@ -1200,7 +1208,7 @@ export default function RoutesPage() {
                     <code className="block bg-white/90 border border-blue-200 rounded px-2.5 py-1.5 font-mono text-blue-950">
                       fltnum, dep, arr, duration, notes, aircraft
                     </code>
-                    <p className="text-[11px] text-blue-700">
+                    <p className="text-[11px] text-[#003a74]">
                       提示：dep 与 arr 必须为 4 位 ICAO 机场代码；duration 需为 HH:MM 格式；若包含多款机型，请用分号 (;) 分隔。
                     </p>
                   </div>
@@ -1211,7 +1219,7 @@ export default function RoutesPage() {
               {importStep === "mapping" && (
                 <div className="space-y-5">
                   <div className="bg-amber-50 border border-amber-200 rounded-lg p-3.5 flex items-start gap-3">
-                    <Info className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                    <Info className="h-5 w-5 text-[var(--v2-state-fg-warning,#8e6518)] shrink-0 mt-0.5" />
                     <div className="text-xs text-amber-900 space-y-1">
                       <p className="font-semibold">
                         严格手动映射模式 (Strict Manual Mapping)
@@ -1224,13 +1232,13 @@ export default function RoutesPage() {
 
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <Label className="text-sm font-semibold text-gray-800">
+                      <Label className="text-sm font-semibold text-[var(--v2-text-text-base,#171717)]">
                         机型对应关系设置 ({aircraftNames.length} 个独立机型)
                       </Label>
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-xs text-gray-500 hover:text-gray-900"
+                        className="text-xs text-[var(--v2-text-text-faint,#737373)] hover:text-[var(--v2-text-text-base,#171717)]"
                         onClick={() => {
                           const cleared: Record<string, number> = {};
                           setAircraftMappings(cleared);
@@ -1240,8 +1248,8 @@ export default function RoutesPage() {
                       </Button>
                     </div>
 
-                    <div className="border rounded-xl divide-y bg-white overflow-hidden shadow-sm">
-                      <div className="grid grid-cols-12 bg-gray-50 px-4 py-2 text-xs font-semibold text-gray-600">
+                    <div className="border rounded-[12px] divide-y bg-white overflow-hidden shadow-sm">
+                      <div className="grid grid-cols-12 bg-[var(--v2-background-bg-layer-01,#f7f8fa)] px-4 py-2 text-xs font-semibold text-[var(--v2-text-text-muted,#525252)]">
                         <div className="col-span-5">CSV 中的机型名称</div>
                         <div className="col-span-2 text-center">映射关系</div>
                         <div className="col-span-5">对应系统机型 (数据库)</div>
@@ -1255,21 +1263,21 @@ export default function RoutesPage() {
                         return (
                           <div
                             key={aircraftName}
-                            className="grid grid-cols-12 px-4 py-3 items-center gap-2 text-sm hover:bg-gray-50/50 transition-colors"
+                            className="grid grid-cols-12 px-4 py-3 items-center gap-2 text-sm hover:bg-[var(--v2-background-bg-layer-01,#f7f8fa)]/50 transition-colors"
                           >
                             <div className="col-span-5 flex items-center gap-2">
-                              <span className="font-medium text-gray-900">
+                              <span className="font-medium text-[var(--v2-text-text-base,#171717)]">
                                 {aircraftName}
                               </span>
                               <Badge
                                 variant="secondary"
-                                className="text-[10px] text-gray-500 px-1.5 py-0"
+                                className="text-[10px] text-[var(--v2-text-text-faint,#737373)] px-1.5 py-0"
                               >
                                 {countInCsv} 航线
                               </Badge>
                             </div>
 
-                            <div className="col-span-2 flex justify-center text-gray-400">
+                            <div className="col-span-2 flex justify-center text-[var(--v2-text-text-faint,#737373)]">
                               <ArrowRight className="h-4 w-4" />
                             </div>
 
@@ -1298,7 +1306,7 @@ export default function RoutesPage() {
                                 </SelectTrigger>
                                 <SelectContent className="bg-white max-h-56">
                                   <SelectItem value="none">
-                                    <span className="text-gray-400 font-normal">
+                                    <span className="text-[var(--v2-text-text-faint,#737373)] font-normal">
                                       跳过 / 不关联机型 (None)
                                     </span>
                                   </SelectItem>
@@ -1309,7 +1317,7 @@ export default function RoutesPage() {
                                     >
                                       {ac.name}
                                       {ac.liveryname && (
-                                        <span className="text-gray-500 ml-1">
+                                        <span className="text-[var(--v2-text-text-faint,#737373)] ml-1">
                                           ({ac.liveryname})
                                         </span>
                                       )}
@@ -1331,17 +1339,17 @@ export default function RoutesPage() {
                 <div className="space-y-6">
                   {/* Summary Metric Cards */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <Card className="shadow-none border-gray-200">
+                    <Card className="shadow-none border-black/[0.08]">
                       <CardContent className="p-4 flex items-center justify-between">
                         <div>
-                          <p className="text-xs text-gray-500 font-medium">
+                          <p className="text-xs text-[var(--v2-text-text-faint,#737373)] font-medium">
                             总记录行数
                           </p>
-                          <p className="text-2xl font-bold text-gray-900 mt-1">
+                          <p className="text-2xl font-medium text-[var(--v2-text-text-base,#171717)] mt-1">
                             {(csvPreview?.length || 0) + (invalidRoutes?.length || 0)}
                           </p>
                         </div>
-                        <div className="h-10 w-10 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
+                        <div className="h-10 w-10 rounded-lg bg-[#0052a5]/[0.06] flex items-center justify-center text-[#0052a5]">
                           <Layers className="h-5 w-5" />
                         </div>
                       </CardContent>
@@ -1350,14 +1358,14 @@ export default function RoutesPage() {
                     <Card className="shadow-none border-green-200 bg-green-50/20">
                       <CardContent className="p-4 flex items-center justify-between">
                         <div>
-                          <p className="text-xs text-green-700 font-medium">
+                          <p className="text-xs text-[var(--v2-state-fg-success,#196b2b)] font-medium">
                             校验通过 (将导入)
                           </p>
-                          <p className="text-2xl font-bold text-green-700 mt-1">
+                          <p className="text-2xl font-medium text-[var(--v2-state-fg-success,#196b2b)] mt-1">
                             {csvPreview?.length || 0}
                           </p>
                         </div>
-                        <div className="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center text-green-700">
+                        <div className="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center text-[var(--v2-state-fg-success,#196b2b)]">
                           <CheckCircle2 className="h-5 w-5" />
                         </div>
                       </CardContent>
@@ -1367,7 +1375,7 @@ export default function RoutesPage() {
                       className={`shadow-none ${
                         invalidRoutes.length > 0
                           ? "border-red-200 bg-red-50/20"
-                          : "border-gray-200"
+                          : "border-black/[0.08]"
                       }`}
                     >
                       <CardContent className="p-4 flex items-center justify-between">
@@ -1376,16 +1384,16 @@ export default function RoutesPage() {
                             className={`text-xs font-medium ${
                               invalidRoutes.length > 0
                                 ? "text-red-700"
-                                : "text-gray-500"
+                                : "text-[var(--v2-text-text-faint,#737373)]"
                             }`}
                           >
                             异常行 (将跳过)
                           </p>
                           <p
-                            className={`text-2xl font-bold mt-1 ${
+                            className={`text-2xl font-medium mt-1 ${
                               invalidRoutes.length > 0
                                 ? "text-red-700"
-                                : "text-gray-400"
+                                : "text-[var(--v2-text-text-faint,#737373)]"
                             }`}
                           >
                             {invalidRoutes.length}
@@ -1395,7 +1403,7 @@ export default function RoutesPage() {
                           className={`h-10 w-10 rounded-lg flex items-center justify-center ${
                             invalidRoutes.length > 0
                               ? "bg-red-100 text-red-700"
-                              : "bg-gray-100 text-gray-400"
+                              : "bg-gray-100 text-[var(--v2-text-text-faint,#737373)]"
                           }`}
                         >
                           <XCircle className="h-5 w-5" />
@@ -1409,14 +1417,14 @@ export default function RoutesPage() {
                     className={`rounded-lg p-3 text-xs flex items-center justify-between border ${
                       importMode === "overwrite"
                         ? "bg-amber-50 border-amber-200 text-amber-900"
-                        : "bg-blue-50 border-blue-200 text-blue-900"
+                        : "bg-[#0052a5]/[0.06] border-blue-200 text-blue-900"
                     }`}
                   >
                     <div className="flex items-center gap-2">
                       {importMode === "overwrite" ? (
-                        <AlertTriangle className="h-4 w-4 text-amber-600" />
+                        <AlertTriangle className="h-4 w-4 text-[var(--v2-state-fg-warning,#8e6518)]" />
                       ) : (
-                        <Layers className="h-4 w-4 text-blue-600" />
+                        <Layers className="h-4 w-4 text-[#0052a5]" />
                       )}
                       <span>
                         本次执行模式：
@@ -1428,7 +1436,7 @@ export default function RoutesPage() {
                       </span>
                     </div>
                     {importMode === "overwrite" && (
-                      <span className="text-amber-700 font-semibold">
+                      <span className="text-[var(--v2-state-fg-warning,#8e6518)] font-semibold">
                         现有约 {totalExistingRoutes} 条旧航线将被清除
                       </span>
                     )}
@@ -1436,7 +1444,7 @@ export default function RoutesPage() {
 
                   {/* Invalid Rows Accordion (if any) */}
                   {invalidRoutes.length > 0 && (
-                    <div className="border border-red-200 rounded-xl overflow-hidden bg-red-50/30">
+                    <div className="border border-red-200 rounded-[12px] overflow-hidden bg-red-50/30">
                       <div
                         onClick={() => setShowInvalidDetails(!showInvalidDetails)}
                         className="px-4 py-3 bg-red-50/80 flex items-center justify-between cursor-pointer hover:bg-red-100/60 transition-colors"
@@ -1463,10 +1471,10 @@ export default function RoutesPage() {
                               key={idx}
                               className="py-2 text-xs grid grid-cols-12 gap-2"
                             >
-                              <div className="col-span-2 font-mono text-gray-500 font-medium">
+                              <div className="col-span-2 font-mono text-[var(--v2-text-text-faint,#737373)] font-medium">
                                 第 {inv.rowNumber} 行
                               </div>
-                              <div className="col-span-3 text-gray-700 font-medium truncate">
+                              <div className="col-span-3 text-[var(--v2-text-text-muted,#525252)] font-medium truncate">
                                 {inv.fltnum || "(空航班号)"}{" "}
                                 {inv.dep && inv.arr
                                   ? `(${inv.dep} → ${inv.arr})`
@@ -1485,11 +1493,11 @@ export default function RoutesPage() {
                   {/* Valid Routes Table Preview */}
                   <div className="space-y-3">
                     <div className="flex items-center justify-between gap-3">
-                      <Label className="text-sm font-semibold text-gray-800">
+                      <Label className="text-sm font-semibold text-[var(--v2-text-text-base,#171717)]">
                         有效航线预览 ({csvPreview?.length || 0} 条)
                       </Label>
                       <div className="relative w-64">
-                        <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-gray-400" />
+                        <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-[var(--v2-text-text-faint,#737373)]" />
                         <Input
                           placeholder="搜索航班号或机场..."
                           value={previewSearch}
@@ -1502,9 +1510,9 @@ export default function RoutesPage() {
                       </div>
                     </div>
 
-                    <div className="border rounded-xl overflow-hidden bg-white shadow-sm">
+                    <div className="border rounded-[12px] overflow-hidden bg-white shadow-sm">
                       <Table>
-                        <TableHeader className="bg-gray-50">
+                        <TableHeader className="bg-[var(--v2-background-bg-layer-01,#f7f8fa)]">
                           <TableRow className="text-xs">
                             <TableHead className="w-16">序号</TableHead>
                             <TableHead>航班号</TableHead>
@@ -1535,7 +1543,7 @@ export default function RoutesPage() {
                                 <TableRow>
                                   <TableCell
                                     colSpan={7}
-                                    className="text-center py-6 text-gray-400 text-xs"
+                                    className="text-center py-6 text-[var(--v2-text-text-faint,#737373)] text-xs"
                                   >
                                     未找到匹配的有效航线
                                   </TableCell>
@@ -1570,12 +1578,12 @@ export default function RoutesPage() {
                               return (
                                 <TableRow
                                   key={idx}
-                                  className="text-xs hover:bg-gray-50/50"
+                                  className="text-xs hover:bg-[var(--v2-background-bg-layer-01,#f7f8fa)]/50"
                                 >
-                                  <TableCell className="text-gray-400 font-mono">
+                                  <TableCell className="text-[var(--v2-text-text-faint,#737373)] font-mono">
                                     {startIdx + idx + 1}
                                   </TableCell>
-                                  <TableCell className="font-semibold text-gray-900">
+                                  <TableCell className="font-semibold text-[var(--v2-text-text-base,#171717)]">
                                     {route.fltnum}
                                   </TableCell>
                                   <TableCell>
@@ -1594,7 +1602,7 @@ export default function RoutesPage() {
                                       {route.arr}
                                     </Badge>
                                   </TableCell>
-                                  <TableCell className="font-mono text-gray-600">
+                                  <TableCell className="font-mono text-[var(--v2-text-text-muted,#525252)]">
                                     {route.duration}
                                   </TableCell>
                                   <TableCell>
@@ -1605,7 +1613,7 @@ export default function RoutesPage() {
                                             <Badge
                                               key={lIdx}
                                               variant="secondary"
-                                              className="text-[10px] bg-blue-50 text-blue-700"
+                                              className="text-[10px] bg-[#0052a5]/[0.06] text-[#003a74]"
                                             >
                                               {lbl}
                                             </Badge>
@@ -1613,12 +1621,12 @@ export default function RoutesPage() {
                                         )}
                                       </div>
                                     ) : (
-                                      <span className="text-gray-400 text-[11px]">
+                                      <span className="text-[var(--v2-text-text-faint,#737373)] text-[11px]">
                                         未关联
                                       </span>
                                     )}
                                   </TableCell>
-                                  <TableCell className="text-gray-500 max-w-xs truncate">
+                                  <TableCell className="text-[var(--v2-text-text-faint,#737373)] max-w-xs truncate">
                                     {route.notes || "-"}
                                   </TableCell>
                                 </TableRow>
@@ -1649,7 +1657,7 @@ export default function RoutesPage() {
                       if (totalPages <= 1) return null;
 
                       return (
-                        <div className="flex items-center justify-between text-xs text-gray-500 pt-1">
+                        <div className="flex items-center justify-between text-xs text-[var(--v2-text-text-faint,#737373)] pt-1">
                           <span>
                             显示第 {(previewPage - 1) * pageSize + 1} -{" "}
                             {Math.min(previewPage * pageSize, filtered.length)} 条 / 共{" "}
@@ -1689,29 +1697,29 @@ export default function RoutesPage() {
               {importStep === "result" && (
                 <div className="py-6 flex flex-col items-center text-center space-y-4">
                   {importResult?.success ? (
-                    <div className="h-16 w-16 rounded-full bg-green-100 flex items-center justify-center text-green-600">
+                    <div className="h-16 w-16 rounded-full bg-[var(--v2-state-bg-success,#e3fae1)] flex items-center justify-center text-[var(--v2-state-fg-success,#196b2b)]">
                       <CheckCircle2 className="h-10 w-10" />
                     </div>
                   ) : (
-                    <div className="h-16 w-16 rounded-full bg-red-100 flex items-center justify-center text-red-600">
+                    <div className="h-16 w-16 rounded-full bg-[var(--v2-state-bg-danger,#fceceb)] flex items-center justify-center text-[var(--v2-state-fg-danger,#c8102e)]">
                       <XCircle className="h-10 w-10" />
                     </div>
                   )}
 
                   <div className="space-y-1">
-                    <h3 className="text-xl font-bold text-gray-900">
+                    <h3 className="text-[20px] font-medium text-[var(--v2-text-text-base,#171717)]">
                       {importResult?.success ? "导入执行成功" : "导入未完成"}
                     </h3>
-                    <p className="text-sm text-gray-600 max-w-md">
+                    <p className="text-sm text-[var(--v2-text-text-muted,#525252)] max-w-md">
                       {importResult?.message}
                     </p>
                   </div>
 
                   {/* Result Detail Stats */}
                   {importResult?.createdCount !== undefined && (
-                    <div className="w-full max-w-md bg-gray-50 border rounded-xl p-4 text-xs space-y-2.5">
-                      <div className="flex justify-between items-center py-1 border-b border-gray-200">
-                        <span className="text-gray-600">执行模式:</span>
+                    <div className="w-full max-w-md bg-[var(--v2-background-bg-layer-01,#f7f8fa)] border rounded-[12px] p-4 text-xs space-y-2.5">
+                      <div className="flex justify-between items-center py-1 border-b border-black/[0.08]">
+                        <span className="text-[var(--v2-text-text-muted,#525252)]">执行模式:</span>
                         <Badge variant="outline">
                           {importMode === "overwrite"
                             ? "全量覆盖 (Wipe & Replace)"
@@ -1720,16 +1728,16 @@ export default function RoutesPage() {
                       </div>
 
                       {importMode === "overwrite" && (
-                        <div className="flex justify-between items-center py-1 border-b border-gray-200">
-                          <span className="text-gray-600">已清空旧航线:</span>
-                          <span className="font-semibold text-amber-600">
+                        <div className="flex justify-between items-center py-1 border-b border-black/[0.08]">
+                          <span className="text-[var(--v2-text-text-muted,#525252)]">已清空旧航线:</span>
+                          <span className="font-semibold text-[var(--v2-state-fg-warning,#8e6518)]">
                             {importResult.clearedCount ?? 0} 条
                           </span>
                         </div>
                       )}
 
-                      <div className="flex justify-between items-center py-1 border-b border-gray-200">
-                        <span className="text-gray-600">成功导入航线:</span>
+                      <div className="flex justify-between items-center py-1 border-b border-black/[0.08]">
+                        <span className="text-[var(--v2-text-text-muted,#525252)]">成功导入航线:</span>
                         <span className="font-semibold text-green-600">
                           {importResult.createdCount} 条
                         </span>
@@ -1737,7 +1745,7 @@ export default function RoutesPage() {
 
                       {invalidRoutes.length > 0 && (
                         <div className="flex justify-between items-center py-1">
-                          <span className="text-gray-600">跳过异常行:</span>
+                          <span className="text-[var(--v2-text-text-muted,#525252)]">跳过异常行:</span>
                           <span className="font-semibold text-red-500">
                             {invalidRoutes.length} 条
                           </span>
@@ -1748,7 +1756,7 @@ export default function RoutesPage() {
 
                   {/* Errors display if failed */}
                   {importResult?.errors && importResult.errors.length > 0 && (
-                    <div className="w-full max-w-md bg-red-50 border border-red-200 rounded-xl p-3 text-left max-h-40 overflow-y-auto">
+                    <div className="w-full max-w-md bg-red-50 border border-red-200 rounded-[12px] p-3 text-left max-h-40 overflow-y-auto">
                       <p className="text-xs font-semibold text-red-900 mb-1.5">
                         详细错误原因:
                       </p>
@@ -1764,7 +1772,7 @@ export default function RoutesPage() {
             </div>
 
             {/* Wizard Footer Controls */}
-            <div className="p-4 border-t bg-gray-50/70 flex items-center justify-between">
+            <div className="p-4 border-t bg-[var(--v2-background-bg-layer-01,#f7f8fa)] flex items-center justify-between">
               <div>
                 {importStep === "mapping" && (
                   <Button
@@ -1814,7 +1822,7 @@ export default function RoutesPage() {
                     size="sm"
                     onClick={() => setImportStep("preview")}
                     disabled={importLoading}
-                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                    className="bg-[#0052a5] hover:bg-blue-700 text-white"
                   >
                     下一步：预览与校验
                     <ChevronRight className="ml-1.5 h-4 w-4" />
@@ -1835,7 +1843,7 @@ export default function RoutesPage() {
                     className={
                       importMode === "overwrite"
                         ? "bg-red-600 hover:bg-red-700 text-white"
-                        : "bg-blue-600 hover:bg-blue-700 text-white"
+                        : "bg-[#0052a5] hover:bg-blue-700 text-white"
                     }
                   >
                     {importLoading ? (
@@ -1872,7 +1880,7 @@ export default function RoutesPage() {
                     <Button
                       size="sm"
                       onClick={resetImportState}
-                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                      className="bg-[#0052a5] hover:bg-blue-700 text-white"
                     >
                       完成并查看航线
                     </Button>
@@ -1896,7 +1904,7 @@ export default function RoutesPage() {
                   危险操作：确认全量覆盖航线？
                 </AlertDialogTitle>
               </div>
-              <AlertDialogDescription className="text-gray-700 space-y-2 text-xs">
+              <AlertDialogDescription className="text-[var(--v2-text-text-muted,#525252)] space-y-2 text-xs">
                 <p>
                   您当前选择了
                   <strong className="text-red-600 mx-1">
@@ -1912,7 +1920,7 @@ export default function RoutesPage() {
                   </strong>
                   ，并仅保留本次 CSV 中的 {csvPreview?.length || 0} 条有效航线！
                 </div>
-                <p className="text-gray-500">
+                <p className="text-[var(--v2-text-text-faint,#737373)]">
                   此操作不可撤销。请确保您已做好备份或确认需要重置航线库。
                 </p>
               </AlertDialogDescription>

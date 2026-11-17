@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Edit, Loader2, Plus, Search, Trash2 } from "lucide-react";
 
 import { CrewHeader } from "@/components/crew-header";
+import { CrewPageHeader } from "@/components/crew-ui";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -228,19 +229,20 @@ export default function AdminMultipliersPage() {
   return (
     <CrewHeader>
       <main className="flex-1 space-y-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">Multipliers</h1>
-            <p className="text-sm text-muted-foreground">
-              Manage PIREP credit multipliers, redemption codes, and rank
-              requirements.
+        <CrewPageHeader
+          title="Multipliers"
+          meta={
+            <p className="mt-2 text-[13px] text-[var(--v2-text-text-muted,#525252)]">
+              Event and seasonal flight-time multipliers
             </p>
-          </div>
-          <Button onClick={openAdd} disabled={loading}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Multiplier
-          </Button>
-        </div>
+          }
+          actions={
+            <Button onClick={openAdd} disabled={loading}>
+              <Plus className="h-4 w-4" strokeWidth={1.5} />
+              Add Multiplier
+            </Button>
+          }
+        />
 
         {error ? (
           <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
@@ -256,7 +258,7 @@ export default function AdminMultipliersPage() {
               id="multiplier-search"
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search by name, code, factor, or rank..."
+              placeholder="Search"
               className="pl-8"
             />
           </div>

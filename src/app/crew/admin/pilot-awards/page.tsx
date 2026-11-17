@@ -19,6 +19,7 @@ import {
 import Image from "next/image";
 
 import { CrewHeader } from "@/components/crew-header";
+import { CrewPageHeader } from "@/components/crew-ui";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -579,19 +580,17 @@ export default function PilotAwardsPage() {
   return (
     <CrewHeader>
       <main className="flex-1 space-y-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">
-              {t("Pilot Awards", "飞行勋章管理")}
-            </h1>
-            <p className="text-sm text-muted-foreground">
+        <CrewPageHeader
+          title={t("Pilot Awards", "飞行勋章管理")}
+          meta={
+            <p className="mt-2 text-[13px] text-[var(--v2-text-text-muted,#525252)]">
               {t(
                 "Grant awards to multiple pilots simultaneously, manage individual pilots, or review recipients by award.",
                 "支持向多位飞行员批量授予勋章、管理个别飞行员荣誉，或按勋章浏览获颁人员。",
               )}
             </p>
-          </div>
-
+          }
+          actions={
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button
@@ -634,7 +633,8 @@ export default function PilotAwardsPage() {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
-        </div>
+          }
+        />
 
         {error || message ? (
           <div

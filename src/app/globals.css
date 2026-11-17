@@ -21,28 +21,29 @@
   --v2-grey-1200: #080808;
 
   /* ── China Southern Airlines (CSN) Brand & Surface Tokens ── */
+  /* App chrome stays graphite; #0052a5 is accent only (selection, primary, charts). */
   --v2-background-bg-base: var(--v2-grey-50);
-  --v2-background-bg-deep: #f2f6fb;
-  --v2-background-bg-layer-01: #f7fafd;
-  --v2-background-bg-layer-02: #eef4fb;
-  --v2-background-bg-layer-03: #e0edff;
-  --v2-background-bg-layer-04: #c9dffa;
+  --v2-background-bg-deep: #f3f4f6;
+  --v2-background-bg-layer-01: #f7f8fa;
+  --v2-background-bg-layer-02: #eef0f3;
+  --v2-background-bg-layer-03: #e4e6ea;
+  --v2-background-bg-layer-04: #d6d9de;
   --v2-background-bg-contrast: #0052a5;
   --v2-background-bg-button-neutral: var(--v2-grey-50);
   --v2-background-bg-accent: #0052a5;
 
-  --v2-text-text-base: #0f172a;
-  --v2-text-text-muted: #475569;
-  --v2-text-text-faint: #64748b;
+  --v2-text-text-base: #171717;
+  --v2-text-text-muted: #525252;
+  --v2-text-text-faint: #737373;
   --v2-text-text-contrast: var(--v2-grey-50);
   --v2-text-text-accent: #0052a5;
 
   --v2-icon-icon-base: #003a74;
-  --v2-icon-icon-muted: #64748b;
-  --v2-icon-icon-faint: #94a3b8;
+  --v2-icon-icon-muted: #737373;
+  --v2-icon-icon-faint: #a3a3a3;
 
-  --v2-overlay-simple-overlay-hover: rgba(0, 82, 165, 0.05);
-  --v2-overlay-simple-overlay-pressed: rgba(0, 82, 165, 0.1);
+  --v2-overlay-simple-overlay-hover: rgba(0, 0, 0, 0.04);
+  --v2-overlay-simple-overlay-pressed: rgba(0, 0, 0, 0.08);
 
   --v2-state-bg-success: #e3fae1;
   --v2-state-fg-success: #196b2b;
@@ -105,10 +106,10 @@
   --card: transparent;
   --card-foreground: var(--v2-text-text-base);
   --muted-foreground: var(--v2-text-text-muted);
-  --secondary: #eef6ff;
-  --secondary-foreground: #003a74;
+  --secondary: var(--v2-background-bg-layer-02);
+  --secondary-foreground: var(--v2-text-text-base);
   --accent: var(--v2-overlay-simple-overlay-hover);
-  --accent-foreground: #003a74;
+  --accent-foreground: var(--v2-text-text-base);
   --popover: #ffffff;
   --popover-foreground: var(--v2-text-text-base);
   --destructive: #ed1b2f;
@@ -129,9 +130,10 @@ body {
   font-family: var(--font-family-sans);
   font-size: 14px;
   line-height: 1.5;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   overflow-x: clip;
   -webkit-font-smoothing: antialiased;
+  font-feature-settings: "tnum" 1;
 }
 
 .bg-card { background: var(--card); }

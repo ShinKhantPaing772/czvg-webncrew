@@ -5,6 +5,7 @@ import { Edit, ImageOff, Loader2, Plus, Star, Trash2 } from "lucide-react";
 import Image from "next/image";
 
 import { CrewHeader } from "@/components/crew-header";
+import { CrewPageHeader } from "@/components/crew-ui";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -195,21 +196,23 @@ export default function AdminAwardsPage() {
   return (
     <CrewHeader>
       <main className="flex-1 space-y-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">{t("Awards", "荣誉勋章")}</h1>
-            <p className="text-sm text-muted-foreground">
+        <CrewPageHeader
+          title={t("Awards", "荣誉勋章")}
+          meta={
+            <p className="mt-2 text-[13px] text-[var(--v2-text-text-muted,#525252)]">
               {t(
-                "Manage award definitions and the featured public reward.",
-                "管理勋章定义及公开展示的特色表彰奖项。",
+                "Medal catalog for the achievement wall",
+                "成就勋章墙的目录",
               )}
             </p>
-          </div>
-          <Button onClick={openAdd} disabled={loading}>
-            <Plus className="mr-2 h-4 w-4" />
-            {t("Add Award", "新增荣誉勋章")}
-          </Button>
-        </div>
+          }
+          actions={
+            <Button onClick={openAdd} disabled={loading}>
+              <Plus className="h-4 w-4" strokeWidth={1.5} />
+              {t("Add Award", "新增荣誉勋章")}
+            </Button>
+          }
+        />
         {error ? (
           <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
             {error}
