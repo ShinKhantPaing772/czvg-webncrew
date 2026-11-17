@@ -1,4 +1,7 @@
-import type React from "react";
+"use client";
+
+import { useState } from "react";
+
 import { getAirlineLogoForFlight } from "@/lib/group-airlines";
 
 export interface AirlineLogoProps {
@@ -10,8 +13,8 @@ export interface AirlineLogoProps {
 
 /**
  * Theme-adaptive Airline Logo.
- * Automatically switches between standard (light) and high-contrast white (dark)
- * logo assets via CSS classes `.brand-logo-light` and `.brand-logo-dark`, preventing SSR flash.
+ * Group carriers use local assets; partners resolve via IATA → Google Flights CDN.
+ * Broken remote assets hide themselves instead of showing a wrong fallback.
  */
 export function AirlineLogo({
   flightnum,
@@ -19,7 +22,13 @@ export function AirlineLogo({
   className = "h-4 w-auto max-w-[54px] shrink-0 object-contain",
   alt = "",
 }: AirlineLogoProps) {
-  const { logo, logoDark, name } = getAirlineLogoForFlight(flightnum, liveryname);
+  const result = getAirlineLogoForFlight(flightnum, liveryname);
+  const [failed, setFailed] = useState(false);
+
+  if (!result || failed) return null;
+
+  const { logo, logoDark, name } = result;
+  const sameAsset = logo === logoDark;
 
   return (
     <>
@@ -27,14 +36,18 @@ export function AirlineLogo({
       <img
         src={logo}
         alt={alt || name}
-        className={`brand-logo-light ${className}`}
+        className={`${sameAsset ? "" : "brand-logo-light "}${className}`}
+        onError={() => setFailed(true)}
       />
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={logoDark}
-        alt={alt || name}
-        className={`brand-logo-dark ${className}`}
-      />
+      {!sameAsset ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={logoDark}
+          alt={alt || name}
+          className={`brand-logo-dark ${className}`}
+          onError={() => setFailed(true)}
+        />
+      ) : null}
     </>
   );
 }
