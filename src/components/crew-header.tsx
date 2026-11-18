@@ -374,40 +374,46 @@ export function CrewHeader({ children }: CrewHeaderProps) {
 
         {/* Bottom Controls: Language Switcher + User Row */}
         {isSidebarOpen ? (
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-1 px-1">
               <LanguageSwitcher className="flex-1 justify-center" />
               <NotificationBell inbox={inbox} />
             </div>
-            <div className="flex items-center justify-between gap-2 px-1">
-              <span className="min-w-0 truncate px-2.5 font-mono text-[12px] text-[var(--v2-text-text-muted,#525252)]">
-                {user?.callsign || user?.name || "CZVG Pilot"}
-              </span>
+            <div className="flex items-center gap-2 rounded-[12px] bg-[var(--v2-background-bg-base,#ffffff)] px-2.5 py-2">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[13px] font-medium text-[var(--v2-text-text-base,#171717)]">
+                  {user?.name || t("CZVG Pilot", "CZVG 飞行员")}
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={handleLogout}
                 disabled={isLoggingOut}
                 title={t("Sign out", "退出登录")}
                 aria-label={t("Sign out", "退出登录")}
-                className="flex size-9 shrink-0 items-center justify-center rounded-[8px] bg-[var(--v2-background-bg-base,#ffffff)] text-[var(--v2-text-text-muted,#525252)] transition-colors duration-150 hover:bg-[rgba(0,0,0,0.04)] hover:text-[var(--v2-text-text-base,#171717)] disabled:opacity-50"
+                className="flex size-8 shrink-0 items-center justify-center rounded-[8px] text-[var(--v2-text-text-muted,#525252)] transition-colors duration-150 hover:bg-[rgba(0,0,0,0.04)] hover:text-[var(--v2-text-text-base,#171717)] disabled:opacity-50"
               >
-                <LogOut className="size-4" strokeWidth={1.5} />
+                <LogOut className="size-3.5" strokeWidth={1.5} />
               </button>
             </div>
           </div>
         ) : (
-          <div className="flex flex-col items-center gap-1">
+          <div className="flex flex-col items-center gap-1.5">
             <LanguageSwitcher compact className="size-8 p-0" />
             <NotificationBell inbox={inbox} />
             <button
               type="button"
               onClick={handleLogout}
               disabled={isLoggingOut}
-              title={t("Sign out", "退出登录")}
+              title={
+                user?.name
+                  ? `${t("Sign out", "退出登录")} · ${user.name}`
+                  : t("Sign out", "退出登录")
+              }
               aria-label={t("Sign out", "退出登录")}
-              className="mx-auto flex size-9 items-center justify-center rounded-[8px] bg-[var(--v2-background-bg-base,#ffffff)] text-[var(--v2-text-text-muted,#525252)] transition-colors duration-150 hover:bg-[rgba(0,0,0,0.04)] hover:text-[var(--v2-text-text-base,#171717)] disabled:opacity-50"
+              className="mx-auto flex size-8 items-center justify-center rounded-[8px] bg-[var(--v2-background-bg-base,#ffffff)] text-[var(--v2-text-text-muted,#525252)] transition-colors duration-150 hover:bg-[rgba(0,0,0,0.04)] hover:text-[var(--v2-text-text-base,#171717)] disabled:opacity-50"
             >
-              <LogOut className="size-4" strokeWidth={1.5} />
+              <LogOut className="size-3.5" strokeWidth={1.5} />
             </button>
           </div>
         )}
@@ -485,21 +491,22 @@ export function CrewHeader({ children }: CrewHeaderProps) {
             </ul>
           </nav>
           <div className="mt-4 shrink-0 border-t border-black/[0.06] pt-4">
-            <div className="flex items-center gap-2 px-1">
+            <div className="flex items-center gap-2 rounded-[12px] bg-[var(--v2-background-bg-base,#ffffff)] px-2.5 py-2">
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[13px] font-medium">{user?.name || "CZVG Pilot"}</p>
-                <p className="mt-1 truncate font-mono text-[11px] text-[var(--v2-text-text-muted,#525252)]">{user?.callsign}</p>
+                <p className="truncate text-[13px] font-medium text-[var(--v2-text-text-base,#171717)]">
+                  {user?.name || t("CZVG Pilot", "CZVG 飞行员")}
+                </p>
               </div>
-              <LanguageSwitcher compact className="size-11 shrink-0 p-0" />
+              <LanguageSwitcher compact className="size-9 shrink-0 p-0" />
               <button
                 type="button"
                 onClick={handleLogout}
                 disabled={isLoggingOut}
                 title={t("Sign out", "退出登录")}
                 aria-label={t("Sign out", "退出登录")}
-                className="flex size-11 shrink-0 items-center justify-center rounded-[10px] bg-[var(--v2-background-bg-base,#ffffff)] text-[var(--v2-text-text-muted,#525252)] transition-colors hover:bg-black/[0.04] disabled:opacity-50"
+                className="flex size-9 shrink-0 items-center justify-center rounded-[8px] text-[var(--v2-text-text-muted,#525252)] transition-colors duration-150 hover:bg-[rgba(0,0,0,0.04)] hover:text-[var(--v2-text-text-base,#171717)] disabled:opacity-50"
               >
-                <LogOut className="size-4" strokeWidth={1.5} />
+                <LogOut className="size-3.5" strokeWidth={1.5} />
               </button>
             </div>
           </div>
