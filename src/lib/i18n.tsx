@@ -298,6 +298,7 @@ export const EN_TO_ZH_PHRASES: Record<string, string> = {
   "Log Out": "退出登录",
   "Logging out...": "正在退出...",
   "Sign out": "退出登录",
+  "CZVG Pilot": "CZVG 飞行员",
   Menu: "导航菜单",
   Dashboard: "飞行员工作台",
   "File PIREP": "申报飞行报告",
