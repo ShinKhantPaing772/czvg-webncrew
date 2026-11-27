@@ -15,6 +15,7 @@ import {
   Users,
 } from "lucide-react";
 import { format } from "date-fns";
+import Link from "next/link";
 import { DayPicker } from "react-day-picker";
 
 import {
@@ -279,6 +280,36 @@ export default function AdminDashboard() {
                 icon={Activity}
               />
             </section>
+
+            {analytics?.sections.scheduling &&
+            hasClientPermission(user?.Permissions, "scheduling") ? (
+              <Card>
+                <CardContent className="flex flex-col gap-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-sm font-semibold">Live Scheduling / 实时排班</h2>
+                      {analytics.sections.scheduling.awaitingReview > 0 && (
+                        <Badge variant="default">
+                          {analytics.sections.scheduling.awaitingReview} awaiting review
+                        </Badge>
+                      )}
+                      {analytics.sections.scheduling.syncAttention > 0 && (
+                        <Badge variant="destructive">
+                          {analytics.sections.scheduling.syncAttention} IF sync attention
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {analytics.sections.scheduling.activeAircraft} active live aircraft ·{" "}
+                      {analytics.sections.scheduling.inProgress} flights in progress
+                    </p>
+                  </div>
+                  <Button asChild size="sm" variant="outline">
+                    <Link href="/crew/admin/scheduling">Manage Live Scheduling</Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : null}
 
             {allowedSections.length === 0 ? (
               <Card>

@@ -74,6 +74,12 @@ export type AnalyticsResponse = {
       adminCount: number;
       distribution: CountPoint[];
     };
+    scheduling?: {
+      activeAircraft: number;
+      awaitingReview: number;
+      inProgress: number;
+      syncAttention: number;
+    };
   };
 };
 
