@@ -136,6 +136,28 @@ type DashboardData = {
   };
   recentPireps: RecentPirep[];
   topAircraft: { label: string; value: number }[];
+  liveScheduling?: {
+    eligible: boolean;
+    activeAircraftCount: number;
+    openSeatsCount: number;
+    myFlights: Array<{
+      id: number;
+      callsign: string | null;
+      departure: string;
+      arrival: string;
+      status: string;
+      scheduled_departure: string | null;
+      role: "captain" | "crew";
+      aircraft: {
+        id: number;
+        registration: string;
+        catalogAircraftId: number;
+        name: string;
+        liveryname: string | null;
+        current_airport: string | null;
+      } | null;
+    }>;
+  } | null;
 };
 
 function SummaryCard({
@@ -478,6 +500,99 @@ export default function UserDashboard() {
                     </div>
                   </div>
                 )}
+
+                <CrewPanel title={t("Live Scheduling", "实时排班动态")}>
+                  {dashboard.liveScheduling?.eligible ? (
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] bg-[var(--v2-background-bg-layer-02,#eef0f3)] px-3.5 py-2.5">
+                        <p className="text-[13px] text-[var(--v2-text-text-muted,#525252)]">
+                          {t(
+                            `${dashboard.liveScheduling.activeAircraftCount} active live aircraft · ${dashboard.liveScheduling.openSeatsCount} open crew seats`,
+                            `${dashboard.liveScheduling.activeAircraftCount} 架实时运营飞机 · ${dashboard.liveScheduling.openSeatsCount} 个空余机组席位`,
+                          )}
+                        </p>
+                        <Button asChild size="sm" variant="outline">
+                          <Link href="/crew/scheduling">
+                            {t("Open Live Scheduling", "进入实时排班")}
+                          </Link>
+                        </Button>
+                      </div>
+                      {dashboard.liveScheduling.myFlights.length > 0 ? (
+                        <div className="space-y-2">
+                          {dashboard.liveScheduling.myFlights.map((flight) => {
+                            const pirepParams = new URLSearchParams({
+                              departure: flight.departure,
+                              arrival: flight.arrival,
+                              ...(flight.callsign ? { flightnum: flight.callsign } : {}),
+                              ...(flight.aircraft?.catalogAircraftId
+                                ? { aircraftId: String(flight.aircraft.catalogAircraftId) }
+                                : {}),
+                            });
+                            return (
+                              <CrewFlightRow
+                                key={flight.id}
+                                href="/crew/scheduling"
+                                flightnum={flight.callsign || flight.aircraft?.registration || "LIVE"}
+                                liveryname={flight.aircraft?.liveryname}
+                                badge={
+                                  <Badge variant={flight.status === "in_progress" || flight.status === "approved" ? "default" : "secondary"}>
+                                    {flight.status === "in_progress"
+                                      ? t("In flight", "执飞中")
+                                      : flight.status === "approved"
+                                        ? t("Approved", "已批准")
+                                        : flight.status === "completed"
+                                          ? t("Completed", "已完成")
+                                          : flight.status === "needs_review"
+                                            ? t("Needs review", "需复核")
+                                            : t("Awaiting approval", "待审批")}
+                                  </Badge>
+                                }
+                                subtitle={`${flight.aircraft?.registration || t("Live aircraft", "实时飞机")} · ${flight.role === "captain" ? t("Captain", "机长") : t("Crew", "机组")}`}
+                                departure={flight.departure}
+                                arrival={flight.arrival}
+                                routeMeta={flight.scheduled_departure ? formatUtcDate(flight.scheduled_departure) : t("Flexible time", "时间不限")}
+                                trailing={
+                                  ["in_progress", "completed"].includes(flight.status) ? (
+                                    <Link
+                                      href={`/crew/file-pirep?${pirepParams.toString()}`}
+                                      onClick={(event) => event.stopPropagation()}
+                                      className="text-[12px] font-medium text-[#0052a5] hover:underline"
+                                    >
+                                      {t("File PIREP", "提交飞行报告")}
+                                    </Link>
+                                  ) : (
+                                    <span className="text-[12px] text-[#0052a5]">
+                                      {t("Manage", "查看")}
+                                    </span>
+                                  )
+                                }
+                              />
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-[13px] text-[var(--v2-text-text-faint,#737373)]">
+                          {t(
+                            "You have no active live flights. Request a leg or join a crew in Live Scheduling.",
+                            "暂无进行中或待飞的实时排班任务，可前往实时排班申请航段或加入机组。",
+                          )}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-[13px] text-[var(--v2-text-text-muted,#525252)]">
+                        {t(
+                          "Live Scheduling lets eligible pilots fly persistent VA aircraft between real airport positions in Infinite Flight.",
+                          "实时排班支持拥有权限的飞行员驾驶虚拟航司持久化机队，按真实机场停场位置连续执飞。",
+                        )}
+                      </p>
+                      <Badge variant="secondary">
+                        {t("Live Pilot award required", "需先获得实时飞行员勋章")}
+                      </Badge>
+                    </div>
+                  )}
+                </CrewPanel>
 
                 <CrewPanel title="Recent sectors">
                   <Input

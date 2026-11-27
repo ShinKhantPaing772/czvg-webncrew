@@ -4,6 +4,7 @@ import { QueryTypes } from "sequelize";
 import sequelize from "@/lib/database";
 import { models } from "@/lib/models";
 import { hasPermission, requirePermission } from "@/lib/server-auth";
+import { getAdminLiveSchedulingSummary } from "@/lib/scheduling/summary";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -377,6 +378,13 @@ export async function GET(request: Request) {
         adminCount,
         distribution: numericCounts(permissionRows),
       };
+    }
+
+    if (hasPermission(auth.user, "scheduling")) {
+      const schedulingSummary = await getAdminLiveSchedulingSummary();
+      if (schedulingSummary) {
+        sections.scheduling = schedulingSummary;
+      }
     }
 
     return NextResponse.json({

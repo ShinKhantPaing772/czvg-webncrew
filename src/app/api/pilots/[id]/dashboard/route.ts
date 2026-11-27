@@ -7,6 +7,7 @@ import { hasPermission, requireCrewAuth } from "@/lib/server-auth";
 import { getPilotBadgesOverview } from "@/lib/awards/evaluator";
 import { getSafeAwards } from "@/lib/awards/columns";
 import { transferTimeSeconds } from "@/lib/pilot-flight-time";
+import { getPilotLiveSchedulingSummary } from "@/lib/scheduling/summary";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -98,6 +99,7 @@ export async function GET(
       topAircraft,
       ranks,
       awardGrants,
+      liveScheduling,
     ] = await Promise.all([
       models.Pirep.sum("flighttime", { where: { pilotid: pilotId, status: 1 } }),
       models.Pirep.count({ where: { pilotid: pilotId, status: 1 } }),
@@ -161,6 +163,7 @@ export async function GET(
         order: [["dateawarded", "DESC"]],
         raw: true,
       }),
+      getPilotLiveSchedulingSummary(pilotId, Number((pilot as any).status)),
     ]);
 
     const approvedFlightSeconds = Number(approvedSeconds || 0);
@@ -310,6 +313,7 @@ export async function GET(
             }
           : null,
       })),
+      liveScheduling,
     });
   } catch (error) {
     console.error("[Pilot Dashboard] Error:", error);

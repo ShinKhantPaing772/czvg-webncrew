@@ -1,8 +1,10 @@
 "use client";
 
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
-import { Check, Loader2, Pencil, Plane, Plus, RefreshCw, Users } from "lucide-react";
+import Link from "next/link";
+import { Check, FileText, Loader2, Pencil, Plane, Plus, RefreshCw, Users } from "lucide-react";
 import { CrewHeader } from "@/components/crew-header";
+import { useI18n } from "@/lib/i18n";
 import {
   CrewEmpty,
   CrewFlightRow,
@@ -41,7 +43,17 @@ type Confirmation = {
 };
 
 function StatusBadge({ flight }: { flight: ScheduledFlight }) {
-  return <Badge variant={flight.status === "approved" || flight.status === "in_progress" ? "default" : flight.status === "rejected" || flight.status === "needs_review" ? "destructive" : "secondary"}>{statusLabels[flight.status] || flight.status}</Badge>;
+  const { t } = useI18n();
+  const zhStatus: Record<string, string> = {
+    pending: "待审批",
+    approved: "已批准",
+    in_progress: "执飞中",
+    completed: "已完成",
+    rejected: "已驳回",
+    cancelled: "已取消",
+    needs_review: "需复核",
+  };
+  return <Badge variant={flight.status === "approved" || flight.status === "in_progress" ? "default" : flight.status === "rejected" || flight.status === "needs_review" ? "destructive" : "secondary"}>{t(statusLabels[flight.status] || flight.status, zhStatus[flight.status] || flight.status)}</Badge>;
 }
 
 function EmptyState({ title, description }: { title: string; description: string }) {
@@ -49,7 +61,8 @@ function EmptyState({ title, description }: { title: string; description: string
 }
 
 function FlightList({ flights, aircraft, onSelect }: { flights: ScheduledFlight[]; aircraft: LiveAircraft[]; onSelect: (flight: ScheduledFlight) => void }) {
-  if (!flights.length) return <EmptyState title="No flights to show" description="Try another filter, or request a flight for an available aircraft." />;
+  const { t } = useI18n();
+  if (!flights.length) return <EmptyState title={t("No flights to show", "暂无符合条件的航班")} description={t("Try another filter, or request a flight for an available aircraft.", "请尝试切换筛选条件，或为可用飞机申请新航段。")} />;
   return <div className="space-y-1.5">{flights.map((flight) => {
     const tail = aircraft.find((item) => item.id === flight.live_aircraft_id);
     const pendingCrew = flight.members.filter((member) => member.status === "pending").length;
@@ -60,8 +73,8 @@ function FlightList({ flights, aircraft, onSelect }: { flights: ScheduledFlight[
         liveryname={tail?.liveryname}
         badge={<StatusBadge flight={flight} />}
         subtitle={<>
-          <span className="block">{tail?.registration || tail?.name || "Live aircraft"}</span>
-          <span className="mt-1 block whitespace-normal font-mono tabular-nums">Requested {formatRequestTime(flight.created_at)}</span>
+          <span className="block">{tail?.registration || tail?.name || t("Live aircraft", "实时飞机")}</span>
+          <span className="mt-1 block whitespace-normal font-mono tabular-nums">{t("Requested", "申请时间")} {formatRequestTime(flight.created_at)}</span>
         </>}
         departure={flight.departure}
         arrival={flight.arrival}
@@ -72,7 +85,7 @@ function FlightList({ flights, aircraft, onSelect }: { flights: ScheduledFlight[
             {flight.captain?.callsign || flight.captain?.name || "—"}
             {" · "}
             {crewCount(flight)}/3
-            {pendingCrew ? ` · ${pendingCrew} pending` : ""}
+            {pendingCrew ? ` · ${pendingCrew} ${t("pending", "待批")}` : ""}
           </span>
         }
       />
@@ -81,6 +94,7 @@ function FlightList({ flights, aircraft, onSelect }: { flights: ScheduledFlight[
 }
 
 export function SchedulingWorkspace({ admin = false }: { admin?: boolean }) {
+  const { t } = useI18n();
   const { data: schedulingData, loading, refreshing, error, refresh, mutate } = useScheduling(admin);
   const data = useMemo(() => admin || !schedulingData ? schedulingData : {
     ...schedulingData,
@@ -171,32 +185,37 @@ export function SchedulingWorkspace({ admin = false }: { admin?: boolean }) {
 
   return <CrewHeader><main className="flex-1 space-y-5 pb-24 md:pb-6">
     <CrewPageHeader
-      title={admin ? "Manage live scheduling" : "Live scheduling"}
-      meta={<p className="mt-2 text-[13px] text-[var(--v2-text-text-muted,#525252)]">{admin ? "Review requests, fleet, and Infinite Flight sync" : "Request a flight or join an approved crew"}</p>}
+      title={admin ? t("Manage live scheduling", "管理实时排班") : t("Live scheduling", "实时排班")}
+      meta={<p className="mt-2 text-[13px] text-[var(--v2-text-text-muted,#525252)]">{admin ? t("Review requests, manage persistent fleet, and sync with Infinite Flight", "审批航段申请、管理持久化机队并与 Infinite Flight 同步") : t("Fly persistent VA aircraft from their current airport, join crews, and file PIREPs", "驾驶虚拟航司持久化机队从当前停场机场执飞，加入机组并提交飞行报告")}</p>}
       actions={<>
         <Button variant="outline" onClick={() => void refresh()} disabled={refreshing} aria-label="Refresh scheduling">
           <RefreshCw className={"h-4 w-4 " + (refreshing ? "animate-spin" : "")} strokeWidth={1.5} />
         </Button>
-        {!admin && <Button onClick={() => setFlightForm({})} disabled={!data?.aircraft.some((item) => item.active)}><Plus className="h-4 w-4" strokeWidth={1.5} />Request flight</Button>}
+        {!admin && <Button onClick={() => setFlightForm({})} disabled={!data?.aircraft.some((item) => item.active)}><Plus className="h-4 w-4" strokeWidth={1.5} />{t("Request flight", "申请执飞航段")}</Button>}
       </>}
     />
+    <div className="rounded-[12px] bg-[var(--v2-background-bg-layer-01,#f7f8fa)] px-4 py-3 text-[12px] text-[var(--v2-text-text-muted,#525252)]">
+      {admin
+        ? t("Workflow: 1. Connect Infinite Flight & import/link fleet → 2. Approve pilot flight & crew requests → 3. Flights sync to IF and update airport locations upon arrival.", "操作流程：1. 连接 Infinite Flight 并导入/关联机队 → 2. 审批飞行员航段与机组申请 → 3. 航段同步至 IF，落地确认后自动更新飞机停场机场。")
+        : t("How it works: 1. Pick an available aircraft at its current airport → 2. Request a new leg or join an approved crew → 3. Start flight before takeoff, record arrival after landing, and submit your PIREP.", "使用流程：1. 选择当前停场机场的可用飞机 → 2. 申请新航段或加入已批准机组 → 3. 起飞前点击「开始执飞」、落地后「确认到达」并提交飞行报告。")}
+    </div>
     {(error || actionError) && <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{actionError || error}</div>}
     {success && <div role="status" className="flex items-center gap-2 rounded-md border bg-muted/30 p-3 text-sm"><Check className="h-4 w-4 text-green-600" />{success}</div>}
-    {admin && data?.configuration?.liveAwardConfigured === false && <div role="status" className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm">The live pilot access award has not been configured. Set the live pilot award before approving pilots for flights.</div>}
-    {loading ? <div role="status" className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" />Loading live scheduling…</div> : !data ? <Card><CardContent className="space-y-3 py-8"><h2 className="font-semibold">Scheduling is unavailable</h2><p className="text-sm text-muted-foreground">{error || "Your account needs access to live scheduling."}</p><Button variant="outline" onClick={() => void refresh()} disabled={refreshing}>Try again</Button></CardContent></Card> : <>
+    {admin && data?.configuration?.liveAwardConfigured === false && <div role="status" className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm">{t("The live pilot access award has not been configured. Set the live pilot award before approving pilots for flights.", "尚未配置实时飞行员勋章（LIVE_PILOT_AWARD_ID），请先在环境变量与勋章管理中完成设置。")}</div>}
+    {loading ? <div role="status" className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" />{t("Loading live scheduling…", "正在加载实时排班…")}</div> : !data ? <Card><CardContent className="space-y-3 py-8"><h2 className="font-semibold">{t("Scheduling is unavailable", "暂无法访问实时排班")}</h2><p className="text-sm text-muted-foreground">{error || t("Your account needs access to live scheduling.", "你的账号需要具备实时飞行员勋章权限。")}</p><Button variant="outline" onClick={() => void refresh()} disabled={refreshing}>{t("Try again", "重试")}</Button></CardContent></Card> : <>
       <div className="grid grid-cols-3 gap-3">
-        <SummaryCard label="Live aircraft" count={data.aircraft.filter((item) => item.active).length} />
-        <SummaryCard label={admin ? "Awaiting review" : "Your pending"} count={admin ? awaitingFlights : data.flights.filter((flight) => flight.captain_id === data.pilotId && ["pending", "needs_review"].includes(flight.status)).length} accent />
-        <SummaryCard label={admin ? "Crew requests" : "Open seats"} count={admin ? awaitingCrew : data.flights.filter((flight) => flight.status === "approved" && crewCount(flight) < 3).length} />
+        <SummaryCard label={t("Live aircraft", "实时运营飞机")} count={data.aircraft.filter((item) => item.active).length} />
+        <SummaryCard label={admin ? t("Awaiting review", "待审批航段") : t("Your pending", "我的待批申请")} count={admin ? awaitingFlights : data.flights.filter((flight) => flight.captain_id === data.pilotId && ["pending", "needs_review"].includes(flight.status)).length} accent />
+        <SummaryCard label={admin ? t("Crew requests", "待批机组") : t("Open seats", "空余机组席位")} count={admin ? awaitingCrew : data.flights.filter((flight) => flight.status === "approved" && crewCount(flight) < 3).length} />
       </div>
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="mb-4 grid w-full grid-cols-3 sm:w-auto sm:inline-flex">{admin ? <><TabsTrigger value="approvals">Approvals</TabsTrigger><TabsTrigger value="fleet">Live fleet</TabsTrigger><TabsTrigger value="if">Infinite Flight</TabsTrigger></> : <><TabsTrigger value="flights">Flights</TabsTrigger><TabsTrigger value="mine">My flights</TabsTrigger><TabsTrigger value="fleet">Live fleet</TabsTrigger></>}</TabsList>
+        <TabsList className="mb-4 grid w-full grid-cols-3 sm:w-auto sm:inline-flex">{admin ? <><TabsTrigger value="approvals">{t("Approvals", "审批与调度")}</TabsTrigger><TabsTrigger value="fleet">{t("Live fleet", "机队管理")}</TabsTrigger><TabsTrigger value="if">{t("Infinite Flight", "无限试飞联动")}</TabsTrigger></> : <><TabsTrigger value="flights">{t("Flights", "可飞动态")}</TabsTrigger><TabsTrigger value="mine">{t("My flights", "我的任务")}</TabsTrigger><TabsTrigger value="fleet">{t("Live fleet", "持久化机队")}</TabsTrigger></>}</TabsList>
         {(admin ? ["approvals"] : ["flights", "mine"]).map((flightTab) => <TabsContent key={flightTab} value={flightTab} className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-[1fr_auto_auto]"><Input aria-label="Search flights" placeholder="Search" value={query} onChange={(event) => setQuery(event.target.value)} /><select aria-label="Filter aircraft" className="h-8 rounded-[8px] border-0 bg-[var(--v2-background-bg-layer-02,#eef0f3)] px-2.5 text-[13px] outline-none" value={aircraftFilter} onChange={(event) => setAircraftFilter(event.target.value)}><option value="all">All aircraft</option>{data.aircraft.map((item) => <option key={item.id} value={item.id}>{item.registration}</option>)}</select><select aria-label="Filter flight status" className="h-8 rounded-[8px] border-0 bg-[var(--v2-background-bg-layer-02,#eef0f3)] px-2.5 text-[13px] outline-none" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>{admin && <option value="attention">Awaiting review</option>}<option value="upcoming">Upcoming and in flight</option><option value="all">All flights</option><option value="history">History</option>{Object.entries(statusLabels).filter(([value]) => admin || !["rejected", "cancelled"].includes(value)).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></div>
-          <p className="text-[12px] text-[var(--v2-text-text-faint,#737373)]">Times in UTC · 1 captain + up to 2 crew</p>
-          {admin && ["attention", "pending"].includes(statusFilter) && <p className="text-[12px] text-[var(--v2-text-text-faint,#737373)]">Oldest flight requests first. Check conflicts before approving.</p>}
+          <div className="grid gap-3 sm:grid-cols-[1fr_auto_auto]"><Input aria-label="Search flights" placeholder={t("Search callsign, airport, pilot…", "搜索呼号、机场、飞行员…")} value={query} onChange={(event) => setQuery(event.target.value)} /><select aria-label="Filter aircraft" className="h-8 rounded-[8px] border-0 bg-[var(--v2-background-bg-layer-02,#eef0f3)] px-2.5 text-[13px] outline-none" value={aircraftFilter} onChange={(event) => setAircraftFilter(event.target.value)}><option value="all">{t("All aircraft", "全部飞机")}</option>{data.aircraft.map((item) => <option key={item.id} value={item.id}>{item.registration}</option>)}</select><select aria-label="Filter flight status" className="h-8 rounded-[8px] border-0 bg-[var(--v2-background-bg-layer-02,#eef0f3)] px-2.5 text-[13px] outline-none" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>{admin && <option value="attention">{t("Awaiting review", "待审批与异常")}</option>}<option value="upcoming">{t("Upcoming and in flight", "待飞与执飞中")}</option><option value="all">{t("All flights", "全部航班")}</option><option value="history">{t("History", "历史记录")}</option>{Object.entries(statusLabels).filter(([value]) => admin || !["rejected", "cancelled"].includes(value)).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></div>
+          <p className="text-[12px] text-[var(--v2-text-text-faint,#737373)]">{t("Times in UTC · 1 captain + up to 2 crew", "时间均为 UTC · 每班 1 名机长 + 最多 2 名机组")}</p>
+          {admin && ["attention", "pending"].includes(statusFilter) && <p className="text-[12px] text-[var(--v2-text-text-faint,#737373)]">{t("Oldest flight requests first. Check conflicts before approving.", "按申请时间从早到晚排列，批准前请确认机场衔接与时间无冲突。")}</p>}
           {!admin && flightTab === "flights" && ["upcoming", "all"].includes(statusFilter) && unscheduledAircraft.length > 0 && <section aria-label="Unscheduled aircraft">
-            <LiveFleet aircraft={unscheduledAircraft} admin={false} title="Unscheduled aircraft" description="These active aircraft have no pending requests, approved flights, or flights in progress in Crew Center. Request a flight from their confirmed airport." onAdd={() => setAircraftEditor({})} onEdit={aircraft => setAircraftEditor({ aircraft })} onRequest={aircraft => setFlightForm({ aircraftId: aircraft.id })} onSchedules={aircraft => setScheduleAircraftId(aircraft.id)} />
+            <LiveFleet aircraft={unscheduledAircraft} admin={false} title={t("Unscheduled aircraft", "空闲可飞飞机")} description={t("These active aircraft have no pending requests, approved flights, or flights in progress in Crew Center. Request a flight from their confirmed airport.", "以下飞机当前没有排队或执飞中的航段，可直接从其停场机场申请执飞。")} onAdd={() => setAircraftEditor({})} onEdit={aircraft => setAircraftEditor({ aircraft })} onRequest={aircraft => setFlightForm({ aircraftId: aircraft.id })} onSchedules={aircraft => setScheduleAircraftId(aircraft.id)} />
           </section>}
           <FlightList flights={visibleFlights} aircraft={data.aircraft} onSelect={(flight) => { setActionError(""); setDetailId(flight.id); }} />
         </TabsContent>)}
@@ -225,6 +244,7 @@ function FlightDetail({ flight, aircraft, pilotId, admin, allowUnpublishedIfStar
   onAct: (body: Record<string, unknown>, message: string) => void;
   onRefresh: () => Promise<void>; onPublishingBusyChange: (busy: boolean) => void;
 }) {
+  const { t } = useI18n();
   const captain = flight.captain_id === pilotId;
   const ownMembership = flight.members.find((member) => member.pilot_id === pilotId);
   const canManageCrew = admin || captain;
@@ -234,6 +254,13 @@ function FlightDetail({ flight, aircraft, pilotId, admin, allowUnpublishedIfStar
   const linkedNotPublished = Boolean(aircraft?.if_aircraft_id && (Number(flight.published_revision || 0) !== flight.revision || flight.publishing_state !== "published"));
   const airportMismatch = Boolean(aircraft?.current_airport && aircraft.current_airport !== flight.departure);
   const startBlocked = issues.length > 0 || (!allowUnpublishedIfStarts && linkedNotPublished) || airportMismatch;
+  const canFilePirep = (captain || ownMembership?.status === "approved") && ["in_progress", "completed"].includes(flight.status);
+  const pirepHref = `/crew/file-pirep?${new URLSearchParams({
+    departure: flight.departure,
+    arrival: flight.actual_arrival || flight.arrival,
+    ...(flight.callsign ? { flightnum: flight.callsign } : {}),
+    ...(aircraft?.aircraft_id ? { aircraftId: String(aircraft.aircraft_id) } : {}),
+  }).toString()}`;
 
   return <Dialog open onOpenChange={(open) => { if (!open && !busy) onClose(); }}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl"><DialogHeader><DialogTitle className="flex flex-wrap items-center gap-2">{aircraft?.registration || "Live aircraft"}<StatusBadge flight={flight} /></DialogTitle><DialogDescription>{flight.callsign ? flight.callsign + " · " : ""}{flight.departure} → {flight.arrival}</DialogDescription></DialogHeader>
     {error && <p role="alert" className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
@@ -254,7 +281,8 @@ function FlightDetail({ flight, aircraft, pilotId, admin, allowUnpublishedIfStar
       {!admin && captain && flight.status === "pending" && <Button variant="outline" disabled={busy} onClick={() => onAsk(flight, "withdraw", "Withdraw this request?", "The pending request will no longer be reviewed.")}>Withdraw request</Button>}
       {(admin || captain) && flight.status === "approved" && <Button disabled={busy || startBlocked} onClick={() => onAsk(flight, "start", "Start this flight?", aircraft?.if_aircraft_id ? allowUnpublishedIfStarts ? "Confirm the aircraft is at the departure airport and the crew is ready. The admin start policy skips IF publication and departure checks; local approval, location, crew, and aircraft queue checks still apply." : "Confirm the aircraft is at the departure airport and the crew is ready. Its current IF location, schedule, and crew will be checked. Start here before departing in Infinite Flight." : "Confirm the aircraft is at the departure airport and the crew is ready. This records the flight as in progress.")}><Plane className="mr-2 h-4 w-4" />Start flight</Button>}
       {admin && ["approved", "needs_review"].includes(flight.status) && <Button variant="outline" disabled={busy} onClick={() => onAsk(flight, "cancel", "Cancel this flight?", "Later flights may need admin review if their departure airport depends on this flight.", { reasonRequired: true })}>Cancel flight</Button>}
-      {(admin || captain) && flight.status === "in_progress" && <Button disabled={busy} onClick={() => onAsk(flight, "complete", "Complete this flight", "Enter the actual arrival airport, including any diversion. The aircraft’s location will be updated.", { completion: true })}>Record arrival</Button>}
+      {(admin || captain) && flight.status === "in_progress" && <Button disabled={busy} onClick={() => onAsk(flight, "complete", "Complete this flight", "Enter the actual arrival airport, including any diversion. The aircraft’s location will be updated.", { completion: true })}>{t("Record arrival", "确认到达")}</Button>}
+      {canFilePirep && <Button variant="outline" asChild><Link href={pirepHref}><FileText className="mr-2 h-4 w-4" />{t("File PIREP", "提交飞行报告")}</Link></Button>}
       {admin && ["pending", "approved", "needs_review"].includes(flight.status) && <Button variant="outline" disabled={busy} onClick={() => onAsk(flight, "reassign", "Change captain", "Select an eligible live pilot. Future reservations and IF crew assignments will be checked.", { reassign: true })}>Change captain</Button>}
       {admin && aircraft?.if_aircraft_id && ["failed", "partial", "conflict", "reconcile", "reconciliation", "reconciliation_required", "needs_reconciliation"].includes(flight.publishing_state || "") && <Button variant="outline" disabled={busy} onClick={() => onAct({ action: flight.publishing_state === "failed" ? "retry_publish" : "reconcile_publish", flight_id: flight.id }, "IF synchronization queued.")}><RefreshCw className="mr-2 h-4 w-4" />{flight.publishing_state === "failed" ? "Retry IF publishing" : "Reconcile with IF"}</Button>}
     </DialogFooter>
